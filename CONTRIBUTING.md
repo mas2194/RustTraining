@@ -1,14 +1,8 @@
-# Contributing
+# 貢献について（Contributing）
 
-This project welcomes contributions and suggestions. Most contributions require you to
-agree to a Contributor License Agreement (CLA) declaring that you have the right to,
-and actually do, grant us the rights to use your contribution. For details, visit
-https://cla.microsoft.com.
+このプロジェクトでは、皆様からの貢献や提案を歓迎します。ほとんどの貢献において、提供いただく貢献の利用権をMicrosoftに付与する権利を有しており、実際にその権利を付与することを宣言するコントリビューターライセンス同意書（CLA: Contributor License Agreement）への同意が必要となります。詳細については、https://cla.microsoft.com をご覧ください。
 
-When you submit a pull request, a CLA-bot will automatically determine whether you need
-to provide a CLA and decorate the PR appropriately (e.g., label, comment). Simply follow the
-instructions provided by the bot. You will only need to do this once across all repositories using our CLA.
+プルリクエストを送信すると、CLAボットがCLAの提供が必要かどうかを自動的に判断し、PRに適切な装飾（ラベルやコメントなど）を行います。ボットの指示に従ってください。MicrosoftのCLAを使用しているすべてのリポジトリを通じて、この手続きを行う必要があるのは1回のみです。
 
-This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
-For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/)
-or contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+本プロジェクトは [Microsoft オープンソース行動規範（Microsoft Open Source Code of Conduct）](https://opensource.microsoft.com/codeofconduct/) を採用しています。
+詳細については [行動規範のFAQ（Code of Conduct FAQ）](https://opensource.microsoft.com/codeofconduct/faq/) を参照するか、追加の質問やご意見がある場合は [opencode@microsoft.com](mailto:opencode@microsoft.com) までお問い合わせください。

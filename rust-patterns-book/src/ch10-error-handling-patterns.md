@@ -1,18 +1,18 @@
-# 10. Error Handling Patterns 🟢
+# 10. エラー処理パターン 🟢
 
-> **What you'll learn:**
-> - When to use `thiserror` (libraries) vs `anyhow` (applications)
-> - Error conversion chains with `#[from]` and `.context()` wrappers
-> - How the `?` operator desugars and works in `main()`
-> - When to panic vs return errors, and `catch_unwind` for FFI boundaries
+> **学習内容:**
+> - `thiserror`（ライブラリ向け）と `anyhow`（アプリケーション向け）の使い分け
+> - `#[from]` と `.context()` ラッパーによるエラー変換チェーン
+> - `?` 演算子の脱糖（desugar）の仕組みと `main()` での動作
+> - パニックとエラー返却の使い分け、およびFFI境界での `catch_unwind`
 
-## thiserror vs anyhow — Library vs Application
+## thiserror vs anyhow — ライブラリとアプリケーション
 
-Rust error handling centers on the `Result<T, E>` type. Two crates dominate:
+Rust のエラー処理は `Result<T, E>` 型を中心に行われます。主に2つのクレートが広く使われています:
 
 ```rust,ignore
-// --- thiserror: For LIBRARIES ---
-// Generates Display, Error, and From impls via derive macros
+// --- thiserror: ライブラリ向け ---
+// derive マクロを通じて Display, Error, From の実装を自動生成
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -29,22 +29,22 @@ pub enum DatabaseError {
     #[error("record not found: table={table} id={id}")]
     NotFound { table: String, id: u64 },
 
-    #[error(transparent)] // Delegate Display to the inner error
-    Io(#[from] std::io::Error), // Auto-generates From<io::Error>
+    #[error(transparent)] // 内部エラーへ Display を委譲
+    Io(#[from] std::io::Error), // From<io::Error> を自動生成
 }
 
-// --- anyhow: For APPLICATIONS ---
-// Dynamic error type — great for top-level code where you just want errors to propagate
+// --- anyhow: アプリケーション向け ---
+// 動的エラー型 — エラーを上位へ伝播させたいトップレベルのコードに最適
 use anyhow::{Context, Result, bail, ensure};
 
 fn read_config(path: &str) -> Result<Config> {
     let content = std::fs::read_to_string(path)
-        .with_context(|| format!("failed to read config from {path}"))?;
+        .with_context(|| format!("設定ファイルの読み込みに失敗しました: {path}"))?;
 
     let config: Config = serde_json::from_str(&content)
-        .context("failed to parse config JSON")?;
+        .context("設定JSONのパースに失敗しました")?;
 
-    ensure!(config.port > 0, "port must be positive, got {}", config.port);
+    ensure!(config.port > 0, "ポート番号は正の値でなければなりません。指定値: {}", config.port);
 
     Ok(config)
 }
@@ -53,23 +53,23 @@ fn main() -> Result<()> {
     let config = read_config("server.toml")?;
 
     if config.name.is_empty() {
-        bail!("server name cannot be empty"); // Return Err immediately
+        bail!("サーバー名を空にすることはできません"); // 即座に Err を返す
     }
 
     Ok(())
 }
 ```
 
-**When to use which**:
+**使い分けの基準**:
 
 | | `thiserror` | `anyhow` |
 |---|---|---|
-| **Use in** | Libraries, shared crates | Applications, binaries |
-| **Error types** | Concrete enums — callers can match | `anyhow::Error` — opaque |
-| **Effort** | Define your error enum | Just use `Result<T>` |
-| **Downcasting** | Not needed — pattern match | `error.downcast_ref::<MyError>()` |
+| **使用場所** | ライブラリ、共有クレート | アプリケーション、バイナリ |
+| **エラー型** | 具体的な列挙型（enum）— 呼び出し元でマッチ可能 | `anyhow::Error` — 隠蔽（不透明） |
+| **実装の手間** | エラー列挙型の定義が必要 | `Result<T>` を使うだけ |
+| **ダウンキャスト** | 不要 — パターンマッチで処理 | `error.downcast_ref::<MyError>()` |
 
-### Error Conversion Chains (#[from])
+### エラー変換チェーン (#[from])
 
 ```rust,ignore
 use thiserror::Error;
@@ -86,7 +86,7 @@ enum AppError {
     Http(#[from] reqwest::Error),
 }
 
-// Now ? automatically converts:
+// これにより ? 演算子が自動的に型変換を行います:
 fn fetch_and_parse(url: &str) -> Result<Config, AppError> {
     let body = reqwest::blocking::get(url)?.text()?;  // reqwest::Error → AppError::Http
     let config: Config = serde_json::from_str(&body)?; // serde_json::Error → AppError::Json
@@ -94,109 +94,108 @@ fn fetch_and_parse(url: &str) -> Result<Config, AppError> {
 }
 ```
 
-### Context and Error Wrapping
+### コンテキストとエラーのラッピング
 
-Add human-readable context to errors without losing the original:
+元のエラー情報を失うことなく、人間にわかりやすいコンテキストを追加します:
 
 ```rust,ignore
 use anyhow::{Context, Result};
 
 fn process_file(path: &str) -> Result<Data> {
     let content = std::fs::read_to_string(path)
-        .with_context(|| format!("failed to read {path}"))?;
+        .with_context(|| format!("{path} の読み込みに失敗しました"))?;
 
     let data = parse_content(&content)
-        .with_context(|| format!("failed to parse {path}"))?;
+        .with_context(|| format!("{path} のパースに失敗しました"))?;
 
     validate(&data)
-        .context("validation failed")?;
+        .context("バリデーションに失敗しました")?;
 
     Ok(data)
 }
 
-// Error output:
-// Error: validation failed
+// エラー出力例:
+// Error: バリデーションに失敗しました
 //
 // Caused by:
-//    0: failed to parse config.json
+//    0: config.json のパースに失敗しました
 //    1: expected ',' at line 5 column 12
 ```
 
-### The ? Operator in Depth
+### ? 演算子の詳細
 
-`?` is syntactic sugar for a `match` + `From` conversion + early return:
+`?` は `match` + `From` による変換 + 早期リターン（early return）の糖衣構文（シンタックスシュガー）です:
 
 ```rust
-// This:
+// 次のコードは:
 let value = operation()?;
 
-// Desugars to:
+// 以下のように脱糖（展開）されます:
 let value = match operation() {
     Ok(v) => v,
     Err(e) => return Err(From::from(e)),
     //                  ^^^^^^^^^^^^^^
-    //                  Automatic conversion via From trait
+    //                  From トレイトによる自動変換
 };
 ```
 
-**`?` also works with `Option`** (in functions returning `Option`):
+**`?` は `Option` でも機能します**（`Option` を返す関数内にて）:
 
 ```rust
 fn find_user_email(users: &[User], name: &str) -> Option<String> {
-    let user = users.iter().find(|u| u.name == name)?; // Returns None if not found
-    let email = user.email.as_ref()?; // Returns None if email is None
+    let user = users.iter().find(|u| u.name == name)?; // 見つからなければ None を返す
+    let email = user.email.as_ref()?; // email が None なら None を返す
     Some(email.to_uppercase())
 }
 ```
 
-### Panics, catch_unwind, and When to Abort
+### パニック、catch_unwind、そしてアボートすべき場合
 
 ```rust
-// Panics: for BUGS, not expected errors
+// パニック: 想定されるエラーではなく、バグ（プログラムの不具合）に対して使用
 fn get_element(data: &[i32], index: usize) -> &i32 {
-    // If this panics, it's a programming error (bug).
-    // Don't "handle" it — fix the caller.
+    // これがパニックする場合、それはプログラミングエラー（バグ）です。
+    // エラーとして「処理」するのではなく、呼び出し元を修正してください。
     &data[index]
 }
 
-// catch_unwind: for boundaries (FFI, thread pools)
+// catch_unwind: 境界部分（FFI、スレッドプール等）で使用
 use std::panic;
 
 let result = panic::catch_unwind(|| {
-    // Run potentially panicking code safely
+    // パニックする可能性のあるコードを安全に実行
     risky_operation()
 });
 
 match result {
-    Ok(value) => println!("Success: {value:?}"),
-    Err(_) => eprintln!("Operation panicked — continuing safely"),
+    Ok(value) => println!("成功: {value:?}"),
+    Err(_) => eprintln!("処理がパニックしました — 安全に継続します"),
 }
 
-// When to use which:
-// - Result<T, E> → expected failures (file not found, network timeout)
-// - panic!()     → programming bugs (index out of bounds, invariant violated)
-// - process::abort() → unrecoverable state (security violation, corrupt data)
+// 使い分けの指針:
+// - Result<T, E> → 予期される失敗（ファイルが見つからない、ネットワークタイムアウト等）
+// - panic!()     → プログラミング上のバグ（インデックス範囲外アクセス、不変条件の破綻等）
+// - process::abort() → 回復不能な状態（セキュリティ侵害、データの破損等）
 ```
 
-> **C++ comparison**: `Result<T, E>` replaces exceptions for expected errors.
-> `panic!()` is like `assert()` or `std::terminate()` — it's for bugs, not
-> control flow. Rust's `?` operator makes error propagation as ergonomic as
-> exceptions without the unpredictable control flow.
+> **C++ との比較**: `Result<T, E>` は、予期されるエラーに対する例外を置き換えるものです。
+> `panic!()` は `assert()` や `std::terminate()` に相当し、制御フローのためではなくバグのために存在します。
+> Rust の `?` 演算子は、予測不能な制御フローを引き起こすことなく、例外と同等のエルゴノミクス（使いやすさ）でエラーを伝播させます。
 
-> **Key Takeaways — Error Handling**
-> - Libraries: `thiserror` for structured error enums; applications: `anyhow` for ergonomic propagation
-> - `#[from]` auto-generates `From` impls; `.context()` adds human-readable wrappers
-> - `?` desugars to `From::from()` + early return; works in `main()` returning `Result`
+> **エラー処理の重要ポイント**
+> - ライブラリ: 構造化されたエラー列挙型を定義するために `thiserror` を使用。アプリケーション: 人間工学的な伝播のために `anyhow` を使用
+> - `#[from]` は `From` 実装を自動生成し、`.context()` は人間に読みやすいラッパーを追加する
+> - `?` は `From::from()` + 早期リターンに脱糖される。`Result` を返す `main()` でも機能する
 
-> **See also:** [Ch 14 — API Design](ch15-crate-architecture-and-api-design.md) for "parse, don't validate" patterns. [Ch 11 — Serialization](ch11-serialization-zero-copy-and-binary-data.md) for serde error handling.
+> **関連情報:** 「parse, don't validate（バリデーションではなくパースせよ）」パターンについては [第15章 — クレートアーキテクチャとAPI設計](ch15-crate-architecture-and-api-design.md) を、serde のエラー処理については [第11章 — シリアライゼーション](ch11-serialization-zero-copy-and-binary-data.md) を参照してください。
 
 ```mermaid
 flowchart LR
     A["std::io::Error"] -->|"#[from]"| B["AppError::Io"]
     C["serde_json::Error"] -->|"#[from]"| D["AppError::Json"]
-    E["Custom validation"] -->|"manual"| F["AppError::Validation"]
+    E["カスタムバリデーション"] -->|"手動"| F["AppError::Validation"]
 
-    B --> G["? operator"]
+    B --> G["? 演算子"]
     D --> G
     F --> G
     G --> H["Result&lt;T, AppError&gt;"]
@@ -213,12 +212,12 @@ flowchart LR
 
 ---
 
-### Exercise: Error Hierarchy with thiserror ★★ (~30 min)
+### 演習: thiserror によるエラー階層設計 ★★（約30分）
 
-Design an error type hierarchy for a file-processing application that can fail during I/O, parsing (JSON and CSV), and validation. Use `thiserror` and demonstrate `?` propagation.
+I/O、パース（JSON および CSV）、バリデーションの各フェーズで失敗する可能性のあるファイル処理アプリケーション向けのエラー型階層を設計してください。`thiserror` を使用し、`?` による伝播を実演してください。
 
 <details>
-<summary>🔑 Solution</summary>
+<summary>🔑 解答例</summary>
 
 ```rust,ignore
 use thiserror::Error;
@@ -239,7 +238,7 @@ pub enum AppError {
 }
 
 fn read_file(path: &str) -> Result<String, AppError> {
-    Ok(std::fs::read_to_string(path)?) // io::Error → AppError::Io via #[from]
+    Ok(std::fs::read_to_string(path)?) // #[from] により io::Error → AppError::Io
 }
 
 fn parse_json(content: &str) -> Result<serde_json::Value, AppError> {
@@ -251,13 +250,13 @@ fn validate_name(value: &serde_json::Value) -> Result<String, AppError> {
         .and_then(|v| v.as_str())
         .ok_or_else(|| AppError::Validation {
             field: "name".into(),
-            reason: "must be a non-null string".into(),
+            reason: "nullでない文字列でなければなりません".into(),
         })?;
 
     if name.is_empty() {
         return Err(AppError::Validation {
             field: "name".into(),
-            reason: "must not be empty".into(),
+            reason: "空文字であってはなりません".into(),
         });
     }
 
@@ -273,8 +272,8 @@ fn process_file(path: &str) -> Result<String, AppError> {
 
 fn main() {
     match process_file("config.json") {
-        Ok(name) => println!("Name: {name}"),
-        Err(e) => eprintln!("Error: {e}"),
+        Ok(name) => println!("名前: {name}"),
+        Err(e) => eprintln!("エラー: {e}"),
     }
 }
 ```
@@ -282,4 +281,3 @@ fn main() {
 </details>
 
 ***
-

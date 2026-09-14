@@ -1,9 +1,9 @@
-# Rust lifetime and borrowing
+# Rustのライフタイムと借用
 
-> **What you'll learn:** How Rust's lifetime system ensures references never dangle — from implicit lifetimes through explicit annotations to the three elision rules that make most code annotation-free. Understanding lifetimes here is essential before moving on to smart pointers in the next section.
+> **学習目標:** 暗黙的なライフタイムから明示的なアノテーション、そして大半のコードでアノテーションを不要にする3つの省略規則に至るまで、Rustのライフタイムシステムが参照のダングリング（未解決な参照）をどのように防ぐかを学びます。ここでライフタイムを理解することは、次のセクションのスマートポインタに進む前に不可欠です。
 
-- Rust enforces a single mutable reference and any number of immutable references
-    - The lifetime of any reference must be at least as long as the original owning lifetime. These are implicit lifetimes and are inferred by the compiler (see https://doc.rust-lang.org/nomicon/lifetime-elision.html)
+- Rustは単一の可変参照、または任意の数の不変参照を強制します
+    - すべての参照のライフタイムは、元の所有者のライフタイム以上でなければなりません。これらは暗黙的なライフタイムであり、コンパイラによって推論されます（https://doc.rust-lang.org/nomicon/lifetime-elision.html を参照）
 ```rust
 fn borrow_mut(x: &mut u32) {
     *x = 43;
@@ -12,34 +12,34 @@ fn main() {
     let mut x = 42;
     let y = &mut x;
     borrow_mut(y);
-    let _z = &x; // Permitted because the compiler knows y isn't subsequently used
-    //println!("{y}"); // Will not compile if this is uncommented
-    borrow_mut(&mut x); // Permitted because _z isn't used 
-    let z = &x; // Ok -- mutable borrow of x ended after borrow_mut() returned
+    let _z = &x; // yが以降で使用されないことをコンパイラが把握しているため許可される
+    //println!("{y}"); // このコメントを解除するとコンパイルエラーになる
+    borrow_mut(&mut x); // _zが使用されていないため許可される 
+    let z = &x; // OK -- xの可変借用はborrow_mut()の終了時に終了している
     println!("{z}");
 }
 ```
 
-# Rust lifetime annotations
-- Explicit lifetime annotations are needed when dealing with multiple lifetimes
-    - Lifetimes are denoted with `'` and can be any identifier (`'a`, `'b`, `'static`, etc.)
-    - The compiler needs help when it can't figure out how long references should live
-- **Common scenario**: Function returns a reference, but which input does it come from?
+# Rustのライフタイムアノテーション
+- 複数のライフタイムを扱う場合、明示的なライフタイムアノテーションが必要です
+    - ライフタイムは `'` で表記され、任意の識別子を使用できます（`'a`, `'b`, `'static` など）
+    - 参照がどのくらい長く生存すべきかをコンパイラが判断できない場合、支援が必要です
+- **よくあるシナリオ**: 関数が参照を返す際、その参照がどの入力に由来するか？
 ```rust
 #[derive(Debug)]
 struct Point {x: u32, y: u32}
 
-// Without lifetime annotation, this won't compile:
+// ライフタイムアノテーションがない場合、これはコンパイルされません:
 // fn left_or_right(pick_left: bool, left: &Point, right: &Point) -> &Point
 
-// With lifetime annotation - all references share the same lifetime 'a
+// ライフタイムアノテーションあり - すべての参照が同じライフタイム 'a を共有
 fn left_or_right<'a>(pick_left: bool, left: &'a Point, right: &'a Point) -> &'a Point {
     if pick_left { left } else { right }
 }
 
-// More complex: different lifetimes for inputs
+// より複雑な例: 入力ごとに異なるライフタイム
 fn get_x_coordinate<'a, 'b>(p1: &'a Point, _p2: &'b Point) -> &'a u32 {
-    &p1.x  // Return value lifetime tied to p1, not p2
+    &p1.x  // 戻り値のライフタイムはp2ではなくp1に結び付けられる
 }
 
 fn main() {
@@ -48,16 +48,16 @@ fn main() {
     {
         let p2 = Point {x: 42, y: 50};
         result = left_or_right(true, &p1, &p2);
-        // This works because we use result before p2 goes out of scope
-        println!("Selected: {result:?}");
+        // p2がスコープを抜ける前にresultを使用しているため、これは動作します
+        println!("選択された値: {result:?}");
     }
-    // This would NOT work - result references p2 which is now gone:
-    // println!("After scope: {result:?}");
+    // これは動作しません - resultが参照しているp2はすでに破棄されています:
+    // println!("スコープ外: {result:?}");
 }
 ```
 
-# Rust lifetime annotations
-- Lifetime annotations are also needed for references in data structures
+# Rustのライフタイムアノテーション
+- データ構造内に参照を保持する場合にもライフタイムアノテーションが必要です
 ```rust
 use std::collections::HashMap;
 #[derive(Debug)]
@@ -73,30 +73,30 @@ fn main() {
     m.map.insert(1, &p1);
     {
         let p3 = Point{x: 60, y:70};
-        //m.map.insert(3, &p3); // Will not compile
-        // p3 is dropped here, but m will outlive
+        //m.map.insert(3, &p3); // コンパイルエラー
+        // p3はここでドロップされますが、mはそれより長く生存します
     }
     for (k, v) in m.map {
         println!("{v:?}");
     }
-    // m is dropped here
-    // p1 and p are dropped here in that order
+    // mはここでドロップされます
+    // p1、pの順にここでドロップされます
 } 
 ```
 
-# Exercise: First word with lifetimes
+# 演習: ライフタイムを用いた最初の単語の抽出
 
-🟢 **Starter** — practice lifetime elision in action
+🟢 **初級** — ライフタイム省略規則の実践
 
-Write a function `fn first_word(s: &str) -> &str` that returns the first whitespace-delimited word from a string. Think about why this compiles without explicit lifetime annotations (hint: elision rule #1 and #2).
+文字列から最初の空白区切りの単語を返す関数 `fn first_word(s: &str) -> &str` を記述してください。明示的なライフタイムアノテーションなしでなぜコンパイルできるのかを考えてみましょう（ヒント: 省略規則1と2）。
 
-<details><summary>Solution (click to expand)</summary>
+<details><summary>解答例（クリックして展開）</summary>
 
 ```rust
 fn first_word(s: &str) -> &str {
-    // The compiler applies elision rules:
-    // Rule 1: input &str gets lifetime 'a → fn first_word(s: &'a str) -> &str
-    // Rule 2: single input lifetime → output gets same → fn first_word(s: &'a str) -> &'a str
+    // コンパイラは省略規則を適用します:
+    // 規則1: 入力の &str にライフタイム 'a が割り当てられる → fn first_word(s: &'a str) -> &str
+    // 規則2: 入力のライフタイムが1つだけの場合、出力も同じになる → fn first_word(s: &'a str) -> &'a str
     match s.find(' ') {
         Some(pos) => &s[..pos],
         None => s,
@@ -106,23 +106,23 @@ fn first_word(s: &str) -> &str {
 fn main() {
     let text = "hello world foo";
     let word = first_word(text);
-    println!("First word: {word}");  // "hello"
+    println!("最初の単語: {word}");  // "hello"
     
     let single = "onlyone";
-    println!("First word: {}", first_word(single));  // "onlyone"
+    println!("最初の単語: {}", first_word(single));  // "onlyone"
 }
 ```
 
 </details>
 
-# Exercise: Slice storage with lifetimes
+# 演習: ライフタイムを用いたスライスの格納
 
-🟡 **Intermediate** — your first encounter with lifetime annotations
-- Create a structure that stores references to the slice of a ```&str```
-    - Create a long ```&str``` and store references slices from it inside the structure
-    - Write a function that accepts the structure and returns the contained slice
+🟡 **中級** — ライフタイムアノテーションの実践
+- `&str` のスライスへの参照を格納する構造体を作成します
+    - 長い `&str` を作成し、そのスライスへの参照を構造体内に格納します
+    - 構造体を受け取り、格納されているスライスを返す関数を作成します
 ```rust
-// TODO: Create a structure to store a reference to a slice
+// TODO: スライスへの参照を格納する構造体を作成
 struct SliceStore {
 
 }
@@ -135,7 +135,7 @@ fn main() {
 }
 ```
 
-<details><summary>Solution (click to expand)</summary>
+<details><summary>解答例（クリックして展開）</summary>
 
 ```rust
 struct SliceStore<'a> {
@@ -159,7 +159,7 @@ fn main() {
     println!("store1: {}", store1.get_slice());
     println!("store2: {}", store2.get_slice());
 }
-// Output:
+// 出力:
 // store1: This
 // store2: is
 ```
@@ -168,154 +168,147 @@ fn main() {
 
 ---
 
-## Lifetime Elision Rules Deep Dive
+## ライフタイム省略規則の深掘り
 
-C programmers often ask: "If lifetimes are so important, why don't most Rust functions
-have `'a` annotations?" The answer is **lifetime elision** — the compiler applies three
-deterministic rules to infer lifetimes automatically.
+Cプログラマはよく「ライフタイムがそれほど重要なら、なぜほとんどのRust関数には `'a` アノテーションが付いていないのか？」と疑問に思います。その答えは**ライフタイムの省略（Lifetime Elision）**にあります。コンパイラは3つの決定論的な規則を適用して、ライフタイムを自動的に推論します。
 
-### The Three Elision Rules
+### 3つの省略規則
 
-The Rust compiler applies these rules **in order** to function signatures. If all output
-lifetimes are determined after applying the rules, no annotations are needed.
+Rustコンパイラは、関数のシグネチャに対してこれらの規則を**順番に**適用します。規則を適用した結果、すべての出力ライフタイムが決定された場合、アノテーションは不要です。
 
 ```mermaid
 flowchart TD
-    A["Function signature<br/>with references"] --> R1
-    R1["Rule 1: Each input<br/>reference gets its own<br/>lifetime<br/><br/>fn f(&amp;str, &amp;str)<br/>→ fn f&lt;'a,'b&gt;(&amp;'a str,<br/>&amp;'b str)"]
+    A["参照を持つ<br/>関数シグネチャ"] --> R1
+    R1["規則1: 各入力参照に<br/>それぞれ固有の<br/>ライフタイムを割り当てる<br/><br/>fn f(&amp;str, &amp;str)<br/>→ fn f&lt;'a,'b&gt;(&amp;'a str,<br/>&amp;'b str)"]
     R1 --> R2
-    R2["Rule 2: If exactly ONE<br/>input lifetime, assign it<br/>to ALL outputs<br/><br/>fn f(&amp;str) → &amp;str<br/>→ fn f&lt;'a&gt;(&amp;'a str)<br/>→ &amp;'a str"]
+    R2["規則2: 入力ライフタイムが<br/>ちょうど1つの場合、<br/>それをすべての出力に割り当てる<br/><br/>fn f(&amp;str) → &amp;str<br/>→ fn f&lt;'a&gt;(&amp;'a str)<br/>→ &amp;'a str"]
     R2 --> R3
-    R3["Rule 3: If one input is<br/>&amp;self or &amp;mut self,<br/>assign its lifetime to<br/>ALL outputs<br/><br/>fn f(&amp;self, &amp;str) → &amp;str<br/>→ fn f&lt;'a&gt;(&amp;'a self, &amp;str)<br/>→ &amp;'a str"]
-    R3 --> CHECK{{"All output<br/>lifetimes<br/>determined?"}}
-    CHECK -->|Yes| OK["✅ No annotations<br/>needed"]
-    CHECK -->|No| ERR["❌ Compile error:<br/>must annotate<br/>manually"]
+    R3["規則3: 入力の1つが<br/>&amp;self または &amp;mut self の場合、<br/>そのライフタイムを<br/>すべての出力に割り当てる<br/><br/>fn f(&amp;self, &amp;str) → &amp;str<br/>→ fn f&lt;'a&gt;(&amp;'a self, &amp;str)<br/>→ &amp;'a str"]
+    R3 --> CHECK{{"すべての出力<br/>ライフタイムが<br/>決定されたか？"}}
+    CHECK -->|はい| OK["✅ アノテーション<br/>不要"]
+    CHECK -->|いいえ| ERR["❌ コンパイルエラー:<br/>手動でのアノテーション<br/>が必要"]
     
     style OK fill:#91e5a3,color:#000
     style ERR fill:#ff6b6b,color:#000
 ```
 
-### Rule-by-Rule Examples
+### 規則ごとの具体例
 
-**Rule 1** — each input reference gets its own lifetime parameter:
+**規則1** — 各入力参照にそれぞれ固有のライフタイムパラメータが割り当てられる:
 ```rust
-// What you write:
+// 記述するコード:
 fn first_word(s: &str) -> &str { ... }
 
-// What the compiler sees after Rule 1:
+// 規則1適用後にコンパイラが認識するシグネチャ:
 fn first_word<'a>(s: &'a str) -> &str { ... }
-// Only one input lifetime → Rule 2 applies
+// 入力ライフタイムが1つだけ → 規則2が適用される
 ```
 
-**Rule 2** — single input lifetime propagates to all outputs:
+**規則2** — 単一の入力ライフタイムがすべての出力に伝播する:
 ```rust
-// After Rule 2:
+// 規則2適用後:
 fn first_word<'a>(s: &'a str) -> &'a str { ... }
-// ✅ All output lifetimes determined — no annotation needed!
+// ✅ すべての出力ライフタイムが決定 — アノテーションは不要！
 ```
 
-**Rule 3** — `&self` lifetime propagates to outputs:
+**規則3** — `&self` のライフタイムが出力に伝播する:
 ```rust
-// What you write:
+// 記述するコード:
 impl SliceStore<'_> {
     fn get_slice(&self) -> &str { self.slice }
 }
 
-// What the compiler sees after Rules 1 + 3:
+// 規則1および規則3適用後にコンパイラが認識するシグネチャ:
 impl SliceStore<'_> {
     fn get_slice<'a>(&'a self) -> &'a str { self.slice }
 }
-// ✅ No annotation needed — &self lifetime used for output
+// ✅ アノテーションは不要 — &self のライフタイムが出力に使用される
 ```
 
-**When elision fails** — you must annotate:
+**省略規則で解決できない場合** — アノテーションが必要:
 ```rust
-// Two input references, no &self → Rules 2 and 3 don't apply
-// fn longest(a: &str, b: &str) -> &str  ← WON'T COMPILE
+// 入力参照が2つあり、&self はない → 規則2も規則3も適用されない
+// fn longest(a: &str, b: &str) -> &str  ← コンパイルエラー
 
-// Fix: tell the compiler which input the output borrows from
+// 修正: 出力がどの入力から借用しているかをコンパイラに伝える
 fn longest<'a>(a: &'a str, b: &'a str) -> &'a str {
     if a.len() >= b.len() { a } else { b }
 }
 ```
 
-### C Programmer Mental Model
+### Cプログラマ向けのメンタルモデル
 
-In C, every pointer is independent — the programmer mentally tracks which allocation
-each pointer refers to, and the compiler trusts you completely. In Rust, lifetimes make
-this tracking **explicit and compiler-verified**:
+C言語では、すべてのポインタは独立しており、各ポインタがどのメモリ割り当てを指しているかをプログラマが頭の中で追跡し、コンパイラはプログラマを完全に信用します。Rustでは、ライフタイムによってこの追跡が**明示的になり、コンパイラによって検証**されます。
 
-| C | Rust | What happens |
+| C | Rust | 何が起きるか |
 |---|------|-------------|
-| `char* get_name(struct User* u)` | `fn get_name(&self) -> &str` | Rule 3 elides: output borrows from `self` |
-| `char* concat(char* a, char* b)` | `fn concat<'a>(a: &'a str, b: &'a str) -> &'a str` | Must annotate — two inputs |
-| `void process(char* in, char* out)` | `fn process(input: &str, output: &mut String)` | No output reference — no lifetime needed |
-| `char* buf; /* who owns this? */` | Compile error if lifetime is wrong | Compiler catches dangling pointers |
+| `char* get_name(struct User* u)` | `fn get_name(&self) -> &str` | 規則3により省略: 出力は `self` から借用 |
+| `char* concat(char* a, char* b)` | `fn concat<'a>(a: &'a str, b: &'a str) -> &'a str` | 2つの入力があるためアノテーション必須 |
+| `void process(char* in, char* out)` | `fn process(input: &str, output: &mut String)` | 出力参照がないためライフタイム不要 |
+| `char* buf; /* who owns this? */` | ライフタイムが不正な場合はコンパイルエラー | コンパイラがダングリングポインタを検出 |
 
-### The `'static` Lifetime
+### `'static` ライフタイム
 
-`'static` means the reference is valid for the **entire program duration**. It's the
-Rust equivalent of a C global or string literal:
+`'static` は、参照が**プログラムの全実行期間**にわたって有効であることを意味します。これはC言語におけるグローバル変数や文字列リテラルに相当します。
 
 ```rust
-// String literals are always 'static — they live in the binary's read-only section
-let s: &'static str = "hello";  // Same as: static const char* s = "hello"; in C
+// 文字列リテラルは常に 'static — バイナリの読み取り専用セクションに配置される
+let s: &'static str = "hello";  // C言語の static const char* s = "hello"; と同等
 
-// Constants are also 'static
+// 定数も 'static
 static GREETING: &str = "hello";
 
-// Common in trait bounds for thread spawning:
+// スレッド生成時のトレイト境界でよく使用される:
 fn spawn<F: FnOnce() + Send + 'static>(f: F) { /* ... */ }
-// 'static here means: "the closure must not borrow any local variables"
-// (either move them in, or use only 'static data)
+// ここでの 'static は「クロージャがローカル変数を借用してはならない」ことを意味する
+// （クロージャ内にムーブするか、'static データのみを使用する）
 ```
 
-### Exercise: Predict the Elision
+### 演習: ライフタイム省略の予測
 
-🟡 **Intermediate**
+🟡 **中級**
 
-For each function signature below, predict whether the compiler can elide lifetimes.
-If not, add the necessary annotations:
+以下の各関数シグネチャについて、コンパイラがライフタイムを省略できるかどうかを予測してください。省略できない場合は、必要なアノテーションを追加してください:
 
 ```rust
-// 1. Can the compiler elide?
+// 1. コンパイラは省略できるか？
 fn trim_prefix(s: &str) -> &str { &s[1..] }
 
-// 2. Can the compiler elide?
+// 2. コンパイラは省略できるか？
 fn pick(flag: bool, a: &str, b: &str) -> &str {
     if flag { a } else { b }
 }
 
-// 3. Can the compiler elide?
+// 3. コンパイラは省略できるか？
 struct Parser { data: String }
 impl Parser {
     fn next_token(&self) -> &str { &self.data[..5] }
 }
 
-// 4. Can the compiler elide?
+// 4. コンパイラは省略できるか？
 fn split_at(s: &str, pos: usize) -> (&str, &str) {
     (&s[..pos], &s[pos..])
 }
 ```
 
-<details><summary>Solution (click to expand)</summary>
+<details><summary>解答例（クリックして展開）</summary>
 
 ```rust,ignore
-// 1. YES — Rule 1 gives 'a to s, Rule 2 propagates to output
+// 1. 省略可能 — 規則1により s に 'a が割り当てられ、規則2により出力に伝播する
 fn trim_prefix(s: &str) -> &str { &s[1..] }
 
-// 2. NO — Two input references, no &self. Must annotate:
+// 2. 省略不可 — 2つの入力参照があり、&self はない。アノテーションが必要:
 fn pick<'a>(flag: bool, a: &'a str, b: &'a str) -> &'a str {
     if flag { a } else { b }
 }
 
-// 3. YES — Rule 1 gives 'a to &self, Rule 3 propagates to output
+// 3. 省略可能 — 規則1により &self に 'a が割り当てられ、規則3により出力に伝播する
 impl Parser {
     fn next_token(&self) -> &str { &self.data[..5] }
 }
 
-// 4. YES — Rule 1 gives 'a to s (only one input reference),
-//    Rule 2 propagates to BOTH outputs. Both slices borrow from s.
+// 4. 省略可能 — 規則1により s に 'a が割り当てられ（入力参照は1つのみ）、
+//    規則2により両方の出力に伝播する。両方のスライスが s から借用する。
 fn split_at(s: &str, pos: usize) -> (&str, &str) {
     (&s[..pos], &s[pos..])
 }

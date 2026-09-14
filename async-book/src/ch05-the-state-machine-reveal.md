@@ -1,19 +1,19 @@
-# 5. The State Machine Reveal 🟢
+# 5. 状態機械（ステートマシン）の正体 🟢
 
-> **What you'll learn:**
-> - How the compiler transforms `async fn` into an enum state machine
-> - Side-by-side comparison: source code vs generated states
-> - Why large stack allocations in `async fn` blow up future sizes
-> - The drop optimization: values drop as soon as they're no longer needed
+> **この章で学ぶこと:**
+> - コンパイラがどのように `async fn` を enum ベースの状態機械に変換するか
+> - ソースコードと生成された状態の対比（Side-by-side）
+> - `async fn` 内での大きなスタック割り当てが Future のサイズを肥大化させる理由
+> - ドロップ最適化: 不要になった値は即座にドロップされる
 
-## What the Compiler Actually Generates
+## コンパイラが実際に生成するもの
 
-When you write `async fn`, the compiler transforms your sequential-looking code into an enum-based state machine. Understanding this transformation is the key to understanding async Rust's performance characteristics and many of its quirks.
+`async fn` を書くと、コンパイラは一見逐次的に見えるコードを、enum ベースの状態機械（ステートマシン）に変換します。この変換を理解することは、非同期 Rust のパフォーマンス特性や多くの癖を理解するための鍵となります。
 
-### Side-by-Side: async fn vs State Machine
+### 対比: async fn vs 状態機械
 
 ```rust
-// What you write:
+// 私たちが書くコード:
 async fn fetch_two_pages() -> String {
     let page1 = http_get("https://example.com/a").await;
     let page2 = http_get("https://example.com/b").await;
@@ -21,25 +21,25 @@ async fn fetch_two_pages() -> String {
 }
 ```
 
-The compiler generates something conceptually like this:
+コンパイラは概念的に以下のようなコードを生成します：
 
 ```rust
 enum FetchTwoPagesStateMachine {
-    // State 0: About to call http_get for page1
+    // 状態 0: page1 のための http_get を呼び出す直前
     Start,
 
-    // State 1: Waiting for page1, holding the future
+    // 状態 1: page1 を待機中、Future を保持
     WaitingPage1 {
         fut1: HttpGetFuture,
     },
 
-    // State 2: Got page1, waiting for page2
+    // 状態 2: page1 を取得済み、page2 を待機中
     WaitingPage2 {
         page1: String,
         fut2: HttpGetFuture,
     },
 
-    // Terminal state
+    // 終了状態
     Complete,
 }
 
@@ -70,38 +70,35 @@ impl Future for FetchTwoPagesStateMachine {
                     *self.as_mut().get_mut() = Self::Complete;
                     return Poll::Ready(result);
                 }
-                Self::Complete => panic!("polled after completion"),
+                Self::Complete => panic!("完了後にポーリングされました"),
             }
         }
     }
 }
 ```
 
-> **Note**: This desugaring is *conceptual*. The real compiler output uses
-> `unsafe` pin projections — the `get_mut()` calls shown here require
-> `Unpin`, but async state machines are `!Unpin`. The goal is to illustrate
-> state transitions, not produce compilable code.
+> **注意**: この糖衣構文の解除（脱糖、desugaring）は *概念的なもの* です。実際のコンパイラの出力では `unsafe` な Pin 射影（pin projection）が使用されます。ここで示されている `get_mut()` の呼び出しには `Unpin` が必要ですが、async 状態機械は `!Unpin` です。ここでの目的は、コンパイル可能なコードを提示することではなく、状態遷移を説明することです。
 
 ```mermaid
 stateDiagram-v2
     [*] --> Start
-    Start --> WaitingPage1: Create http_get future #1
+    Start --> WaitingPage1: http_get の Future #1 を作成
     WaitingPage1 --> WaitingPage1: poll() → Pending
     WaitingPage1 --> WaitingPage2: poll() → Ready(page1)
     WaitingPage2 --> WaitingPage2: poll() → Pending
     WaitingPage2 --> Complete: poll() → Ready(page2)
-    Complete --> [*]: Return format!("{page1}\\n{page2}")
+    Complete --> [*]: format!("{page1}\\n{page2}") を返却
 ```
 
-> **State contents:**
-> - **WaitingPage1** — stores `fut1: HttpGetFuture` (page2 not yet allocated)
-> - **WaitingPage2** — stores `page1: String`, `fut2: HttpGetFuture` (fut1 has been dropped)
+> **状態が保持する内容:**
+> - **WaitingPage1** — `fut1: HttpGetFuture` を保持（page2 はまだ割り当てられていない）
+> - **WaitingPage2** — `page1: String`, `fut2: HttpGetFuture` を保持（fut1 はドロップ済み）
 
-### Why This Matters for Performance
+### パフォーマンスにおいてこれが重要である理由
 
-**Zero-cost**: The state machine is a stack-allocated enum. No heap allocation per future, no garbage collector, no boxing — unless you explicitly use `Box::pin()`.
+**ゼロコスト**: 状態機械はスタック上に割り当てられる enum です。明示的に `Box::pin()` を使用しない限り、Future ごとのヒープ割り当てやガベージコレクタ、ボクシングは一切発生しません。
 
-**Size**: The enum's size is the maximum of all its variants. Each `.await` point creates a new variant. This means:
+**サイズ**: enum のサイズは、そのすべてのヴァリアントの最大サイズになります。各 `.await` ポイントが新しいヴァリアントを作成します。これは以下のことを意味します：
 
 ```rust
 async fn small() {
@@ -110,31 +107,29 @@ async fn small() {
     let b: u8 = 0;
     yield_now().await;
 }
-// Size ≈ max(size_of(u8), size_of(u8)) + discriminant + future sizes
-//      ≈ small!
+// サイズ ≈ max(size_of(u8), size_of(u8)) + 判別子（discriminant） + 内部 Future のサイズ
+//      ≈ 小さい！
 
 async fn big() {
-    let buf: [u8; 1_000_000] = [0; 1_000_000]; // 1MB on the stack!
+    let buf: [u8; 1_000_000] = [0; 1_000_000]; // スタック上に 1MB！
     some_io().await;
     process(&buf);
 }
-// Size ≈ 1MB + inner future sizes
-// ⚠️ Don't stack-allocate huge buffers in async functions!
-// Use Vec<u8> or Box<[u8]> instead.
+// サイズ ≈ 1MB + 内部 Future のサイズ
+// ⚠️ async 関数内で巨大なバッファをスタック割り当てしてはいけません！
+// 代わりに Vec<u8> や Box<[u8]> を使用してください。
 ```
 
-**Drop optimization**: When a state machine transitions, it drops values no longer needed. In the example above, `fut1` is dropped when we transition from `WaitingPage1` to `WaitingPage2` — the compiler inserts the drop automatically.
+**ドロップ最適化**: 状態機械が遷移するとき、不要になった値はドロップされます。上の例では、`WaitingPage1` から `WaitingPage2` に遷移する際に `fut1` がドロップされます — コンパイラがこのドロップ処理を自動的に挿入します。
 
-> **Practical rule**: Large stack allocations in `async fn` blow up the future's
-> size. If you see stack overflows in async code, check for large arrays or
-> deeply nested futures. Use `Box::pin()` to heap-allocate sub-futures if needed.
+> **実践的なルール**: `async fn` 内での大きなスタック割り当ては、Future のサイズを急激に肥大化させます。非同期コードでスタックオーバーフローが発生した場合は、大きな配列や深くネストした Future がないか確認してください。必要に応じて、`Box::pin()` を使用してサブ Future をヒープに割り当ててください。
 
-### Exercise: Predict the State Machine
+### 演習: 状態機械を予測する
 
 <details>
-<summary>🏋️ Exercise (click to expand)</summary>
+<summary>🏋️ 演習 (クリックして展開)</summary>
 
-**Challenge**: Given this async function, sketch the state machine the compiler generates. How many states (enum variants) does it have? What values are stored in each?
+**課題**: 次の async 関数が与えられたとき、コンパイラが生成する状態機械をスケッチしてください。状態（enum ヴァリアント）はいくつありますか？ それぞれにどのような値が格納されますか？
 
 ```rust
 async fn pipeline(url: &str) -> Result<usize, Error> {
@@ -146,29 +141,27 @@ async fn pipeline(url: &str) -> Result<usize, Error> {
 ```
 
 <details>
-<summary>🔑 Solution</summary>
+<summary>🔑 解答</summary>
 
-Five states:
+5つの状態:
 
-1. **Start** — stores `url`
-2. **WaitingFetch** — stores `url`, `fetch` future
-3. **WaitingText** — stores `response`, `text()` future
-4. **WaitingParse** — stores `body`, `parse` future
-5. **Done** — returned `Ok(parsed.len())`
+1. **Start** — `url` を保持
+2. **WaitingFetch** — `url`, `fetch` の Future を保持
+3. **WaitingText** — `response`, `text()` の Future を保持
+4. **WaitingParse** — `body`, `parse` の Future を保持
+5. **Done** — `Ok(parsed.len())` を返却
 
-Each `.await` creates a yield point = a new enum variant. The `?` adds early-exit paths but doesn't add extra states — it's just a `match` on the `Poll::Ready` value.
+各 `.await` が中断ポイント（yield point）= 新しい enum ヴァリアントを作成します。`?` は早期リターン用のパスを追加しますが、余分な状態は追加しません — 単に `Poll::Ready` の値に対する `match` を行うだけです。
 
 </details>
 </details>
 
-> **Key Takeaways — The State Machine Reveal**
-> - `async fn` compiles to an enum with one variant per `.await` point
-> - The future's **size** = max of all variant sizes — large stack values blow it up
-> - The compiler inserts **drops** at state transitions automatically
-> - Use `Box::pin()` or heap allocation when future size becomes a problem
+> **要点まとめ — 状態機械の正体**
+> - `async fn` は、`.await` ポイントごとに1つのヴァリアントを持つ enum にコンパイルされる
+> - Future の**サイズ** = すべてのヴァリアントサイズの最大値 — 大きなスタック値はサイズを肥大化させる
+> - コンパイラは状態遷移時に**ドロップ**処理を自動的に挿入する
+> - Future のサイズが問題になる場合は、`Box::pin()` やヒープ割り当てを使用する
 
-> **See also:** [Ch 4 — Pin and Unpin](ch04-pin-and-unpin.md) for why the generated enum needs pinning, [Ch 6 — Building Futures by Hand](ch06-building-futures-by-hand.md) to build these state machines yourself
+> **参照:** 生成された enum になぜピニングが必要なのかについては [第4章 — Pin と Unpin](ch04-pin-and-unpin.md)、これらの状態機械をご自身で手動構築する方法については [第6章 — 手作業での Future 構築](ch06-building-futures-by-hand.md) を参照してください。
 
 ***
-
-

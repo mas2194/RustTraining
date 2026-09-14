@@ -1,72 +1,72 @@
-# Send & Sync — Compile-Time Concurrency Proofs 🟠
+# Send と Sync — コンパイル時並行性証明 🟠
 
-> **What you'll learn:** How Rust's `Send` and `Sync` auto-traits turn the compiler into a concurrency auditor — proving at compile time which types can cross thread boundaries and which can be shared, with zero runtime cost.
+> **学習内容:** Rust の `Send` と `Sync` 自動トレイト（auto-traits）がどのようにコンパイラを並行性監査役へと変え、どの型がスレッド境界を越えられ、どの型が安全に共有できるかを実行時コストゼロでコンパイル時に証明するのかを学びます。
 >
-> **Cross-references:** [ch04](ch04-capability-tokens-zero-cost-proof-of-aut.md) (capability tokens), [ch09](ch09-phantom-types-for-resource-tracking.md) (phantom types), [ch15](ch15-const-fn-compile-time-correctness-proofs.md) (const fn proofs)
+> **関連章:** [第4章](ch04-capability-tokens-zero-cost-proof-of-aut.md)（ケーパビリティトークン）、[第9章](ch09-phantom-types-for-resource-tracking.md)（幽霊型（ファントム型））、[第15章](ch15-const-fn-compile-time-correctness-proofs.md)（const fn による証明）
 
-## The Problem: Concurrent Access Without a Safety Net
+## 問題: セーフティネットのない並行アクセス
 
-In systems programming, peripherals, shared buffers, and global state are accessed from multiple contexts — main loops, interrupt handlers, DMA callbacks, and worker threads. In C, the compiler offers no enforcement whatsoever:
+システムプログラミングにおいて、ペリフェラル、共有バッファ、グローバル状態は複数のコンテキスト（メインループ、割り込みハンドラ、DMA コールバック、ワーカースレッドなど）からアクセスされます。C 言語では、コンパイラは強制力のある保護を一切提供しません：
 
 ```c
-/* Shared sensor buffer — accessed from main loop and ISR */
+/* 共有センサーバッファ — メインループと ISR からアクセスされる */
 volatile uint32_t sensor_buf[64];
 volatile uint32_t buf_index = 0;
 
 void SENSOR_IRQHandler(void) {
-    sensor_buf[buf_index++] = read_sensor();  /* Race: buf_index read + write */
+    sensor_buf[buf_index++] = read_sensor();  /* レース: buf_index の読み取り + 書き込み */
 }
 
 void process_sensors(void) {
-    for (uint32_t i = 0; i < buf_index; i++) {  /* buf_index changes mid-loop */
-        process(sensor_buf[i]);                   /* Data overwritten mid-read */
+    for (uint32_t i = 0; i < buf_index; i++) {  /* ループの途中で buf_index が変化する */
+        process(sensor_buf[i]);                   /* 読み取りの途中でデータが上書きされる */
     }
-    buf_index = 0;                                /* ISR fires between these lines */
+    buf_index = 0;                                /* これらの行の合間に ISR が発火する */
 }
 ```
 
-The `volatile` keyword prevents the compiler from optimizing away the reads, but it does **nothing** about data races. Two contexts can read and write `buf_index` simultaneously, producing torn values, lost updates, or buffer overruns. The same problem appears with `pthread_mutex_t` — the compiler will happily let you forget to lock:
+`volatile` キーワードはコンパイラが読み取りを最適化で消去することを防ぎますが、データ競合（data race）については**何も**対策しません。2つのコンテキストが同時に `buf_index` を読み書きでき、値の引き裂かれ（torn values）、更新の喪失、バッファオーバーランを引き起こします。同様の問題は `pthread_mutex_t` でも発生します — コンパイラはロックの取得を忘れても平気で見逃します：
 
 ```c
 pthread_mutex_t lock;
 int shared_counter;
 
 void increment(void) {
-    shared_counter++;  /* Oops — forgot pthread_mutex_lock(&lock) */
+    shared_counter++;  /* しまった — pthread_mutex_lock(&lock) を忘れた */
 }
 ```
 
-**Every concurrent bug is discovered at runtime** — typically under load, in production, and intermittently.
+**すべての並行性バグは実行時に発見されます** — 通常は高負荷時や本番環境で、断続的に発生します。
 
-## What Send and Sync Prove
+## Send と Sync が証明するもの
 
-Rust defines two marker traits that the compiler derives automatically:
+Rust はコンパイラが自動的に導出する2つのマーカートレイトを定義しています：
 
-| Trait | Proof | Informal meaning |
+| トレイト | 証明内容 | 直感的な意味 |
 |-------|-------|-------------------|
-| `Send` | A value of type `T` can be safely **moved** to another thread | "This can cross a thread boundary" |
-| `Sync` | A **shared reference** `&T` can be safely used by multiple threads | "This can be read from multiple threads" |
+| `Send` | 型 `T` の値が別のスレッドに安全に**ムーブ**できること | 「スレッド境界を越えられる」 |
+| `Sync` | **共有参照** `&T` を複数のスレッドで安全に使用できること | 「複数のスレッドから安全に読み取れる」 |
 
-These are **auto-traits** — the compiler derives them by inspecting every field. A struct is `Send` if all its fields are `Send`. A struct is `Sync` if all its fields are `Sync`. If any field opts out, the entire struct opts out. No annotation needed, no runtime overhead — the proof is structural.
+これらは**自動トレイト（auto-traits）**です — コンパイラはすべてのフィールドを検査することによってこれらを導出します。ある構造体のすべてのフィールドが `Send` であれば、その構造体も `Send` になります。すべてのフィールドが `Sync` であれば、その構造体も `Sync` になります。いずれかのフィールドが除外（オプトアウト）されていれば、構造体全体が除外されます。アノテーションは不要で、実行時オーバーヘッドもありません — 証明は構造的です。
 
 ```mermaid
 flowchart TD
-    STRUCT["Your struct"]
-    INSPECT["Compiler inspects<br/>every field"]
-    ALL_SEND{"All fields<br/>Send?"}
-    ALL_SYNC{"All fields<br/>Sync?"}
-    SEND_YES["Send ✅<br/><i>can cross thread boundaries</i>"]
-    SEND_NO["!Send ❌<br/><i>confined to one thread</i>"]
-    SYNC_YES["Sync ✅<br/><i>shareable across threads</i>"]
-    SYNC_NO["!Sync ❌<br/><i>no concurrent references</i>"]
+    STRUCT["構造体"]
+    INSPECT["コンパイラが<br/>すべてのフィールドを検査"]
+    ALL_SEND{"全フィールドが<br/>Send か？"}
+    ALL_SYNC{"全フィールドが<br/>Sync か？"}
+    SEND_YES["Send ✅<br/><i>スレッド境界を越えられる</i>"]
+    SEND_NO["!Send ❌<br/><i>1つのスレッドに閉じ込められる</i>"]
+    SYNC_YES["Sync ✅<br/><i>スレッド間で共有可能</i>"]
+    SYNC_NO["!Sync ❌<br/><i>並行参照不可</i>"]
 
     STRUCT --> INSPECT
     INSPECT --> ALL_SEND
     INSPECT --> ALL_SYNC
     ALL_SEND -->|Yes| SEND_YES
-    ALL_SEND -->|"Any field !Send<br/>(e.g., Rc, *const T)"| SEND_NO
+    ALL_SEND -->|"いずれかのフィールドが !Send<br/>(例: Rc, *const T)"| SEND_NO
     ALL_SYNC -->|Yes| SYNC_YES
-    ALL_SYNC -->|"Any field !Sync<br/>(e.g., Cell, RefCell)"| SYNC_NO
+    ALL_SYNC -->|"いずれかのフィールドが !Sync<br/>(例: Cell, RefCell)"| SYNC_NO
 
     style SEND_YES fill:#c8e6c9,color:#000
     style SYNC_YES fill:#c8e6c9,color:#000
@@ -74,36 +74,36 @@ flowchart TD
     style SYNC_NO fill:#ffcdd2,color:#000
 ```
 
-> **The compiler is the auditor.** In C, thread-safety annotations live in comments and header documentation — advisory, never enforced. In Rust, `Send` and `Sync` are derived from the structure of the type itself. Adding a single `Cell<f32>` field automatically makes the containing struct `!Sync`. No programmer action required, no way to forget.
+> **コンパイラ自身が監査役です。** C 言語では、スレッドセーフに関する注記はコメントやヘッダーのドキュメントに記載されますが、これらは推奨にすぎず強制されることは決してありません。Rust では、`Send` と `Sync` は型自体の構造から導出されます。`Cell<f32>` フィールドを1つ追加するだけで、それを含む構造体は自動的に `!Sync` になります。プログラマ側の操作は不要で、忘れる余地もありません。
 
-The two traits are linked by a key identity:
+この2つのトレイトは重要な恒等関係によって結ばれています：
 
-> **`T` is `Sync` if and only if `&T` is `Send`.**
+> **`T` が `Sync` であることと、`&T` が `Send` であることは同値である。**
 
-This makes intuitive sense: if a shared reference can be safely sent to another thread, then the underlying type is safe for concurrent reads.
+これは直感的に理にかなっています：もし共有参照を安全に別のスレッドに送信できるのであれば、元の型は並行な読み取りに対して安全であることになります。
 
-### Types That Opt Out
+### オプトアウトする型
 
-Certain types are deliberately `!Send` or `!Sync`:
+特定の型は意図的に `!Send` または `!Sync` になっています：
 
-| Type | Send | Sync | Why |
+| 型 | Send | Sync | 理由 |
 |------|:----:|:----:|-----|
-| `u32`, `String`, `Vec<T>` | ✅ | ✅ | No interior mutability, no raw pointers |
-| `Cell<T>`, `RefCell<T>` | ✅ | ❌ | Interior mutability without synchronization |
-| `Rc<T>` | ❌ | ❌ | Reference count is not atomic |
-| `*const T`, `*mut T` | ❌ | ❌ | Raw pointers have no safety guarantees |
-| `Arc<T>` (where `T: Send + Sync`) | ✅ | ✅ | Atomic reference count |
-| `Mutex<T>` (where `T: Send`) | ✅ | ✅ | Lock serializes all access |
+| `u32`, `String`, `Vec<T>` | ✅ | ✅ | 内部可変性がなく、生ポインタも持たない |
+| `Cell<T>`, `RefCell<T>` | ✅ | ❌ | 同期機構のない内部可変性 |
+| `Rc<T>` | ❌ | ❌ | 参照カウントがアトミックではない |
+| `*const T`, `*mut T` | ❌ | ❌ | 生ポインタには安全性保証がない |
+| `Arc<T>`（`T: Send + Sync` の場合） | ✅ | ✅ | アトミックな参照カウント |
+| `Mutex<T>`（`T: Send` の場合） | ✅ | ✅ | ロックがすべてのアクセスを直列化する |
 
-Every ❌ in this table is a **compile-time invariant**. You cannot accidentally send an `Rc` to another thread — the compiler rejects it.
+この表のすべての ❌ は**コンパイル時の不変条件**です。誤って `Rc` を別のスレッドに送信することはできません — コンパイラがそれを拒否します。
 
-## !Send Peripheral Handles
+## !Send なペリフェラルハンドル
 
-In embedded systems, a peripheral register block lives at a fixed memory address and should only be accessed from a single execution context. Raw pointers are inherently `!Send` and `!Sync`, so wrapping one automatically opts the containing type out of both traits:
+組み込みシステムでは、ペリフェラルレジスタブロックは固定メモリ空間に配置され、単一の実行コンテキストからのみアクセスされるべきです。生ポインタは本質的に `!Send` かつ `!Sync` であるため、生ポインタをラップするだけで、それを含む型も両方のトレイトから自動的にオプトアウトされます：
 
 ```rust
-/// A handle to a memory-mapped UART peripheral.
-/// The raw pointer makes this automatically !Send and !Sync.
+/// メモリマップド UART ペリフェラルへのハンドル。
+/// 生ポインタにより、これは自動的に !Send かつ !Sync になる。
 pub struct Uart {
     regs: *const u32,
 }
@@ -114,23 +114,23 @@ impl Uart {
     }
 
     pub fn write_byte(&self, byte: u8) {
-        // In real firmware: unsafe { write_volatile(self.regs.add(DATA_OFFSET), byte as u32) }
+        // 実際のファームウェアでは: unsafe { write_volatile(self.regs.add(DATA_OFFSET), byte as u32) }
         println!("UART TX: {:#04X}", byte);
     }
 }
 
 fn main() {
     let uart = Uart::new(0x4000_1000);
-    uart.write_byte(b'A');  // ✅ Use on the creating thread
+    uart.write_byte(b'A');  // ✅ 作成したスレッド上で使用
 
-    // ❌ Would not compile: Uart is !Send
+    // ❌ コンパイル不可: Uart は !Send
     // std::thread::spawn(move || {
     //     uart.write_byte(b'B');
     // });
 }
 ```
 
-The commented-out `thread::spawn` would produce:
+コメントアウトされた `thread::spawn` は次のエラーを発生させます：
 
 ```text
 error[E0277]: `*const u32` cannot be sent between threads safely
@@ -140,13 +140,14 @@ error[E0277]: `*const u32` cannot be sent between threads safely
    |                        implemented for `*const u32`
 ```
 
-**No raw pointer? Use `PhantomData`.** Sometimes a type has no raw pointer but should still be confined to one thread — for example, a file descriptor index or a handle obtained from a C library:
+**生ポインタがない場合は？`PhantomData` を使用します。**
+型が生ポインタを持たない場合でも、1つのスレッドに限定したいことがあります — たとえば、ファイルディスクリプタのインデックスや、C ライブラリから取得したハンドルの場合です：
 
 ```rust
 use std::marker::PhantomData;
 
-/// An opaque handle from a C library. PhantomData<*const ()> makes it
-/// !Send + !Sync even though the inner fd is just a plain integer.
+/// C ライブラリからの不透明な（opaque）ハンドル。PhantomData<*const ()> により、
+/// 内部の fd が単なる整数であっても !Send + !Sync になる。
 pub struct LibHandle {
     fd: i32,
     _not_send: PhantomData<*const ()>,
@@ -165,34 +166,34 @@ fn main() {
     let handle = LibHandle::open("/dev/sensor0");
     println!("fd = {}", handle.fd());
 
-    // ❌ Would not compile: LibHandle is !Send
+    // ❌ コンパイル不可: LibHandle は !Send
     // std::thread::spawn(move || { let _ = handle.fd(); });
 }
 ```
 
-This is the compile-time equivalent of C's "please read the documentation that says this handle isn't thread-safe." In Rust, the compiler enforces it.
+これは、C 言語における「このハンドルはスレッドセーフではないと記載されたドキュメントを読んでください」という注記のコンパイル時版です。Rust では、コンパイラがそれを強制します。
 
-## Mutex Transforms !Sync into Sync
+## Mutex が !Sync を Sync に変換する
 
-`Cell<T>` and `RefCell<T>` provide interior mutability without any synchronization — so they're `!Sync`. But sometimes you genuinely need to share mutable state across threads. `Mutex<T>` adds the missing synchronization, and the compiler recognizes this:
+`Cell<T>` や `RefCell<T>` は一切の同期なしで内部可変性を提供するため、`!Sync` です。しかし、場合によってはスレッド間で可変な状態を本当に共有する必要があります。`Mutex<T>` は欠けている同期機構を追加し、コンパイラはこれを認識します：
 
-> **If `T: Send`, then `Mutex<T>: Send + Sync`.**
+> **`T: Send` であれば、`Mutex<T>: Send + Sync` である。**
 
-The lock serializes all access, so the `!Sync` inner type becomes safe to share. The compiler proves this structurally — no runtime check for "did the programmer remember to lock":
+ロックがすべてのアクセスを直列化（シリアライズ）するため、`!Sync` な内部型を安全に共有できるようになります。コンパイラはこれを構造的に証明します — 「プログラマがロックを取得し忘れていないか」をチェックする実行時オーバーヘッドはありません：
 
 ```rust
 use std::sync::{Arc, Mutex};
 use std::cell::Cell;
 
-/// A sensor cache using Cell for interior mutability.
-/// Cell<u32> is !Sync — can't be shared across threads directly.
+/// 内部可変性のために Cell を使用するセンサーキャッシュ。
+/// Cell<u32> は !Sync — スレッド間で直接共有することはできない。
 struct SensorCache {
     last_reading: Cell<u32>,
     reading_count: Cell<u32>,
 }
 
 fn main() {
-    // Mutex makes SensorCache safe to share — compiler proves it
+    // Mutex により SensorCache を安全に共有できるようになる — コンパイラがそれを証明
     let cache = Arc::new(Mutex::new(SensorCache {
         last_reading: Cell::new(0),
         reading_count: Cell::new(0),
@@ -201,7 +202,7 @@ fn main() {
     let handles: Vec<_> = (0..4).map(|i| {
         let c = Arc::clone(&cache);
         std::thread::spawn(move || {
-            let guard = c.lock().unwrap();  // Must lock before access
+            let guard = c.lock().unwrap();  // アクセス前に必ずロックを取得しなければならない
             guard.last_reading.set(i * 10);
             guard.reading_count.set(guard.reading_count.get() + 1);
         })
@@ -215,13 +216,13 @@ fn main() {
 }
 ```
 
-Compare to the C version: `pthread_mutex_lock` is a runtime call that the programmer can forget. Here, the type system makes it impossible to access `SensorCache` without going through the `Mutex`. The proof is structural — the only runtime cost is the lock itself.
+C 言語のバージョンと比較してみてください：`pthread_mutex_lock` はプログラマが呼び忘れかねない実行時呼び出しです。ここでは、型システムによって `Mutex` を経由せずに `SensorCache` にアクセスすることが不可能になっています。証明は構造的であり、唯一の実行時コストはロックそのものだけです。
 
-> **`Mutex` doesn't just synchronize — it proves synchronization.** `Mutex::lock()` returns a `MutexGuard` that `Deref`s to `&T`. There is no way to obtain a reference to the inner data without going through the lock. The API makes "forgot to lock" structurally unrepresentable.
+> **`Mutex` は単に同期を行うだけでなく、同期されていることを証明します。** `Mutex::lock()` は `&T` へ `Deref` する `MutexGuard` を返します。ロックを経由せずに内部データへの参照を取得する方法はありません。この API は「ロックの忘れ」を構造的に表現不可能にしています。
 
-## Function Bounds as Theorems
+## 定理としての関数境界（Function Bounds）
 
-`std::thread::spawn` has this signature:
+`std::thread::spawn` は次のシグネチャを持っています：
 
 ```rust,ignore
 pub fn spawn<F, T>(f: F) -> JoinHandle<T>
@@ -230,17 +231,17 @@ where
     T: Send + 'static,
 ```
 
-The `Send + 'static` bound isn't just an implementation detail — it's a **theorem**:
+`Send + 'static` というトレイト境界は単なる実装の詳細ではなく、**定理**です：
 
-> "Any closure and return value passed to `spawn` is proven at compile time to be safe to run on another thread, with no dangling references."
+> 「`spawn` に渡される任意のクロージャと戻り値は、ダングリング参照を持たず、別のスレッドで安全に実行できることがコンパイル時に証明されている。」
 
-You can apply the same pattern to your own APIs:
+自身の API にも同じパターンを適用できます：
 
 ```rust
 use std::sync::mpsc;
 
-/// Run a task on a background thread and return its result.
-/// The bounds prove: the closure and its result are thread-safe.
+/// バックグラウンドスレッドでタスクを実行し、その結果を返す。
+/// トレイト境界が証明すること: クロージャとその結果はスレッドセーフである。
 fn run_on_background<F, T>(task: F) -> T
 where
     F: FnOnce() -> T + Send + 'static,
@@ -254,22 +255,22 @@ where
 }
 
 fn main() {
-    // ✅ u32 is Send, closure captures nothing non-Send
+    // ✅ u32 は Send であり、クロージャは非 Send なものをキャプチャしない
     let result = run_on_background(|| 6 * 7);
     println!("Result: {result}");
 
-    // ✅ String is Send
+    // ✅ String は Send
     let greeting = run_on_background(|| String::from("hello from background"));
     println!("{greeting}");
 
-    // ❌ Would not compile: Rc is !Send
+    // ❌ コンパイル不可: Rc は !Send
     // use std::rc::Rc;
     // let data = Rc::new(42);
     // run_on_background(move || *data);
 }
 ```
 
-Uncommenting the `Rc` example produces a precise diagnostic:
+`Rc` の例のコメントを解除すると、的確な診断メッセージが出力されます：
 
 ```text
 error[E0277]: `Rc<i32>` cannot be sent between threads safely
@@ -284,64 +285,64 @@ note: required by a bound in `run_on_background`
     |                        ^^^^ required by this bound
 ```
 
-The compiler traces the violation back to the exact bound — and tells the programmer *why*. Compare to C's `pthread_create`:
+コンパイラは違反の原因を正確な境界まで遡り、プログラマに*なぜ*ダメなのかを伝えます。C 言語の `pthread_create` と比較してみてください：
 
 ```c
 int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
                    void *(*start_routine)(void *), void *arg);
 ```
 
-The `void *arg` accepts anything — thread-safe or not. The C compiler can't distinguish a non-atomic refcount from a plain integer. Rust's trait bounds make the distinction at the type level.
+`void *arg` はスレッドセーフであろうとなかろうと、あらゆるものを受け取ってしまいます。C コンパイラは非アトミックな参照カウントと単なる整数を区別できません。Rust のトレイト境界は、型レベルでこの区別を行います。
 
-## When to Use Send/Sync Proofs
+## いつ Send/Sync による証明を使用すべきか
 
-| Scenario | Approach |
+| シナリオ | アプローチ |
 |----------|----------|
-| Peripheral handle wrapping a raw pointer | Automatic `!Send + !Sync` — nothing to do |
-| Handle from C library (integer fd/handle) | Add `PhantomData<*const ()>` for `!Send + !Sync` |
-| Shared config behind a lock | `Arc<Mutex<T>>` — compiler proves access is safe |
-| Cross-thread message passing | `mpsc::channel` — `Send` bound enforced automatically |
-| Task spawner or thread pool API | Require `F: Send + 'static` in signature |
-| Single-threaded resource (e.g., GPU context) | `PhantomData<*const ()>` to prevent sharing |
-| Type should be `Send` but contains a raw pointer | `unsafe impl Send` with documented safety justification |
+| 生ポインタをラップしたペリフェラルハンドル | 自動的に `!Send + !Sync` — 何もする必要なし |
+| C ライブラリからのハンドル（整数の fd/ハンドル） | `!Send + !Sync` にするために `PhantomData<*const ()>` を追加 |
+| ロック配下の共有設定 | `Arc<Mutex<T>>` — コンパイラがアクセスが安全であることを証明 |
+| スレッド間のメッセージパッシング | `mpsc::channel` — `Send` 境界が自動的に強制される |
+| タスクスポウナーやスレッドプール API | シグネチャで `F: Send + 'static` を要求 |
+| 単一スレッド専用リソース（例: GPU コンテキスト） | 共有を防止するために `PhantomData<*const ()>` を使用 |
+| 型を `Send` にしたいが生ポインタを含んでいる | 安全性の根拠を文書化した上で `unsafe impl Send` |
 
-### Cost Summary
+### コストのまとめ
 
-| What | Runtime cost |
+| 項目 | 実行時コスト |
 |------|:------:|
-| `Send` / `Sync` auto-derivation | Compile time only — 0 bytes |
-| `PhantomData<*const ()>` field | Zero-sized — optimised away |
-| `!Send` / `!Sync` enforcement | Compile time only — no runtime check |
-| `F: Send + 'static` function bounds | Monomorphised — static dispatch, no boxing |
-| `Mutex<T>` lock | Runtime lock (unavoidable for shared mutation) |
-| `Arc<T>` reference counting | Atomic increment/decrement (unavoidable for shared ownership) |
+| `Send` / `Sync` の自動導出 | コンパイル時のみ — 0 バイト |
+| `PhantomData<*const ()>` フィールド | ゼロサイズ — 最適化で消去 |
+| `!Send` / `!Sync` の強制 | コンパイル時のみ — 実行時チェックなし |
+| `F: Send + 'static` 関数境界 | 単相化 — 静的ディスパッチ、ボクシングなし |
+| `Mutex<T>` ロック | 実行時ロック（共有可変性には不可避） |
+| `Arc<T>` 参照カウント | アトミックなインクリメント/デクリメント（共有所有権には不可避） |
 
-The first four rows are **zero-cost** — they exist only in the type system and vanish after compilation. `Mutex` and `Arc` carry unavoidable runtime costs, but those costs are the *minimum* any correct concurrent program must pay — Rust just makes sure you pay them.
+最初の4行は**ゼロコスト**です — 型システム内にのみ存在し、コンパイル後に消え去ります。`Mutex` と `Arc` には不可避な実行時コストが伴いますが、それらのコストは正しい並行プログラムが支払わなければならない*最小限*のコストです — Rust はそれを確実に支払わせるだけです。
 
-## Exercise: DMA Transfer Guard
+## 演習: DMA 転送ガード
 
-Design a `DmaTransfer<T>` that holds a buffer while a DMA transfer is in flight. Requirements:
+DMA 転送の実行中にバッファを保持する `DmaTransfer<T>` を設計してください。要件：
 
-1. `DmaTransfer` must be `!Send` — the DMA controller uses physical addresses tied to this core's memory bus
-2. `DmaTransfer` must be `!Sync` — concurrent reads while DMA is writing would see torn data
-3. Provide a `wait()` method that **consumes** the guard and returns the buffer — ownership proves the transfer is complete
-4. The buffer type `T` must implement a `DmaSafe` marker trait
+1. `DmaTransfer` は `!Send` でなければならない — DMA コントローラはこのコアのメモリバスに紐づく物理アドレスを使用する
+2. `DmaTransfer` は `!Sync` でなければならない — DMA が書き込んでいる間の並行な読み取りは引き裂かれたデータを参照してしまう
+3. ガードを**消費**してバッファを返却する `wait()` メソッドを提供する — 所有権が転送の完了を証明する
+4. バッファ型 `T` は `DmaSafe` マーカートレイトを実装していなければならない
 
 <details>
-<summary>Solution</summary>
+<summary>解答例</summary>
 
 ```rust
 use std::marker::PhantomData;
 
-/// Marker trait for types that can be used as DMA buffers.
-/// In real firmware: type must be repr(C) with no padding.
+/// DMA バッファとして使用できる型のためのマーカートレイト。
+/// 実際のファームウェアでは: パディングのない repr(C) 型でなければならない。
 trait DmaSafe {}
 
 impl DmaSafe for [u8; 64] {}
 impl DmaSafe for [u8; 256] {}
 
-/// A guard representing an in-flight DMA transfer.
-/// !Send + !Sync: can't be sent to another thread or shared.
+/// 実行中の DMA 転送を表すガード。
+/// !Send + !Sync: 別のスレッドに送信することも共有することもできない。
 pub struct DmaTransfer<T: DmaSafe> {
     buffer: T,
     channel: u8,
@@ -349,9 +350,9 @@ pub struct DmaTransfer<T: DmaSafe> {
 }
 
 impl<T: DmaSafe> DmaTransfer<T> {
-    /// Start a DMA transfer. The buffer is consumed — no one else can touch it.
+    /// DMA 転送を開始する。バッファは消費される — 他の誰も触れることはできない。
     pub fn start(buffer: T, channel: u8) -> Self {
-        // In real firmware: configure DMA channel, set source/dest, start transfer
+        // 実際のファームウェアでは: DMA チャネルを設定し、転送元/転送先を指定して転送を開始
         println!("DMA channel {} started", channel);
         Self {
             buffer,
@@ -360,10 +361,10 @@ impl<T: DmaSafe> DmaTransfer<T> {
         }
     }
 
-    /// Wait for the transfer to complete and return the buffer.
-    /// Consumes self — the guard no longer exists after this.
+    /// 転送の完了を待機し、バッファを返す。
+    /// self を消費する — これ以降ガードは存在しなくなる。
     pub fn wait(self) -> T {
-        // In real firmware: poll DMA status register until complete
+        // 実際のファームウェアでは: 完了するまで DMA ステータスレジスタをポーリング
         println!("DMA channel {} complete", self.channel);
         self.buffer
     }
@@ -372,16 +373,16 @@ impl<T: DmaSafe> DmaTransfer<T> {
 fn main() {
     let buf = [0u8; 64];
 
-    // Start transfer — buf is moved into the guard
+    // 転送開始 — buf はガード内にムーブされる
     let transfer = DmaTransfer::start(buf, 2);
 
-    // ❌ buf is no longer accessible — ownership prevents use-during-DMA
+    // ❌ buf にはもうアクセスできない — 所有権が DMA 実行中の使用を防止する
     // println!("{:?}", buf);
 
-    // ❌ Would not compile: DmaTransfer is !Send
+    // ❌ コンパイル不可: DmaTransfer は !Send
     // std::thread::spawn(move || { transfer.wait(); });
 
-    // ✅ Wait on the original thread, get the buffer back
+    // ✅ 元のスレッドで待機し、バッファを取り戻す
     let buf = transfer.wait();
     println!("Buffer recovered: {} bytes", buf.len());
 }
@@ -391,25 +392,25 @@ fn main() {
 
 ```mermaid
 flowchart TB
-    subgraph compiler["Compile Time — Auto-Derived Proofs"]
+    subgraph compiler["コンパイル時 — 自動導出される証明"]
         direction TB
-        SEND["Send<br/>✅ safe to move across threads"]
-        SYNC["Sync<br/>✅ safe to share references"]
-        NOTSEND["!Send<br/>❌ confined to one thread"]
-        NOTSYNC["!Sync<br/>❌ no concurrent sharing"]
+        SEND["Send<br/>✅ スレッド間を安全にムーブ可能"]
+        SYNC["Sync<br/>✅ 参照を安全に共有可能"]
+        NOTSEND["!Send<br/>❌ 1つのスレッドに限定"]
+        NOTSYNC["!Sync<br/>❌ 並行共有不可"]
     end
 
-    subgraph types["Type Taxonomy"]
+    subgraph types["型の分類"]
         direction TB
-        PLAIN["Primitives, String, Vec<br/>Send + Sync"]
+        PLAIN["プリミティブ, String, Vec<br/>Send + Sync"]
         CELL["Cell, RefCell<br/>Send + !Sync"]
-        RC["Rc, raw pointers<br/>!Send + !Sync"]
-        MUTEX["Mutex&lt;T&gt;<br/>restores Sync"]
-        ARC["Arc&lt;T&gt;<br/>shared ownership + Send"]
+        RC["Rc, 生ポインタ<br/>!Send + !Sync"]
+        MUTEX["Mutex&lt;T&gt;<br/>Sync を回復"]
+        ARC["Arc&lt;T&gt;<br/>共有所有権 + Send"]
     end
 
-    subgraph runtime["Runtime"]
-        SAFE["Thread-safe access<br/>No data races<br/>No forgotten locks"]
+    subgraph runtime["実行時"]
+        SAFE["スレッドセーフなアクセス<br/>データ競合なし<br/>ロック忘れなし"]
     end
 
     SEND --> PLAIN
@@ -431,16 +432,16 @@ flowchart TB
     style SAFE fill:#c8e6c9,color:#000
 ```
 
-## Key Takeaways
+## 主なポイント
 
-1. **`Send` and `Sync` are compile-time proofs about concurrency safety** — the compiler derives them structurally by inspecting every field. No annotation, no runtime cost, no opt-in needed.
+1. **`Send` と `Sync` は並行性の安全性に関するコンパイル時証明である** — コンパイラはすべてのフィールドを検査することで、これらを構造的に自動導出します。アノテーションも、実行時コストも、明示的なオプトインも不要です。
 
-2. **Raw pointers automatically opt out** — any type containing `*const T` or `*mut T` becomes `!Send + !Sync`. This makes peripheral handles naturally thread-confined.
+2. **生ポインタは自動的にオプトアウトする** — `*const T` または `*mut T` を含むあらゆる型は `!Send + !Sync` になります。これにより、ペリフェラルハンドルは自然にスレッド限定になります。
 
-3. **`PhantomData<*const ()>` is the explicit opt-out** — when a type has no raw pointer but should still be thread-confined (C library handles, GPU contexts), a phantom field does the job.
+3. **`PhantomData<*const ()>` は明示的なオプトアウト手段** — 型が生ポインタを持たない場合でもスレッド限定にしたい場合（C ライブラリのハンドル、GPU コンテキスト）、幽霊フィールドがその役目を果たします。
 
-4. **`Mutex<T>` restores `Sync` with proof** — the compiler structurally proves that all access goes through the lock. Unlike C's `pthread_mutex_t`, you cannot forget to lock.
+4. **`Mutex<T>` は証明を伴って `Sync` を回復する** — コンパイラはすべてのアクセスがロックを経由することを構造的に証明します。C 言語の `pthread_mutex_t` とは異なり、ロックの取得を忘れることはできません。
 
-5. **Function bounds are theorems** — `F: Send + 'static` in a spawner's signature is a compile-time proof obligation: every call site must prove its closure is thread-safe. Compare to C's `void *arg` which accepts anything.
+5. **関数境界は定理である** — スポウナーのシグネチャにおける `F: Send + 'static` はコンパイル時の証明義務です: すべての呼び出し元は自身のクロージャがスレッドセーフであることを証明しなければなりません。何でも受け取ってしまう C 言語の `void *arg` と比較してみてください。
 
-6. **The pattern complements all other correctness techniques** — typestate proves protocol sequencing, phantom types prove permissions, `const fn` proves value invariants, and `Send`/`Sync` prove concurrency safety. Together they cover the full correctness surface.
+6. **このパターンは他のすべての正しさの技法を補完する** — 型状態（タイプステート）がプロトコルの順序を証明し、幽霊型がパーミッションを証明し、`const fn` が値の不変条件を証明し、`Send`/`Sync` が並行性の安全性を証明します。これらが合わさることで、正しさの領域全体が網羅されます。

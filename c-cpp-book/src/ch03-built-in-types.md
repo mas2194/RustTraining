@@ -1,77 +1,74 @@
-# Built-in Rust types
+# Rustの組み込み型
 
-> **What you'll learn:** Rust's fundamental types (`i32`, `u64`, `f64`, `bool`, `char`), type inference, explicit type annotations, and how they compare to C/C++ primitive types. No implicit conversions — Rust requires explicit casts.
+> **学習目標:** Rustの基本型（`i32`, `u64`, `f64`, `bool`, `char`）、型推論、明示的な型注釈、そしてそれらがC/C++のプリミティブ型とどう比較されるかを学びます。暗黙の型変換はありません — Rustでは明示的なキャストが必要です。
 
-- Rust has type inference, but also allows explicit specification of the type 
+- Rustには型推論がありますが、型を明示的に指定することも可能です
 
-|  **Description**  |            **Type**            |          **Example**          |
+|  **説明**  |            **型**            |          **例**          |
 |:-----------------:|:------------------------------:|:-----------------------------:|
-| Signed integers   | i8, i16, i32, i64, i128, isize | -1, 42, 1_00_000, 1_00_000i64 |
-| Unsigned integers | u8, u16, u32, u64, u128, usize | 0, 42, 42u32, 42u64           |
-| Floating point    | f32, f64                       | 0.0, 0.42                     |
+| 符号付き整数   | i8, i16, i32, i64, i128, isize | -1, 42, 1_00_000, 1_00_000i64 |
+| 符号なし整数 | u8, u16, u32, u64, u128, usize | 0, 42, 42u32, 42u64           |
+| 浮動小数点数    | f32, f64                       | 0.0, 0.42                     |
 | Unicode           | char                           | 'a', '$'                      |
-| Boolean           | bool                           | true, false                   |
+| 真偽値           | bool                           | true, false                   |
 
-- Rust permits arbitrary use of ```_``` between numbers for ease of reading
+- Rustでは読みやすさのために数値の間に任意の `_` を挟むことができます
 ----
-### Rust type specification and assignment
-- Rust uses the ```let``` keyword to assign values to variables. The type of the variable can be optionally specified after a ```:```
+### Rustの型指定と代入
+- Rustでは変数へ値を代入（束縛）するために `let` キーワードを使用します。変数の型は `:` の後に任意で指定できます
 ```rust
 fn main() {
     let x : i32 = 42;
-    // These two assignments are logically equivalent
+    // これら2つの代入は論理的に同等です
     let y : u32 = 42;
     let z = 42u32;
 }
 ``` 
-- Function parameters and return values (if any) require an explicit type. The following takes a u8 parameter and returns u32
+- 関数のパラメータと戻り値（ある場合）には明示的な型指定が必要です。以下は `u8` のパラメータを受け取り `u32` を返します
 ```rust
 fn foo(x : u8) -> u32
 {
     return x as u32 * x as u32;
 }
 ```
-- Unused variables are prefixed with ```_``` to avoid compiler warnings
+- 未使用の変数には `_` をプレフィックスとして付けることで、コンパイラの警告を回避できます
 ----
-# Rust type specification and inference
-- Rust can automatically infer the type of the variable based on the context. 
-- [▶ Try it in the Rust Playground](https://play.rust-lang.org/)
+# Rustの型指定と推論
+- Rustは文脈に基づいて変数の型を自動的に推論できます。
+- [▶ Rust Playground で試す](https://play.rust-lang.org/)
 ```rust
 fn secret_of_life_u32(x : u32) {
-    println!("The u32 secret_of_life is {}", x);
+    println!("u32のsecret_of_lifeは{}", x);
 }
 
 fn secret_of_life_u8(x : u8) {
-    println!("The u8 secret_of_life is {}", x);
+    println!("u8のsecret_of_lifeは{}", x);
 }
 
 fn main() {
-    let a = 42; // The let keyword assigns a value; type of a is u32
-    let b = 42; // The let keyword assigns a value; inferred type of b is u8
+    let a = 42; // letキーワードで値を代入; aの型はu32
+    let b = 42; // letキーワードで値を代入; bの推論される型はu8
     secret_of_life_u32(a);
     secret_of_life_u8(b);
 }
 ```
 
-# Rust variables and mutability
-- Rust variables are **immutable** by default unless the ```mut``` keyword is used to denote that a variable is mutable. For example, the following code will not compile unless the ```let a = 42``` is changed to ```let mut a = 42```
+# Rustの変数と可変性
+- Rustの変数は、可変であることを示す `mut` キーワードを使用しない限り、デフォルトで**不変（immutable）**です。例えば、次のコードは `let a = 42` を `let mut a = 42` に変更しない限りコンパイルされません
 ```rust
 fn main() {
-    let a = 42; // Must be changed to let mut a = 42 to permit the assignment below 
-    a = 43;  // Will not compile unless the above is changed
+    let a = 42; // 以下の代入を許可するには let mut a = 42 に変更する必要があります
+    a = 43;  // 上記を変更しない限りコンパイルエラーになります
 }
 ```
-- Rust permits the reuse of the variable names (shadowing)
+- Rustでは変数名の再利用（シャドーイング）が許可されています
 ```rust
 fn main() {
     let a = 42;
     {
-        let a = 43; //OK: Different variable with the same name
+        let a = 43; // OK: 同じ名前を持つ異なる変数
     }
-    // a = 43; // Not permitted
-    let a = 43; // Ok: New variable and assignment
+    // a = 43; // 許可されていません
+    let a = 43; // OK: 新しい変数としての宣言と代入
 }
 ```
-
-
-

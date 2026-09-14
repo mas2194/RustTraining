@@ -1,45 +1,45 @@
-# Case Study Overview: C++ to Rust Translation
+# 事例研究の概要：C++からRustへの移行
 
-> **What you'll learn:** Lessons from a real-world translation of ~100K lines of C++ to ~90K lines of Rust across ~20 crates. Five key transformation patterns and the architectural decisions behind them.
+> **学習内容:** 約10万行のC++から約20個のクレートに跨る約9万行のRustへの実環境での移行から得られた教訓。5つの主要な変換パターンと、その背後にあるアーキテクチャ上の決定事項。
 
-- We translated a large C++ diagnostic system (~100K lines of C++) into a Rust implementation (~20 Rust crates, ~90K lines)
-- This section shows the **actual patterns** used — not toy examples, but real production code
-- The five key transformations:
+- 大規模なC++診断システム（約10万行のC++）をRust実装（約20個のRustクレート、約9万行）へと移行しました
+- 本セクションでは、トイプログラムではなく、実際のプロダクションコードで使用された**実践的なパターン**を紹介します
+- 5つの主要な変換パターン：
 
-| **#** | **C++ Pattern** | **Rust Pattern** | **Impact** |
+| **#** | **C++のパターン** | **Rustのパターン** | **影響・効果** |
 |-------|----------------|-----------------|-----------|
-| 1 | Class hierarchy + `dynamic_cast` | Enum dispatch + `match` | ~400 → 0 dynamic_casts |
-| 2 | `shared_ptr` / `enable_shared_from_this` tree | Arena + index linkage | No reference cycles |
-| 3 | `Framework*` raw pointer in every module | `DiagContext<'a>` with lifetime borrowing | Compile-time validity |
-| 4 | God object  | Composable state structs | Testable, modular |
-| 5 | `vector<unique_ptr<Base>>` everywhere | Trait objects **only** where needed (~25 uses) | Static dispatch default |
+| 1 | クラス階層 + `dynamic_cast` | Enumディスパッチ + `match` | `dynamic_cast` が約400箇所 → 0箇所に削減 |
+| 2 | `shared_ptr` / `enable_shared_from_this` によるツリー | アリーナ + インデックス参照 | 循環参照の完全な排除 |
+| 3 | すべてのモジュールに `Framework*` 生ポインタ | ライフタイム借用を用いた `DiagContext<'a>` | コンパイル時の有効性保証 |
+| 4 | 神オブジェクト（God Object） | コンポーザブルな状態構造体 | テスト容易性とモジュール性の向上 |
+| 5 | いたる所にある `vector<unique_ptr<Base>>` | **真に必要な箇所にのみ** トレイトオブジェクト（約25箇所） | 静的ディスパッチをデフォルトに |
 
-### Before and After Metrics
+### 移行前後のメトリクス比較
 
-| **Metric** | **C++ (Original)** | **Rust (Rewrite)** |
+| **指標** | **C++（移行前）** | **Rust（リライト後）** |
 |------------|---------------------|------------------------|
-| `dynamic_cast` / type downcasts | ~400 | 0 |
-| `virtual` / `override` methods | ~900 | ~25 (`Box<dyn Trait>`) |
-| Raw `new` allocations | ~200 | 0 (all owned types) |
-| `shared_ptr` / reference counting | ~10 (topology lib) | 0 (`Arc` only at FFI boundary) |
-| `enum class` definitions | ~60 | ~190 `pub enum` |
-| Pattern matching expressions | N/A | ~750 `match` |
-| God objects (>5K lines) | 2 | 0 |
+| `dynamic_cast` / 型のダウンキャスト | 約400箇所 | 0 |
+| `virtual` / `override` メソッド | 約900箇所 | 約25箇所（`Box<dyn Trait>`） |
+| 生の `new` によるメモリ確保 | 約200箇所 | 0（すべて所有型） |
+| `shared_ptr` / 参照カウント | 約10箇所（トポロジライブラリ） | 0（FFI境界でのみ `Arc` を使用） |
+| `enum class` の定義数 | 約60 | 約190（`pub enum`） |
+| パターンマッチング式 | N/A | 約750（`match`） |
+| 神オブジェクト（5,000行以上） | 2 | 0 |
 
 ----
 
-# Case Study 1: Inheritance hierarchy → Enum dispatch
+# ケーススタディ1: 継承階層 → Enumディスパッチ
 
-## The C++ Pattern: Event Class Hierarchy
+## C++のパターン: イベントクラス階層
 ```cpp
-// C++ original: Every GPU event type is a class inheriting from GpuEventBase
+// C++の原型: すべてのGPUイベント型がGpuEventBaseを継承するクラス
 class GpuEventBase {
 public:
     virtual ~GpuEventBase() = default;
     virtual void Process(DiagFramework* fw) = 0;
     uint16_t m_recordId;
     uint8_t  m_sensorType;
-    // ... common fields
+    // ... 共通フィールド
 };
 
 class GpuPcieDegradeEvent : public GpuEventBase {
@@ -51,25 +51,25 @@ public:
 
 class GpuPcieFatalEvent : public GpuEventBase { /* ... */ };
 class GpuBootEvent : public GpuEventBase { /* ... */ };
-// ... 10+ event classes inheriting from GpuEventBase
+// ... GpuEventBaseを継承する10個以上のイベントクラス
 
-// Processing requires dynamic_cast:
+// 処理には dynamic_cast が必要:
 void ProcessEvents(std::vector<std::unique_ptr<GpuEventBase>>& events,
                    DiagFramework* fw) {
     for (auto& event : events) {
         if (auto* degrade = dynamic_cast<GpuPcieDegradeEvent*>(event.get())) {
-            // handle degrade...
+            // degradeイベントを処理...
         } else if (auto* fatal = dynamic_cast<GpuPcieFatalEvent*>(event.get())) {
-            // handle fatal...
+            // fatalイベントを処理...
         }
-        // ... 10 more branches
+        // ... さらに10個以上の分岐
     }
 }
 ```
 
-## The Rust Solution: Enum Dispatch
+## Rustの解決策: Enumディスパッチ
 ```rust
-// Example: types.rs — No inheritance, no vtable, no dynamic_cast
+// 実装例: types.rs — 継承なし、vtableなし、dynamic_castなし
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum GpuEventKind {
     PcieDegrade,
@@ -86,19 +86,19 @@ pub enum GpuEventKind {
 ```
 
 ```rust
-// Example: manager.rs — Separate typed Vecs, no downcasting needed
+// 実装例: manager.rs — 型ごとに分離されたVec、ダウンキャストは不要
 pub struct GpuEventManager {
     sku: SkuVariant,
-    degrade_events: Vec<GpuPcieDegradeEvent>,   // Concrete type, not Box<dyn>
+    degrade_events: Vec<GpuPcieDegradeEvent>,   // Box<dyn> ではなく具象型
     fatal_events: Vec<GpuPcieFatalEvent>,
     uncorr_events: Vec<GpuPcieUncorrEvent>,
     boot_events: Vec<GpuBootEvent>,
     baseboard_events: Vec<GpuBaseboardEvent>,
     ecc_events: Vec<GpuEccEvent>,
-    // ... each event type gets its own Vec
+    // ... 各イベント型が独自のVecを持つ
 }
 
-// Accessors return typed slices — zero ambiguity
+// アクセサは型付きスライスを返す — 曖昧さはゼロ
 impl GpuEventManager {
     pub fn degrade_events(&self) -> &[GpuPcieDegradeEvent] {
         &self.degrade_events
@@ -109,49 +109,49 @@ impl GpuEventManager {
 }
 ```
 
-### Why Not `Vec<Box<dyn GpuEvent>>`?
-- **The Wrong Approach** (literal translation): Put all events in one heterogeneous collection, then downcast — this is what C++ does with `vector<unique_ptr<Base>>`
-- **The Right Approach**: Separate typed Vecs eliminate *all* downcasting. Each consumer asks for exactly the event type it needs
-- **Performance**: Separate Vecs give better cache locality (all degrade events are contiguous in memory)
+### なぜ `Vec<Box<dyn GpuEvent>>` ではないのか？
+- **誤ったアプローチ**（直訳的な移行）: すべてのイベントを1つの異種混在コレクション（ヘテロジニアスコレクション）に入れ、後からダウンキャストする — これはC++が `vector<unique_ptr<Base>>` で行っていることです
+- **正しいアプローチ**: 型ごとに分離されたVecを用意することで、*すべての* ダウンキャストを排除します。各コンシューマは必要なイベント型のみを正確に要求します
+- **パフォーマンス**: 分離されたVecによりキャッシュ局所性が向上します（すべてのdegradeイベントがメモリ上で連続して配置されます）
 
 ----
 
-# Case Study 2: shared_ptr tree → Arena/index pattern
+# ケーススタディ2: shared_ptrツリー → アリーナ/インデックスパターン
 
-## The C++ Pattern: Reference-Counted Tree
+## C++のパターン: 参照カウントツリー
 ```cpp
-// C++ topology library: PcieDevice uses enable_shared_from_this 
-// because parent and child nodes both need to reference each other
+// C++のトポロジライブラリ: 親ノードと子ノードの双方が互いを参照する必要があるため、
+// PcieDevice は enable_shared_from_this を使用する
 class PcieDevice : public std::enable_shared_from_this<PcieDevice> {
 public:
     std::shared_ptr<PcieDevice> m_upstream;
     std::vector<std::shared_ptr<PcieDevice>> m_downstream;
-    // ... device data
+    // ... デバイスデータ
     
     void AddChild(std::shared_ptr<PcieDevice> child) {
-        child->m_upstream = shared_from_this();  // Parent ↔ child cycle!
+        child->m_upstream = shared_from_this();  // 親 ↔ 子の循環参照！
         m_downstream.push_back(child);
     }
 };
-// Problem: parent→child and child→parent create reference cycles
-// Need weak_ptr to break cycles, but easy to forget
+// 問題点: 親→子および子→親の参照により循環参照が発生する
+// 循環を断つには weak_ptr が必要だが、設定を忘れやすい
 ```
 
-## The Rust Solution: Arena with Index Linkage
+## Rustの解決策: インデックス参照によるアリーナ構造
 ```rust
-// Example: components.rs — Flat Vec owns all devices
+// 実装例: components.rs — 平坦なVecがすべてのデバイスを所有する
 pub struct PcieDevice {
     pub base: PcieDeviceBase,
     pub kind: PcieDeviceKind,
 
-    // Tree linkage via indices — no reference counting, no cycles
-    pub upstream_idx: Option<usize>,      // Index into the arena Vec
-    pub downstream_idxs: Vec<usize>,      // Indices into the arena Vec
+    // インデックスによるツリー構造のリンク — 参照カウントなし、循環なし
+    pub upstream_idx: Option<usize>,      // アリーナVecへのインデックス
+    pub downstream_idxs: Vec<usize>,      // アリーナVecへのインデックス群
 }
 
-// The "arena" is simply a Vec<PcieDevice> owned by the tree:
+// 「アリーナ」とは、ツリーによって所有される単なる Vec<PcieDevice> です:
 pub struct DeviceTree {
-    devices: Vec<PcieDevice>,  // Flat ownership — one Vec owns everything
+    devices: Vec<PcieDevice>,  // 単一の所有権 — 1つのVecがすべてを所有する
 }
 
 impl DeviceTree {
@@ -169,29 +169,29 @@ impl DeviceTree {
 }
 ```
 
-### Key Insight
-- **No `shared_ptr`, no `weak_ptr`, no `enable_shared_from_this`**
-- **No reference cycles possible** — indices are just `usize` values
-- **Better cache performance** — all devices in contiguous memory
-- **Simpler reasoning** — one owner (the Vec), many viewers (indices)
+### 重要な知見
+- **`shared_ptr`、`weak_ptr`、`enable_shared_from_this` が一切不要**
+- **循環参照が発生し得ない** — インデックスは単なる `usize` 値
+- **キャッシュパフォーマンスの向上** — すべてのデバイスが連続したメモリ領域に配置
+- **理解しやすい所有構造** — 1つの所有者（Vec）と多数の参照者（インデックス）
 
 ```mermaid
 graph LR
-    subgraph "C++ shared_ptr Tree"
+    subgraph "C++の shared_ptr ツリー"
         A1["shared_ptr<Device>"] -->|"shared_ptr"| B1["shared_ptr<Device>"]
-        B1 -->|"shared_ptr (parent)"| A1
+        B1 -->|"shared_ptr (親)"| A1
         A1 -->|"shared_ptr"| C1["shared_ptr<Device>"]
-        C1 -->|"shared_ptr (parent)"| A1
+        C1 -->|"shared_ptr (親)"| A1
         style A1 fill:#ff6b6b,color:#000
         style B1 fill:#ffa07a,color:#000
         style C1 fill:#ffa07a,color:#000
     end
 
-    subgraph "Rust Arena + Index"
+    subgraph "Rustのアリーナ + インデックス"
         V["Vec<PcieDevice>"]
-        V --> D0["[0] Root<br/>upstream: None<br/>down: [1,2]"]
-        V --> D1["[1] Child<br/>upstream: Some(0)<br/>down: []"]
-        V --> D2["[2] Child<br/>upstream: Some(0)<br/>down: []"]
+        V --> D0["[0] ルート<br/>upstream: None<br/>down: [1,2]"]
+        V --> D1["[1] 子<br/>upstream: Some(0)<br/>down: []"]
+        V --> D2["[2] 子<br/>upstream: Some(0)<br/>down: []"]
         style V fill:#51cf66,color:#000
         style D0 fill:#91e5a3,color:#000
         style D1 fill:#91e5a3,color:#000
@@ -200,5 +200,3 @@ graph LR
 ```
 
 ----
-
-

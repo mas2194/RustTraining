@@ -1,547 +1,547 @@
-# C# → Rust Training: Merged Chapter Plan
+# C# → Rust トレーニング: 統合章構成計画
 
-## Source Documents
+## 元ドキュメント
 
-| Doc | File | Lines |
+| ドキュメント | ファイル | 行数 |
 |-----|------|-------|
 | **Bootstrap (B)** | `RustBootstrapForCSharp.md` | 5,363 |
 | **Advanced (A)** | `RustTrainingForCSharp.md` | 3,021 |
-| **Total raw** | | **8,384** |
-| **Estimated merged** | (after dedup) | **~5,800** |
+| **元データ合計** | | **8,384** |
+| **統合後の見積もり** | （重複排除後） | **約5,800** |
 
-## Mermaid Diagrams Inventory (13 total — all in Advanced doc)
+## Mermaid ダイアグラム一覧（計13個 — すべて Advanced ドキュメント内）
 
-| # | Adv Line | Subject | Target Chapter |
+| # | Adv 行番号 | 対象テーマ | 格納先章 |
 |---|----------|---------|----------------|
-| M1 | L84 | Development Model Comparison | ch01 |
-| M2 | L173 | Memory Management: GC vs RAII | ch01 |
-| M3 | L282 | C# Null Handling Evolution | ch06.1 |
-| M4 | L410 | C# Discriminated Unions (Workarounds) | ch06 |
-| M5 | L536 | C# Pattern Matching Limitations | ch06.1 |
-| M6 | L667 | C# Records — Shallow Immutability | ch03.1 |
-| M7 | L829 | Runtime Safety vs Compile-Time Safety | ch07.1 |
-| M8 | L998 | C# Inheritance Hierarchy | ch10.2 |
-| M9 | L1153 | C# Exception Model | ch09 |
-| M10 | L1290 | C# LINQ Characteristics | ch12 |
-| M11 | L1463 | C# Generic Constraints | ch10.1 |
-| M12 | L2156 | C# Thread Safety Challenges | ch13 |
-| M13 | L2850 | Migration Strategy Decision Tree | ch16 |
+| M1 | L84 | 開発モデルの比較 | ch01 |
+| M2 | L173 | メモリ管理: GC vs RAII | ch01 |
+| M3 | L282 | C# における null 処理の進化 | ch06.1 |
+| M4 | L410 | C# の判別共用体（ワークアラウンド） | ch06 |
+| M5 | L536 | C# のパターンマッチングの限界 | ch06.1 |
+| M6 | L667 | C# レコード — 浅いイミュータビリティ | ch03.1 |
+| M7 | L829 | 実行時安全性 vs コンパイル時安全性 | ch07.1 |
+| M8 | L998 | C# の継承階層 | ch10.2 |
+| M9 | L1153 | C# の例外モデル | ch09 |
+| M10 | L1290 | C# LINQ の特徴 | ch12 |
+| M11 | L1463 | C# のジェネリック制約 | ch10.1 |
+| M12 | L2156 | C# のスレッド安全性の課題 | ch13 |
+| M13 | L2850 | 移行戦略の決定木 | ch16 |
 
 ---
 
-## Chapter Structure
+## 章構成
 
-### Chapter 0: Introduction
+### 第0章: はじめに
 <!-- ch00: Introduction -->
 
-**File:** `ch00-introduction.md`
-**Estimated lines:** ~30
-**Content:** Book overview, how to use this guide, prerequisites (C# experience assumed).
-**Source:** New content (modeled on C/C++ book ch00 pattern).
+**ファイル:** `ch00-introduction.md`  
+**見積行数:** 約30行  
+**内容:** 本書の概要、ガイドの使い方、前提知識（C# の経験を前提とする）。  
+**出典:** 新規作成コンテンツ（C/C++ ブックの ch00 パターンに準拠）。  
 
 ---
 
-### Chapter 1: Introduction and Motivation
+### 第1章: 導入と動機
 <!-- ch01: Introduction and Motivation -->
 
-**File:** `ch01-introduction-and-motivation.md`
-**Estimated lines:** ~380
-**Mermaid diagrams:** M1, M2
+**ファイル:** `ch01-introduction-and-motivation.md`  
+**見積行数:** 約380行  
+**Mermaid ダイアグラム:** M1, M2  
 
-| Sub-section marker | Source | Lines | Notes |
+| サブセクションマーカー | 出典 | 行数 | 備考 |
 |---|---|---|---|
-| <!-- ch01.1: Quick Reference --> | B L93–110 | 18 | Quick Reference table — **unique to C# doc, keep verbatim** |
-| <!-- ch01.2: Language Philosophy --> | A L70–125 | 56 | C# vs Rust philosophy; includes **M1** |
-| <!-- ch01.3: GC vs RAII --> | A L126–214 | 89 | GC vs Ownership overview; includes **M2** |
-| <!-- ch01.4: The Case for Rust --> | B L111–221 | 111 | Performance, memory safety arguments |
-| <!-- ch01.5: C# Pain Points --> | B L222–348 | 80 | Trim to ~80 lines (null, exceptions, GC pain points — remove overlap with A philosophy already covered in ch01.2–01.3) |
-| <!-- ch01.6: When to Choose --> | B L349–400 | 52 | When Rust vs C#, real-world impact |
+| <!-- ch01.1: Quick Reference --> | B L93–110 | 18 | クイックリファレンステーブル — **C# ドキュメント固有の内容、そのまま保持** |
+| <!-- ch01.2: Language Philosophy --> | A L70–125 | 56 | C# と Rust の言語思想の比較。**M1** を含む |
+| <!-- ch01.3: GC vs RAII --> | A L126–214 | 89 | GC vs 所有権の概要。**M2** を含む |
+| <!-- ch01.4: The Case for Rust --> | B L111–221 | 111 | パフォーマンス、メモリ安全性に関する論点 |
+| <!-- ch01.5: C# Pain Points --> | B L222–348 | 80 | 約80行に要約（null、例外、GC のペインポイント — ch01.2〜01.3 で既にカバーされている A の言語思想との重複を排除） |
+| <!-- ch01.6: When to Choose --> | B L349–400 | 52 | Rust と C# の選択基準、実環境での影響 |
 
-**Overlap resolution:** Bootstrap "Pain Points" §1 (Null) and §3 (GC) partially overlap with Advanced's Philosophy and GC-vs-RAII. Keep Advanced versions (they have Mermaid diagrams), trim Bootstrap Pain Points to avoid duplication. Pain Point §2 (Hidden Exceptions) is unique — keep fully.
+**重複の解消方針:** Bootstrap の「ペインポイント」第1節（Null）および第3節（GC）は、Advanced の言語思想および GC vs RAII と部分的に重複しています。Mermaid ダイアグラムを含む Advanced 側の記述を採用し、Bootstrap のペインポイントを要約して重複を排除します。ペインポイント第2節（隠れた例外）は独自の内容であるため完全に保持します。
 
 ---
 
-### Chapter 2: Getting Started
+### 第2章: はじめの一歩
 <!-- ch02: Getting Started -->
 
-**File:** `ch02-getting-started.md`
-**Estimated lines:** ~170
+**ファイル:** `ch02-getting-started.md`  
+**見積行数:** 約170行  
 
-| Sub-section marker | Source | Lines | Notes |
+| サブセクションマーカー | 出典 | 行数 | 備考 |
 |---|---|---|---|
-| <!-- ch02.1: Installation --> | B L401–434 | 34 | rustup, tools comparison table |
-| <!-- ch02.2: First Program --> | B L435–486 | 52 | Hello World comparison C# vs Rust |
-| <!-- ch02.3: Cargo vs NuGet --> | B L487–564 | 78 | Project config, commands, workspace vs solution |
+| <!-- ch02.1: Installation --> | B L401–434 | 34 | rustup、ツール比較表 |
+| <!-- ch02.2: First Program --> | B L435–486 | 52 | Hello World の C# と Rust の比較 |
+| <!-- ch02.3: Cargo vs NuGet --> | B L487–564 | 78 | プロジェクト設定、コマンド、ワークスペース vs ソリューション |
 
-#### Sub-chapter: ch02.1 — Essential Rust Keywords for C# Developers
+#### サブチャプター: ch02.1 — C#開発者のための必須 Rust キーワード
 <!-- ch02.1: Keywords Reference -->
 
-**File:** `ch02-1-keywords-reference.md`
-**Estimated lines:** ~400
-**Source:** B L842–1244 (403 lines)
-**Notes:** This comprehensive keyword mapping table is **unique to the C# doc**. Covers visibility, memory, control flow, type definition, function, variable, pattern matching, and safety keywords — all mapped from C# equivalents. Keep verbatim. The ~400-line size justifies a dedicated sub-chapter.
+**ファイル:** `ch02-1-keywords-reference.md`  
+**見積行数:** 約400行  
+**出典:** B L842–1244（403行）  
+**備考:** この包括的なキーワード対応表は **C# ドキュメント固有のもの**です。可視性、メモリ、制御フロー、型定義、関数、変数、パターンマッチング、安全性に関するキーワードをすべて C# の同等機能と対比しています。内容をそのまま保持します。約400行という規模から、専用のサブチャプターとするのが適切です。
 
 ---
 
-### Chapter 3: Built-in Types
+### 第3章: 組み込み型
 <!-- ch03: Built-in Types -->
 
-**File:** `ch03-built-in-types.md`
-**Estimated lines:** ~280
+**ファイル:** `ch03-built-in-types.md`  
+**見積行数:** 約280行  
 
-| Sub-section marker | Source | Lines | Notes |
+| サブセクションマーカー | 出典 | 行数 | 備考 |
 |---|---|---|---|
-| <!-- ch03.1: Variables and Mutability --> | B L565–641 | 77 | let vs var, mut, const, shadowing |
-| <!-- ch03.2: Primitive Types --> | B L642–707 | 66 | Type comparison table, size types, inference |
-| <!-- ch03.3: String Types --> | B L708–782 | 75 | String vs &str, practical examples |
-| <!-- ch03.4: Comments and Docs --> | B L783–841 | 59 | Comments, doc comments, rustdoc |
+| <!-- ch03.1: Variables and Mutability --> | B L565–641 | 77 | let vs var、mut、const、シャドーイング |
+| <!-- ch03.2: Primitive Types --> | B L642–707 | 66 | 型比較表、サイズ型、型推論 |
+| <!-- ch03.3: String Types --> | B L708–782 | 75 | String vs &str、実践例 |
+| <!-- ch03.4: Comments and Docs --> | B L783–841 | 59 | コメント、ドキュメントコメント、rustdoc |
 
-#### Sub-chapter: ch03.1 — True Immutability Deep Dive
+#### サブチャプター: ch03.1 — 真のイミュータビリティ詳解
 <!-- ch03.1: True Immutability -->
 
-**File:** `ch03-1-true-immutability.md`
-**Estimated lines:** ~136
-**Source:** A L577–712 (136 lines)
-**Mermaid diagrams:** M6
-**Notes:** C# records "immutability theater" vs Rust true immutability. Includes **M6** (Records — Shallow Immutability diagram). This content is **unique to C# doc** — C# developers need to understand why `record` isn't truly immutable.
+**ファイル:** `ch03-1-true-immutability.md`  
+**見積行数:** 約136行  
+**出典:** A L577–712（136行）  
+**Mermaid ダイアグラム:** M6  
+**備考:** C# レコードの「イミュータビリティの演出（浅い不変性）」と Rust の真のイミュータビリティの比較。**M6**（レコード — 浅い不変性ダイアグラム）を含みます。この内容は **C# ドキュメント独自のもの**であり、C# 開発者がなぜ `record` が真にイミュータブルではないのかを理解するために必須です。
 
 ---
 
-### Chapter 4: Control Flow
+### 第4章: 制御フロー
 <!-- ch04: Control Flow -->
 
-**File:** `ch04-control-flow.md`
-**Estimated lines:** ~280
+**ファイル:** `ch04-control-flow.md`  
+**見積行数:** 約280行  
 
-| Sub-section marker | Source | Lines | Notes |
+| サブセクションマーカー | 出典 | 行数 | 備考 |
 |---|---|---|---|
-| <!-- ch04.1: Functions vs Methods --> | B L1638–1745 | 108 | Declaration, expression vs statement, params/returns |
-| <!-- ch04.2: Conditionals --> | B L1748–1792 | 45 | if/else, if-let, ternary equivalents |
-| <!-- ch04.3: Loops --> | B L1793–1886 | 93 | loop, while, for, loop control (break/continue labels) |
-| <!-- ch04.4: Pattern Matching Preview --> | B L1887–1978 | 35 | Brief intro only (~35 lines trimmed from 92); full treatment in ch06. Add forward reference: "See Chapter 6 for comprehensive coverage." |
+| <!-- ch04.1: Functions vs Methods --> | B L1638–1745 | 108 | 宣言、式 vs 文、パラメータ/戻り値 |
+| <!-- ch04.2: Conditionals --> | B L1748–1792 | 45 | if/else、if-let、三項演算子の代替表現 |
+| <!-- ch04.3: Loops --> | B L1793–1886 | 93 | loop、while、for、ループ制御（break/continue ラベル） |
+| <!-- ch04.4: Pattern Matching Preview --> | B L1887–1978 | 35 | 概要のみ（92行から約35行に要約）。完全な解説は第6章で行います。「詳細は第6章を参照」という前方参照を追加します。 |
 
-**Notes:** The full Pattern Matching Introduction (B L1887–1978, 92 lines) overlaps heavily with ch06. Extract only the basic `match` syntax preview (~35 lines) and forward-reference ch06.
+**備考:** 完全なパターンマッチングの導入（B L1887–1978、92行）は第6章と大きく重複します。ここでは基本的な `match` 構文のプレビュー（約35行）のみを抽出し、第6章へ誘導します。
 
 ---
 
-### Chapter 5: Data Structures
+### 第5章: データ構造
 <!-- ch05: Data Structures -->
 
-**File:** `ch05-data-structures.md`
-**Estimated lines:** ~380
+**ファイル:** `ch05-data-structures.md`  
+**見積行数:** 約380行  
 
-| Sub-section marker | Source | Lines | Notes |
+| サブセクションマーカー | 出典 | 行数 | 備考 |
 |---|---|---|---|
-| <!-- ch05.1: Arrays and Slices --> | B L2445–2548 | 104 | C# arrays vs Rust arrays, slices, string slices |
-| <!-- ch05.2: Structs vs Classes --> | B L2673–2807 | 135 | Struct definition, creating instances, init patterns |
-| <!-- ch05.3: Methods and Associated Functions --> | B L2808–2941 | 134 | impl blocks, &self/&mut self/self, method receiver types |
+| <!-- ch05.1: Arrays and Slices --> | B L2445–2548 | 104 | C# の配列 vs Rust の配列、スライス、文字列スライス |
+| <!-- ch05.2: Structs vs Classes --> | B L2673–2807 | 135 | 構造体の定義、インスタンス生成、初期化パターン |
+| <!-- ch05.3: Methods and Associated Functions --> | B L2808–2941 | 134 | impl ブロック、&self/&mut self/self、メソッドレシーバ型 |
 
-#### Sub-chapter: ch05.1 — Constructor Patterns
+#### サブチャプター: ch05.1 — コンストラクタパターン
 <!-- ch05.1: Constructor Patterns -->
 
-**File:** `ch05-1-constructor-patterns.md`
-**Estimated lines:** ~210
-**Source:** B L3084–3291 (208 lines)
-**Notes:** C# constructors vs Rust `new()` convention, `Default` trait, builder pattern implementation. This is a large self-contained section that warrants its own sub-chapter.
+**ファイル:** `ch05-1-constructor-patterns.md`  
+**見積行数:** 約210行  
+**出典:** B L3084–3291（208行）  
+**備考:** C# のコンストラクタ vs Rust の `new()` 慣例、`Default` トレイト、Builder パターンの実装。独立した大きなセクションであるため、専用のサブチャプターとします。
 
-#### Sub-chapter: ch05.2 — Collections: Vec, HashMap, and Iteration
+#### サブチャプター: ch05.2 — コレクション: Vec、HashMap、反復処理
 <!-- ch05.2: Collections -->
 
-**File:** `ch05-2-collections.md`
-**Estimated lines:** ~390
+**ファイル:** `ch05-2-collections.md`  
+**見積行数:** 約390行  
 
-| Sub-section marker | Source | Lines | Notes |
+| サブセクションマーカー | 出典 | 行数 | 備考 |
 |---|---|---|---|
-| <!-- ch05.2.1: Vec vs List --> | B L2163–2307 | 145 | Creating, initializing, common operations, safe access |
-| <!-- ch05.2.2: HashMap vs Dictionary --> | B L2308–2444 | 137 | Operations, entry API, ownership with keys/values |
-| <!-- ch05.2.3: Working with Collections --> | B L2549–2672 | 110 | Iteration patterns, IntoIterator/Iter, collecting results (trimmed — LINQ-style iterator content moves to ch12) |
+| <!-- ch05.2.1: Vec vs List --> | B L2163–2307 | 145 | 生成、初期化、基本操作、安全なアクセス |
+| <!-- ch05.2.2: HashMap vs Dictionary --> | B L2308–2444 | 137 | 基本操作、entry API、キー/値の所有権 |
+| <!-- ch05.2.3: Working with Collections --> | B L2549–2672 | 110 | 反復パターン、IntoIterator/Iter、結果の収集（要約 — LINQ スタイルのイテレータ内容は第12章へ移動） |
 
-**Overlap note:** The "Working with Collections" section (B L2549–2672) contains some iterator chain content that overlaps with ch12 (Closures/LINQ). Keep basic iteration patterns here, move advanced iterator chains and LINQ comparisons to ch12.
+**重複に関する注意:** 「コレクションの操作」セクション（B L2549–2672）には、第12章（クロージャ/LINQ）と重複するイテレータチェーンの内容が含まれています。基本的な反復パターンのみをここに残し、高度なイテレータチェーンや LINQ 比較は第12章へ移動します。
 
 ---
 
-### Chapter 6: Enums and Pattern Matching
+### 第6章: 列挙型とパターンマッチング
 <!-- ch06: Enums and Pattern Matching -->
 
-**File:** `ch06-enums-and-pattern-matching.md`
-**Estimated lines:** ~320
-**Mermaid diagrams:** M4
+**ファイル:** `ch06-enums-and-pattern-matching.md`  
+**見積行数:** 約320行  
+**Mermaid ダイアグラム:** M4  
 
-| Sub-section marker | Source | Lines | Notes |
+| サブセクションマーカー | 出典 | 行数 | 備考 |
 |---|---|---|---|
-| <!-- ch06.1: C# Enum Limitations --> | B L3296–3342 | 47 | Why C# enums are limited |
-| <!-- ch06.2: Rust Enum Power --> | B L3343–3378 | 36 | Enum variants with data |
-| <!-- ch06.3: Algebraic Data Types --> | A L319–451 | 100 | ADTs vs C# unions; includes **M4**. Trim from 133 to ~100 (remove overlap with basic enum coverage above) |
-| <!-- ch06.4: Pattern Matching --> | B L3379–3461 | 83 | Match expressions, destructuring |
-| <!-- ch06.5: Guards and Advanced --> | B L3462–3502 | 41 | Match guards, nested patterns |
+| <!-- ch06.1: C# Enum Limitations --> | B L3296–3342 | 47 | なぜ C# の enum には限界があるのか |
+| <!-- ch06.2: Rust Enum Power --> | B L3343–3378 | 36 | データを持つ enum バリアント |
+| <!-- ch06.3: Algebraic Data Types --> | A L319–451 | 100 | 代数的データ型（ADT） vs C# の共用体。**M4** を含む。133行から約100行に要約（上記の基本的な enum の説明との重複を排除） |
+| <!-- ch06.4: Pattern Matching --> | B L3379–3461 | 83 | match 式、構造化データの分解（デストラクチャリング） |
+| <!-- ch06.5: Guards and Advanced --> | B L3462–3502 | 41 | マッチガード、ネストされたパターン |
 
-#### Sub-chapter: ch06.1 — Exhaustive Matching and Null Safety
+#### サブチャプター: ch06.1 — 網羅的マッチングと null 安全性
 <!-- ch06.1: Exhaustive Matching and Null Safety -->
 
-**File:** `ch06-1-exhaustive-matching-and-null-safety.md`
-**Estimated lines:** ~300
-**Mermaid diagrams:** M3, M5
+**ファイル:** `ch06-1-exhaustive-matching-and-null-safety.md`  
+**見積行数:** 約300行  
+**Mermaid ダイアグラム:** M3, M5  
 
-| Sub-section marker | Source | Lines | Notes |
+| サブセクションマーカー | 出典 | 行数 | 備考 |
 |---|---|---|---|
-| <!-- ch06.1.1: Exhaustive Matching --> | A L452–576 | 125 | Compiler guarantees vs runtime errors; includes **M5** |
-| <!-- ch06.1.2: Null Safety: Option --> | A L215–318 | 80 | Nullable<T> vs Option<T>; includes **M3**. Trim from 104 to ~80 (remove overlap with B's Option section) |
-| <!-- ch06.1.3: Option and Result --> | B L3503–3615 | 113 | Option<T> and Result<T,E> practical usage |
+| <!-- ch06.1.1: Exhaustive Matching --> | A L452–576 | 125 | コンパイラによる保証 vs 実行時エラー。**M5** を含む |
+| <!-- ch06.1.2: Null Safety: Option --> | A L215–318 | 80 | Nullable<T> vs Option<T>。**M3** を含む。104行から約80行に要約（B の Option セクションとの重複を排除） |
+| <!-- ch06.1.3: Option and Result --> | B L3503–3615 | 113 | Option<T> と Result<T,E> の実践的な使用法 |
 
-**Overlap resolution:** Both docs cover Option<T>. Advanced version (A L215–318) has the Mermaid diagram and deeper "evolution of null handling" narrative — use as the conceptual intro. Bootstrap version (B L3503–3615) has practical code examples — keep for the hands-on portion. Deduplicate overlapping examples.
+**重複の解消方針:** 両方のドキュメントで Option<T> が取り上げられています。Advanced 版（A L215–318）には Mermaid ダイアグラムと深い「null 処理の進化」の解説があるため、概念的な導入として使用します。Bootstrap 版（B L3503–3615）には実践的なコード例が含まれているため、実践パートとして保持します。重複するサンプルコードは一本化します。
 
 ---
 
-### Chapter 7: Ownership and Borrowing
+### 第7章: 所有権と借用
 <!-- ch07: Ownership and Borrowing -->
 
-**File:** `ch07-ownership-and-borrowing.md`
-**Estimated lines:** ~330
+**ファイル:** `ch07-ownership-and-borrowing.md`  
+**見積行数:** 約330行  
 
-| Sub-section marker | Source | Lines | Notes |
+| サブセクションマーカー | 出典 | 行数 | 備考 |
 |---|---|---|---|
-| <!-- ch07.1: C# Memory Model --> | B L1249–1267 | 19 | C# reference types, GC review |
-| <!-- ch07.2: Ownership Rules --> | B L1268–1316 | 49 | Three rules, Move for C# developers, Copy vs Move |
-| <!-- ch07.3: Practical Examples --> | B L1317–1348 | 32 | Swapping values example |
-| <!-- ch07.4: Borrowing --> | B L1349–1472 | 124 | Shared/mutable refs, borrowing rules, ref safety comparison |
-| <!-- ch07.5: Move Semantics --> | B L1540–1637 | 98 | Value/reference types vs move semantics, avoiding moves |
+| <!-- ch07.1: C# Memory Model --> | B L1249–1267 | 19 | C# の参照型、GC の復習 |
+| <!-- ch07.2: Ownership Rules --> | B L1268–1316 | 49 | 3つの規則、C#開発者から見たムーブ、Copy vs Move |
+| <!-- ch07.3: Practical Examples --> | B L1317–1348 | 32 | 値の入れ替えの実例 |
+| <!-- ch07.4: Borrowing --> | B L1349–1472 | 124 | 共有参照/可変参照、借用規則、参照の安全性比較 |
+| <!-- ch07.5: Move Semantics --> | B L1540–1637 | 98 | 値型/参照型 vs ムーブセマンティクス、不要なムーブの回避 |
 
-#### Sub-chapter: ch07.1 — References, Pointers, and Memory Safety
+#### サブチャプター: ch07.1 — 参照、ポインタ、メモリ安全性
 <!-- ch07.1: Memory Safety Deep Dive -->
 
-**File:** `ch07-1-references-pointers-and-memory-safety.md`
-**Estimated lines:** ~220
-**Mermaid diagrams:** M7
+**ファイル:** `ch07-1-references-pointers-and-memory-safety.md`  
+**見積行数:** 約220行  
+**Mermaid ダイアグラム:** M7  
 
-| Sub-section marker | Source | Lines | Notes |
+| サブセクションマーカー | 出典 | 行数 | 備考 |
 |---|---|---|---|
-| <!-- ch07.1.1: References vs Pointers --> | B L1473–1539 | 67 | C# unsafe pointers vs Rust safe references, lifetime basics |
-| <!-- ch07.1.2: Memory Safety --> | A L713–870 | 158 | Runtime checks vs compile-time proofs; includes **M7**. This is the deepest treatment of why Rust's ownership prevents entire bug categories — **unique depth for C# audience** |
+| <!-- ch07.1.1: References vs Pointers --> | B L1473–1539 | 67 | C# の unsafe ポインタ vs Rust の安全な参照、ライフタイムの基礎 |
+| <!-- ch07.1.2: Memory Safety --> | A L713–870 | 158 | 実行時チェック vs コンパイル時証明。**M7** を含む。Rust の所有権がなぜバグの全カテゴリを根絶するのかについての最も詳細な解説であり、**C# 開発者にとって極めて価値の高い深い内容**です。 |
 
 ---
 
-### Chapter 8: Crates and Modules
+### 第8章: クレートとモジュール
 <!-- ch08: Crates and Modules -->
 
-**File:** `ch08-crates-and-modules.md`
-**Estimated lines:** ~340
+**ファイル:** `ch08-crates-and-modules.md`  
+**見積行数:** 約340行  
 
-| Sub-section marker | Source | Lines | Notes |
+| サブセクションマーカー | 出典 | 行数 | 備考 |
 |---|---|---|---|
-| <!-- ch08.1: Modules vs Namespaces --> | B L3674–3882 | 209 | C# namespace → Rust module mapping, hierarchy, visibility, file organization |
-| <!-- ch08.2: Crates vs Assemblies --> | B L3883–4009 | 127 | Assembly model vs crate model, crate types, workspace vs solution |
+| <!-- ch08.1: Modules vs Namespaces --> | B L3674–3882 | 209 | C# 名前空間から Rust モジュールへの対応、階層構造、可視性、ファイル構成 |
+| <!-- ch08.2: Crates vs Assemblies --> | B L3883–4009 | 127 | アセンブリモデル vs クレートモデル、クレートの種類、ワークスペース vs ソリューション |
 
-#### Sub-chapter: ch08.1 — Package Management Deep Dive
+#### サブチャプター: ch08.1 — パッケージ管理詳解
 <!-- ch08.1: Package Management -->
 
-**File:** `ch08-1-package-management.md`
-**Estimated lines:** ~235
+**ファイル:** `ch08-1-package-management.md`  
+**見積行数:** 約235行  
 
-| Sub-section marker | Source | Lines | Notes |
+| サブセクションマーカー | 出典 | 行数 | 備考 |
 |---|---|---|---|
-| <!-- ch08.1.1: Dependencies --> | B L4010–4055 | 46 | Cargo.toml vs .csproj, dependency types |
-| <!-- ch08.1.2: Version Management --> | B L4056–4089 | 34 | Semantic versioning, Cargo.lock |
-| <!-- ch08.1.3: Package Sources --> | B L4090–4132 | 43 | crates.io vs NuGet, alternative registries |
-| <!-- ch08.1.4: Features --> | B L4133–4182 | 50 | Feature flags vs #if DEBUG conditional compilation |
-| <!-- ch08.1.5: External Crates --> | B L4183–4244 | 62 | Popular crate list, HTTP client migration example |
+| <!-- ch08.1.1: Dependencies --> | B L4010–4055 | 46 | Cargo.toml vs .csproj、依存関係の種類 |
+| <!-- ch08.1.2: Version Management --> | B L4056–4089 | 34 | セマンティックバージョニング、Cargo.lock |
+| <!-- ch08.1.3: Package Sources --> | B L4090–4132 | 43 | crates.io vs NuGet、代替レジストリ |
+| <!-- ch08.1.4: Features --> | B L4133–4182 | 50 | 機能フラグ（feature flags） vs #if DEBUG 条件付きコンパイル |
+| <!-- ch08.1.5: External Crates --> | B L4183–4244 | 62 | 人気クレートの一覧、HTTP クライアント移行の実例 |
 
 ---
 
-### Chapter 9: Error Handling
+### 第9章: エラー処理
 <!-- ch09: Error Handling -->
 
-**File:** `ch09-error-handling.md`
-**Estimated lines:** ~350
-**Mermaid diagrams:** M9
+**ファイル:** `ch09-error-handling.md`  
+**見積行数:** 約350行  
+**Mermaid ダイアグラム:** M9  
 
-| Sub-section marker | Source | Lines | Notes |
+| サブセクションマーカー | 出典 | 行数 | 備考 |
 |---|---|---|---|
-| <!-- ch09.1: C# Exception Model --> | A L1046–1089 | 44 | Exception-based handling, problems; part of **M9** context |
-| <!-- ch09.2: Exceptions vs Result --> | A L1090–1194 | 105 | Result-based error handling (Advanced version — deeper, with Mermaid **M9**) |
-| <!-- ch09.3: The ? Operator --> | B L2057–2084 | 28 | ? operator explained as "like C#'s await" |
-| <!-- ch09.4: Custom Error Types --> | B L3616–3673 | 58 | thiserror-based custom errors (moved from Enums chapter) |
-| <!-- ch09.5: Error Handling Deep Dive --> | B L4558–4715 | 120 | Comprehensive error handling patterns (trim from 158 — remove overlap with A's Result coverage above) |
+| <!-- ch09.1: C# Exception Model --> | A L1046–1089 | 44 | 例外ベースの処理とその問題点。**M9** の文脈の一部 |
+| <!-- ch09.2: Exceptions vs Result --> | A L1090–1194 | 105 | Result ベースのエラー処理（Advanced 版 — より深く、Mermaid **M9** を含む） |
+| <!-- ch09.3: The ? Operator --> | B L2057–2084 | 28 | 「C# の await に似たもの」として解説された `?` 演算子 |
+| <!-- ch09.4: Custom Error Types --> | B L3616–3673 | 58 | thiserror を使ったカスタムエラー（列挙型の章から移動） |
+| <!-- ch09.5: Error Handling Deep Dive --> | B L4558–4715 | 120 | 包括的なエラー処理パターン（158行から約120行に要約 — 上記の A の Result 解説との重複を排除） |
 
-**Overlap resolution:** Three sources cover error handling:
-1. **B L1979–2162 "Error Handling Basics"** (184 lines) — introductory
-2. **B L4558–4715 "Error Handling Deep Dive"** (158 lines) — advanced patterns
-3. **A L1046–1194 "Exceptions vs Result"** (149 lines) — conceptual comparison with Mermaid
+**重複の解消方針:** エラー処理は以下の3つの箇所で扱われています:
+1. **B L1979–2162「エラー処理の基礎」**（184行）— 入門的
+2. **B L4558–4715「エラー処理詳解」**（158行）— 高度なパターン
+3. **A L1046–1194「例外 vs Result」**（149行）— Mermaid を交えた概念的比較
 
-**Strategy:** Use A's version for the conceptual framing (it has M9 diagram and deeper C# comparison). Use B Deep Dive for practical patterns. Drop B Basics (it's redundant with the combination of A + B Deep Dive). Keep ? operator explanation from B Basics since it's uniquely well-explained there.
+**戦略:** 概念的な位置づけには A 版を採用します（M9 ダイアグラムと詳細な C# 比較が含まれるため）。実践的なパターンには B の「エラー処理詳解」を使用します。B の「基礎」は削除します（A 版と B 詳解の組み合わせと重複するため）。ただし、B の基礎にある `?` 演算子の解説は非常にわかりやすいため、そこから抽出して保持します。
 
-#### Sub-chapter: ch09.1 — Error Handling Best Practices
+#### サブチャプター: ch09.1 — エラー処理のベストプラクティス
 <!-- ch09.1: Error Handling Best Practices -->
 
-**File:** `ch09-1-error-handling-best-practices.md`
-**Estimated lines:** ~80
-**Source:** Extracted from B L4612–4715 (practical patterns not covered in main ch09), plus A L2916–2938 (error handling strategy from Best Practices section).
-**Notes:** Covers when to use `anyhow` vs `thiserror`, error conversion patterns, error context chaining. Following the C/C++ book pattern of ch09 + ch09.1.
+**ファイル:** `ch09-1-error-handling-best-practices.md`  
+**見積行数:** 約80行  
+**出典:** B L4612–4715（メインの ch09 でカバーしきれなかった実践パターン）および A L2916–2938（ベストプラクティスセクションのエラー処理戦略）から抽出。  
+**備考:** `anyhow` と `thiserror` の使い分け、エラー変換パターン、エラーコンテキストのチェーンについて解説。C/C++ ブックの ch09 + ch09.1 の構成に準拠。
 
 ---
 
-### Chapter 10: Traits and Generics
+### 第10章: トレイトとジェネリクス
 <!-- ch10: Traits and Generics -->
 
-**File:** `ch10-traits.md`
-**Estimated lines:** ~380
+**ファイル:** `ch10-traits.md`  
+**見積行数:** 約380行  
 
-| Sub-section marker | Source | Lines | Notes |
+| サブセクションマーカー | 出典 | 行数 | 備考 |
 |---|---|---|---|
-| <!-- ch10.1: Traits vs Interfaces --> | B L4245–4383 | 139 | Definition, implementation, C# interface comparison |
-| <!-- ch10.2: Implementing Behavior --> | B L2942–3083 | 100 | Trait implementation on structs, multiple impls (trim from 142 — remove overlap with ch10.1) |
-| <!-- ch10.3: Trait Objects --> | B L4385–4443 | 59 | Dynamic dispatch, dyn Trait, Box<dyn Trait> |
-| <!-- ch10.4: Derived Traits --> | B L4444–4491 | 48 | #[derive], common derivable traits |
-| <!-- ch10.5: Std Library Traits --> | B L4492–4557 | 40 | Display, Debug, Clone, Iterator (trim — From/Into moves to ch11) |
+| <!-- ch10.1: Traits vs Interfaces --> | B L4245–4383 | 139 | 定義、実装、C# インターフェイスとの比較 |
+| <!-- ch10.2: Implementing Behavior --> | B L2942–3083 | 100 | 構造体に対するトレイト実装、複数の実装（142行から要約 — ch10.1 との重複を排除） |
+| <!-- ch10.3: Trait Objects --> | B L4385–4443 | 59 | 動的ディスパッチ、dyn Trait、Box<dyn Trait> |
+| <!-- ch10.4: Derived Traits --> | B L4444–4491 | 48 | #[derive]、一般的な導出可能トレイト |
+| <!-- ch10.5: Std Library Traits --> | B L4492–4557 | 40 | Display、Debug、Clone、Iterator（要約 — From/Into は第11章へ移動） |
 
-#### Sub-chapter: ch10.1 — Generics and Constraints
+#### サブチャプター: ch10.1 — ジェネリクスと制約
 <!-- ch10.1: Generics -->
 
-**File:** `ch10-1-generics.md`
-**Estimated lines:** ~170
-**Source:** A L1338–1505 (168 lines)
-**Mermaid diagrams:** M11
-**Notes:** C# `where T : class` vs Rust trait bounds, monomorphization, associated types. Includes **M11** (Generic Constraints diagram). The Advanced doc's treatment is significantly deeper than what Bootstrap covers.
+**ファイル:** `ch10-1-generics.md`  
+**見積行数:** 約170行  
+**出典:** A L1338–1505（168行）  
+**Mermaid ダイアグラム:** M11  
+**備考:** C# の `where T : class` vs Rust のトレイト境界、単一化（モノモーフィゼーション）、関連型。**M11**（ジェネリック制約ダイアグラム）を含みます。Advanced ドキュメントの解説は Bootstrap よりも大幅に詳細です。
 
-#### Sub-chapter: ch10.2 — Inheritance vs Composition
+#### サブチャプター: ch10.2 — 継承 vs コンポジション
 <!-- ch10.2: Inheritance vs Composition -->
 
-**File:** `ch10-2-inheritance-vs-composition.md`
-**Estimated lines:** ~175
-**Source:** A L871–1045 (175 lines)
-**Mermaid diagrams:** M8
-**Notes:** C# inheritance hierarchy vs Rust composition model. Includes **M8** (Inheritance Hierarchy diagram). **Unique and valuable for C# developers** who must unlearn class hierarchies. Covers: trait objects as polymorphism, newtype pattern, delegation.
+**ファイル:** `ch10-2-inheritance-vs-composition.md`  
+**見積行数:** 約175行  
+**出典:** A L871–1045（175行）  
+**Mermaid ダイアグラム:** M8  
+**備考:** C# の継承階層 vs Rust のコンポジションモデル。**M8**（継承階層ダイアグラム）を含みます。クラス階層の考え方を脱却しなければならない **C# 開発者にとって独自かつ極めて貴重な内容**です。トレイトオブジェクトによる多態性、Newtype パターン、委譲（Delegation）を扱います。
 
 ---
 
-### Chapter 11: From and Into Traits
+### 第11章: From トレイトと Into トレイト
 <!-- ch11: From and Into Traits -->
 
-**File:** `ch11-from-and-into-traits.md`
-**Estimated lines:** ~120
+**ファイル:** `ch11-from-and-into-traits.md`  
+**見積行数:** 約120行  
 
-| Sub-section marker | Source | Lines | Notes |
+| サブセクションマーカー | 出典 | 行数 | 備考 |
 |---|---|---|---|
-| <!-- ch11.1: From/Into Basics --> | B L4492–4530 | 40 | From<T> implementation, automatic Into<T> (extracted from Std Library Traits section) |
-| <!-- ch11.2: Conversion Patterns --> | New | 40 | C# implicit/explicit operators vs From/Into, TryFrom/TryInto |
-| <!-- ch11.3: Error Conversions --> | B L4617–4650 | 30 | From<E> for error type conversions (extracted from Error Handling Deep Dive) |
-| <!-- ch11.4: Practical Examples --> | New | 10 | String conversions, numeric type conversions |
+| <!-- ch11.1: From/Into Basics --> | B L4492–4530 | 40 | From<T> の実装、自動的な Into<T>（標準ライブラリトレイトの節から抽出） |
+| <!-- ch11.2: Conversion Patterns --> | 新規作成 | 40 | C# の暗黙的/明示的キャスト演算子 vs From/Into、TryFrom/TryInto |
+| <!-- ch11.3: Error Conversions --> | B L4617–4650 | 30 | エラー型変換のための From<E>（エラー処理詳解から抽出） |
+| <!-- ch11.4: Practical Examples --> | 新規作成 | 10 | 文字列変換、数値型の変換 |
 
-**Notes:** Neither source doc has an explicit From/Into chapter. Content is assembled from Bootstrap's Std Library Traits section (From/Into examples) and Error Handling (From for error conversion). Some new bridging content needed for C# implicit/explicit cast operator mapping. Smaller chapter (~120 lines) but follows C/C++ book structure for cross-book consistency.
+**備考:** どちらの元ドキュメントにも From/Into 専用の章はありません。内容は Bootstrap の標準ライブラリトレイト（From/Into の例）とエラー処理（エラー変換のための From）から集約します。C# の暗黙的/明示的キャスト演算子との対応づけを行うための新たな橋渡しコンテンツを追加します。比較的小さな章（約120行）ですが、他言語向けブックとの一貫性のために独立した章とします。
 
 ---
 
-### Chapter 12: Closures and Iterators
+### 第12章: クロージャとイテレータ
 <!-- ch12: Closures and Iterators -->
 
-**File:** `ch12-closures-and-iterators.md`
-**Estimated lines:** ~300
-**Mermaid diagrams:** M10
+**ファイル:** `ch12-closures-and-iterators.md`  
+**見積行数:** 約300行  
+**Mermaid ダイアグラム:** M10  
 
-| Sub-section marker | Source | Lines | Notes |
+| サブセクションマーカー | 出典 | 行数 | 備考 |
 |---|---|---|---|
-| <!-- ch12.1: Closures --> | New | 60 | C# lambda expressions vs Rust closures, Fn/FnMut/FnOnce traits, capture semantics (C# developers know lambdas well — focus on ownership differences) |
-| <!-- ch12.2: LINQ vs Iterators --> | A L1195–1337 | 143 | Comprehensive LINQ-to-Iterator mapping; includes **M10**. **Unique and high-value for C# developers** |
-| <!-- ch12.3: Advanced Iteration --> | B L2595–2672 | 78 | Iterator/IntoIterator/Iter distinction, collecting results (moved from ch05 Working with Collections — the advanced iteration content) |
+| <!-- ch12.1: Closures --> | 新規作成 | 60 | C# ラムダ式 vs Rust クロージャ、Fn/FnMut/FnOnce トレイト、キャプチャセマンティクス（C# 開発者はラムダを日常的に使っているため、所有権の違いに焦点を当てる） |
+| <!-- ch12.2: LINQ vs Iterators --> | A L1195–1337 | 143 | 包括的な LINQ からイテレータへのマッピング。**M10** を含む。**C# 開発者にとって極めて価値の高い独自コンテンツ** |
+| <!-- ch12.3: Advanced Iteration --> | B L2595–2672 | 78 | Iterator/IntoIterator/Iter の違い、結果の収集（第5章「コレクションの操作」の高度な反復処理から移動） |
 
-**Notes:** The C/C++ books have "Closures" as ch12. For C# developers, closures themselves are familiar (they use lambdas daily), so the focus shifts to: (1) how Rust closures differ (ownership capture), and (2) the LINQ-to-Iterator mapping which is the killer content. The Advanced doc's LINQ section is excellent and unique.
+**備考:** C/C++ ブックでは第12章は「クロージャ」となっています。C# 開発者にとってクロージャ自体はおなじみ（ラムダ式を日常利用）であるため、力点は (1) Rust のクロージャの違い（所有権のキャプチャ）、および (2) キラーコンテンツである LINQ とイテレータの対応関係、に置かれます。Advanced ドキュメントの LINQ セクションは非常に優れており独自性があります。
 
 ---
 
-### Chapter 13: Concurrency
+### 第13章: 並行性
 <!-- ch13: Concurrency -->
 
-**File:** `ch13-concurrency.md`
-**Estimated lines:** ~260
-**Mermaid diagrams:** M12
+**ファイル:** `ch13-concurrency.md`  
+**見積行数:** 約260行  
+**Mermaid ダイアグラム:** M12  
 
-| Sub-section marker | Source | Lines | Notes |
+| サブセクションマーカー | 出典 | 行数 | 備考 |
 |---|---|---|---|
-| <!-- ch13.1: Thread Safety --> | A L1947–2155 | 209 | Convention vs type system guarantees, Send/Sync, Arc/Mutex, channels; includes **M12** |
-| <!-- ch13.2: Async Comparison --> | A L2156–2204 | 49 | Rust async/await vs C# async/await, tokio runtime |
+| <!-- ch13.1: Thread Safety --> | A L1947–2155 | 209 | 開発規約 vs 型システムによる保証、Send/Sync、Arc/Mutex、チャネル。**M12** を含む |
+| <!-- ch13.2: Async Comparison --> | A L2156–2204 | 49 | Rust の async/await vs C# の async/await、tokio ランタイム |
 
-**Notes:** Entirely from Advanced doc. The Advanced doc's Thread Safety section is comprehensive and includes the M12 Mermaid diagram showing C# thread safety challenges. The async comparison naturally follows. No Bootstrap content needed here (Bootstrap doesn't cover concurrency).
+**備考:** 全面的に Advanced ドキュメントから構成されます。Advanced のスレッド安全性セクションは包括的であり、C# におけるスレッド安全性の課題を示す M12 Mermaid ダイアグラムを含んでいます。非同期の比較も自然につながります（Bootstrap には並行性の記述がないため不要）。
 
 ---
 
-### Chapter 14: Unsafe Rust and FFI
+### 第14章: Unsafe Rust と FFI
 <!-- ch14: Unsafe Rust and FFI -->
 
-**File:** `ch14-unsafe-rust-and-ffi.md`
-**Estimated lines:** ~120
+**ファイル:** `ch14-unsafe-rust-and-ffi.md`  
+**見積行数:** 約120行  
 
-| Sub-section marker | Source | Lines | Notes |
+| サブセクションマーカー | 出典 | 行数 | 備考 |
 |---|---|---|---|
-| <!-- ch14.1: Unsafe Blocks --> | New | 50 | C# `unsafe` keyword vs Rust `unsafe` blocks, what unsafe permits, safety invariants |
-| <!-- ch14.2: FFI Basics --> | New | 40 | C# P/Invoke + COM Interop vs Rust FFI (`extern "C"`), bindgen |
-| <!-- ch14.3: When to Use Unsafe --> | New | 30 | Guidelines, unsafe abstractions with safe APIs |
+| <!-- ch14.1: Unsafe Blocks --> | 新規作成 | 50 | C# の `unsafe` キーワード vs Rust の `unsafe` ブロック、unsafe が許可すること、安全性の不変条件 |
+| <!-- ch14.2: FFI Basics --> | 新規作成 | 40 | C# の P/Invoke + COM 相互運用 vs Rust の FFI（`extern "C"`）、bindgen |
+| <!-- ch14.3: When to Use Unsafe --> | 新規作成 | 30 | ガイドライン、安全な API でラップされた unsafe 抽象化 |
 
-**Notes:** Neither source doc has explicit unsafe/FFI content (the Advanced ToC mentions it but the sections were never written). This chapter needs new content. For C# developers, the key mappings are: `unsafe {}` blocks, P/Invoke → `extern "C"`, COM Interop → FFI bindings. Keep concise since this is less commonly needed by C# developers transitioning to Rust.
+**備考:** いずれの元ドキュメントにも unsafe/FFI の具体的な本文はありません（Advanced の目次には記載がありましたが執筆されていませんでした）。この章は新規作成が必要です。C# 開発者にとって重要な対応関係は、`unsafe {}` ブロック、P/Invoke → `extern "C"`、COM 相互運用 → FFI バインディングです。C# から Rust へ移行する開発者にとって利用頻度は高くないため、簡潔にまとめます。
 
 ---
 
-### Chapter 15: Case Studies and Practical Migration
+### 第15章: ケーススタディと実践的移行
 <!-- ch15: Case Studies -->
 
-**File:** `ch15-case-studies.md`
-**Estimated lines:** ~400
+**ファイル:** `ch15-case-studies.md`  
+**見積行数:** 約400行  
 
-| Sub-section marker | Source | Lines | Notes |
+| サブセクションマーカー | 出典 | 行数 | 備考 |
 |---|---|---|---|
-| <!-- ch15.1: Config Management --> | B L4720–4854 | 135 | C# IConfiguration → Rust config crate migration |
-| <!-- ch15.2: Data Processing --> | B L4855–5039 | 185 | LINQ pipeline → Rust iterator pipeline |
-| <!-- ch15.3: HTTP Client --> | B L5040–5218 | 80 | HttpClient → reqwest migration (trim from 179 — remove overlap with Essential Crates UserService example in ch15.2) |
+| <!-- ch15.1: Config Management --> | B L4720–4854 | 135 | C# の IConfiguration → Rust の config クレートへの移行 |
+| <!-- ch15.2: Data Processing --> | B L4855–5039 | 185 | LINQ パイプライン → Rust イテレータパイプライン |
+| <!-- ch15.3: HTTP Client --> | B L5040–5218 | 80 | HttpClient → reqwest への移行（179行から要約 — ch15.1 の必須クレート UserService 例との重複を排除） |
 
-#### Sub-chapter: ch15.1 — Common Patterns and Essential Crates
+#### サブチャプター: ch15.1 — 一般的なパターンと必須クレート
 <!-- ch15.1: Common Patterns and Essential Crates -->
 
-**File:** `ch15-1-common-patterns-and-essential-crates.md`
-**Estimated lines:** ~400
+**ファイル:** `ch15-1-common-patterns-and-essential-crates.md`  
+**見積行数:** 約400行  
 
-| Sub-section marker | Source | Lines | Notes |
+| サブセクションマーカー | 出典 | 行数 | 備考 |
 |---|---|---|---|
-| <!-- ch15.1.1: Repository Pattern --> | A L1506–1625 | 120 | C# repository → Rust trait-based repository |
-| <!-- ch15.1.2: Builder Pattern --> | A L1626–1743 | 118 | C# builder → Rust builder with consuming self |
-| <!-- ch15.1.3: Essential Crates --> | A L1744–1946 | 160 | **Unique to C# doc.** Cargo.toml template mapping every C# library to Rust equivalent (serde↔Json, reqwest↔HttpClient, tokio↔Task, thiserror↔Exception, sqlx↔EF, etc.) + full UserService example. Trim from 203 to ~160 (remove overlap with ch15 HTTP client) |
+| <!-- ch15.1.1: Repository Pattern --> | A L1506–1625 | 120 | C# のリポジトリ → Rust のトレイトベースのリポジトリ |
+| <!-- ch15.1.2: Builder Pattern --> | A L1626–1743 | 118 | C# の Builder → 所有権を消費する（consuming self）Rust の Builder |
+| <!-- ch15.1.3: Essential Crates --> | A L1744–1946 | 160 | **C# ドキュメント固有。** あらゆる C# ライブラリを Rust の同等クレートに対応付けた Cargo.toml テンプレート（serde↔Json、reqwest↔HttpClient、tokio↔Task、thiserror↔Exception、sqlx↔EF など）＋ 完全な UserService の実装例。203行から約160行に要約（ch15 の HTTP クライアントとの重複を排除） |
 
-#### Sub-chapter: ch15.2 — Adoption Strategy and Concept Mapping
+#### サブチャプター: ch15.2 — 導入戦略と概念マッピング
 <!-- ch15.2: Adoption Strategy -->
 
-**File:** `ch15-2-adoption-strategy.md`
-**Estimated lines:** ~390
+**ファイル:** `ch15-2-adoption-strategy.md`  
+**見積行数:** 約390行  
 
-| Sub-section marker | Source | Lines | Notes |
+| サブセクションマーカー | 出典 | 行数 | 備考 |
 |---|---|---|---|
-| <!-- ch15.2.1: Concept Mapping --> | A L2428–2595 | 168 | **Unique and high-value.** DI → trait injection, LINQ → iterator chains, EF → SQLx, IConfiguration → config crate. Each with side-by-side C#/Rust code |
-| <!-- ch15.2.2: Incremental Adoption --> | A L2205–2427 | 120 | Phase 1/2/3 adoption strategy (trim from 223 — remove overlap with Essential Crates and Concept Mapping) |
-| <!-- ch15.2.3: Team Timeline --> | A L2596–2708 | 100 | Month 1/2/3+ timeline with concrete milestones (trim from 113 — remove overlap with adoption phases) |
+| <!-- ch15.2.1: Concept Mapping --> | A L2428–2595 | 168 | **独自かつ価値が高い。** DI → トレイト注入、LINQ → イテレータチェーン、EF → SQLx、IConfiguration → config クレート。それぞれ C# と Rust のコードを左右で対比 |
+| <!-- ch15.2.2: Incremental Adoption --> | A L2205–2427 | 120 | フェーズ 1/2/3 の段階的導入戦略（223行から要約 — 必須クレートおよび概念マッピングとの重複を排除） |
+| <!-- ch15.2.3: Team Timeline --> | A L2596–2708 | 100 | 具体的なマイルストーンを定めた 1ヶ月目/2ヶ月目/3ヶ月目以降のタイムライン（113行から要約 — 導入フェーズとの重複を排除） |
 
 ---
 
-### Chapter 16: Best Practices
+### 第16章: ベストプラクティス
 <!-- ch16: Best Practices -->
 
-**File:** `ch16-best-practices.md`
-**Estimated lines:** ~340
-**Mermaid diagrams:** M13
+**ファイル:** `ch16-best-practices.md`  
+**見積行数:** 約340行  
+**Mermaid ダイアグラム:** M13  
 
-| Sub-section marker | Source | Lines | Notes |
+| サブセクションマーカー | 出典 | 行数 | 備考 |
 |---|---|---|---|
-| <!-- ch16.1: Mindset Shifts --> | A L2886–2891 | 6 | Key mental model changes |
-| <!-- ch16.2: Code Organization --> | A L2892–2915 | 24 | Project structure recommendations |
-| <!-- ch16.3: Testing Patterns --> | A L2939–2974 | 36 | #[test], #[cfg(test)], integration tests |
-| <!-- ch16.4: Common Mistakes --> | A L2975–3021 | 47 | Inheritance attempts, unwrap abuse, excessive clone, RefCell overuse |
-| <!-- ch16.5: Performance Comparison --> | A L2709–2883 | 130 | Managed vs native perf characteristics, benchmarks, CPU workloads, decision criteria; includes **M13** (Migration Strategy Decision Tree). Trim from 175 to ~130 (remove overlap with ch01 "When to Choose") |
-| <!-- ch16.6: Common Pitfalls --> | B L5288–5363 | 76 | Ownership confusion, borrow checker fights, expecting null |
+| <!-- ch16.1: Mindset Shifts --> | A L2886–2891 | 6 | 主要なメンタルモデルの転換 |
+| <!-- ch16.2: Code Organization --> | A L2892–2915 | 24 | 推奨されるプロジェクト構成 |
+| <!-- ch16.3: Testing Patterns --> | A L2939–2974 | 36 | #[test]、#[cfg(test)]、統合テスト |
+| <!-- ch16.4: Common Mistakes --> | A L2975–3021 | 47 | 継承を持ち込もうとする誤り、unwrap の乱用、過剰な clone、RefCell の使いすぎ |
+| <!-- ch16.5: Performance Comparison --> | A L2709–2883 | 130 | マネージド実行 vs ネイティブ実行の性能特性、ベンチマーク、CPU ワークロード、採用判断基準。**M13**（移行戦略の決定木）を含む。175行から約130行に要約（ch01「Rust と C# の選択基準」との重複を排除） |
+| <!-- ch16.6: Common Pitfalls --> | B L5288–5363 | 76 | 所有権の混同、ボローチェッカーとの格闘、null の期待 |
 
-#### Sub-chapter: ch16.1 — Learning Path and Resources
+#### サブチャプター: ch16.1 — 学習ロードマップとリソース
 <!-- ch16.1: Learning Path -->
 
-**File:** `ch16-1-learning-path.md`
-**Estimated lines:** ~100
-**Source:** B L5219–5287 (69 lines) + curated subset of B L5269–5287 (resources)
-**Notes:** Week-by-week and month-by-month learning plan. Books, online resources, practice projects. Trim from 145 to ~100 (the timeline content overlaps with ch15.2 Team Timeline).
+**ファイル:** `ch16-1-learning-path.md`  
+**見積行数:** 約100行  
+**出典:** B L5219–5287（69行）＋ B L5269–5287 から厳選したリソース  
+**備考:** 週ごと・月ごとの学習プラン。書籍、オンラインリソース、実践プロジェクト。145行から約100行に要約（タイムラインの内容が ch15.2 のチームタイムラインと重複するため）。
 
 ---
 
-## SUMMARY.md (mdbook format)
+## SUMMARY.md（mdbook 形式）
 
 ```markdown
 # Summary
 
-[Introduction](ch00-introduction.md)
+[はじめに](ch00-introduction.md)
 
 ---
 
-- [1. Introduction and Motivation](ch01-introduction-and-motivation.md)
-- [2. Getting Started](ch02-getting-started.md)
-    - [Keywords Reference](ch02-1-keywords-reference.md)
-- [3. Built-in Types](ch03-built-in-types.md)
-    - [True Immutability Deep Dive](ch03-1-true-immutability.md)
-- [4. Control Flow](ch04-control-flow.md)
-- [5. Data Structures](ch05-data-structures.md)
-    - [Constructor Patterns](ch05-1-constructor-patterns.md)
-    - [Collections: Vec, HashMap, and Iteration](ch05-2-collections.md)
-- [6. Enums and Pattern Matching](ch06-enums-and-pattern-matching.md)
-    - [Exhaustive Matching and Null Safety](ch06-1-exhaustive-matching-and-null-safety.md)
-- [7. Ownership and Borrowing](ch07-ownership-and-borrowing.md)
-    - [References, Pointers, and Memory Safety](ch07-1-references-pointers-and-memory-safety.md)
-- [8. Crates and Modules](ch08-crates-and-modules.md)
-    - [Package Management Deep Dive](ch08-1-package-management.md)
-- [9. Error Handling](ch09-error-handling.md)
-    - [Error Handling Best Practices](ch09-1-error-handling-best-practices.md)
-- [10. Traits and Generics](ch10-traits.md)
-    - [Generics](ch10-1-generics.md)
-    - [Inheritance vs Composition](ch10-2-inheritance-vs-composition.md)
-- [11. From and Into Traits](ch11-from-and-into-traits.md)
-- [12. Closures and Iterators](ch12-closures-and-iterators.md)
-- [13. Concurrency](ch13-concurrency.md)
-- [14. Unsafe Rust and FFI](ch14-unsafe-rust-and-ffi.md)
-- [15. Case Studies](ch15-case-studies.md)
-    - [Common Patterns and Essential Crates](ch15-1-common-patterns-and-essential-crates.md)
-    - [Adoption Strategy and Concept Mapping](ch15-2-adoption-strategy.md)
-- [16. Best Practices](ch16-best-practices.md)
-    - [Learning Path and Resources](ch16-1-learning-path.md)
+- [1. 導入と動機](ch01-introduction-and-motivation.md)
+- [2. はじめの一歩](ch02-getting-started.md)
+    - [キーワードリファレンス](ch02-1-keywords-reference.md)
+- [3. 組み込み型](ch03-built-in-types.md)
+    - [真のイミュータビリティ詳解](ch03-1-true-immutability.md)
+- [4. 制御フロー](ch04-control-flow.md)
+- [5. データ構造](ch05-data-structures.md)
+    - [コンストラクタパターン](ch05-1-constructor-patterns.md)
+    - [コレクション: Vec、HashMap、反復処理](ch05-2-collections.md)
+- [6. 列挙型とパターンマッチング](ch06-enums-and-pattern-matching.md)
+    - [網羅的マッチングと null 安全性](ch06-1-exhaustive-matching-and-null-safety.md)
+- [7. 所有権と借用](ch07-ownership-and-borrowing.md)
+    - [参照、ポインタ、メモリ安全性](ch07-1-references-pointers-and-memory-safety.md)
+- [8. クレートとモジュール](ch08-crates-and-modules.md)
+    - [パッケージ管理詳解](ch08-1-package-management.md)
+- [9. エラー処理](ch09-error-handling.md)
+    - [エラー処理のベストプラクティス](ch09-1-error-handling-best-practices.md)
+- [10. トレイトとジェネリクス](ch10-traits.md)
+    - [ジェネリクス](ch10-1-generics.md)
+    - [継承 vs コンポジション](ch10-2-inheritance-vs-composition.md)
+- [11. From トレイトと Into トレイト](ch11-from-and-into-traits.md)
+- [12. クロージャとイテレータ](ch12-closures-and-iterators.md)
+- [13. 並行性](ch13-concurrency.md)
+- [14. Unsafe Rust と FFI](ch14-unsafe-rust-and-ffi.md)
+- [15. ケーススタディ](ch15-case-studies.md)
+    - [一般的なパターンと必須クレート](ch15-1-common-patterns-and-essential-crates.md)
+    - [導入戦略と概念マッピング](ch15-2-adoption-strategy.md)
+- [16. ベストプラクティス](ch16-best-practices.md)
+    - [学習ロードマップとリソース](ch16-1-learning-path.md)
 ```
 
 ---
 
-## Overlap Resolution Summary
+## 重複解消のサマリー
 
-| Overlapping Topic | Bootstrap Source | Advanced Source | Resolution |
+| 重複トピック | Bootstrap の出典 | Advanced の出典 | 解消方針 |
 |---|---|---|---|
-| **Option/Null Safety** | B L2085–2133, B L3503–3615 | A L215–318 (M3) | Use A for conceptual intro (has Mermaid). Use B L3503–3615 for practical examples. Drop B L2085–2133 (redundant). → ch06.1 |
-| **Error Handling** | B L1979–2162 (basics), B L4558–4715 (deep) | A L1046–1194 (M9) | Use A for conceptual framing (has Mermaid). Use B deep dive for patterns. Drop B basics (redundant). → ch09 |
-| **Pattern Matching** | B L1887–1978 (intro), B L3379–3502 (full) | A L452–576 (M5) | Brief preview in ch04 (~35 lines from B intro). Full coverage in ch06 from B L3379+. Advanced exhaustive matching from A. → ch04, ch06 |
-| **Traits/Interfaces** | B L4245–4557 (full), B L2942–3083 (impl) | A L871–1045 (inheritance, M8) | B for trait mechanics (ch10 main). A for inheritance-vs-composition philosophy (ch10.2). Merge B impl section into ch10 main. |
-| **GC vs Ownership** | B L222–270 (pain point) | A L126–214 (M2) | Use A (has Mermaid). Trim B pain point to avoid duplication. → ch01 |
-| **Philosophy/Motivation** | B L111–400 (case + pain points) | A L70–125 (M1) | Use A for deep philosophy (has Mermaid). Use B for practical motivation args. → ch01 |
-| **Collections/Iteration** | B L2549–2672 (working with) | A L1195–1337 (LINQ, M10) | Basic iteration in ch05.2. LINQ comparison in ch12 from A. Advanced iteration from B moves to ch12. |
+| **Option / null 安全性** | B L2085–2133, B L3503–3615 | A L215–318 (M3) | 概念的導入には A を使用（Mermaid あり）。実践例には B L3503–3615 を使用。B L2085–2133 は重複のため削除。→ ch06.1 |
+| **エラー処理** | B L1979–2162（基礎）, B L4558–4715（詳解） | A L1046–1194 (M9) | 概念的整理には A を使用（Mermaid あり）。パターン解説には B 詳解を使用。B 基礎は重複のため削除。→ ch09 |
+| **パターンマッチング** | B L1887–1978（概要）, B L3379–3502（詳細） | A L452–576 (M5) | ch04 では簡潔なプレビューのみ（B 概要から約35行）。ch06 で B L3379+ から網羅的に解説。高度な網羅性検証は A から採用。→ ch04, ch06 |
+| **トレイト / インターフェイス** | B L4245–4557（全体）, B L2942–3083（実装） | A L871–1045（継承, M8） | トレイトの仕組みは B を使用（ch10 メイン）。継承 vs コンポジションの思想は A を使用（ch10.2）。B の実装セクションを ch10 メインへ統合。 |
+| **GC vs 所有権** | B L222–270（ペインポイント） | A L126–214 (M2) | A を使用（Mermaid あり）。B のペインポイントを要約して重複を排除。→ ch01 |
+| **思想 / 動機付け** | B L111–400（根拠 ＋ ペインポイント） | A L70–125 (M1) | 深い言語思想には A を使用（Mermaid あり）。実践的な動機付けの議論には B を使用。→ ch01 |
+| **コレクション / 反復処理** | B L2549–2672（操作） | A L1195–1337 (LINQ, M10) | 基本的な反復は ch05.2 に配置。LINQ 比較は A から ch12 へ配置。B の高度な反復処理は ch12 へ移動。 |
 
 ---
 
-## Estimated Line Counts by Chapter
+## 章ごとの見積行数
 
-| Chapter | Main | Sub-chapters | Total |
+| 章 | メイン | サブチャプター | 合計 |
 |---------|------|-------------|-------|
-| ch00 Introduction | 30 | — | 30 |
-| ch01 Intro & Motivation | 380 | — | 380 |
-| ch02 Getting Started | 170 | ch02.1 Keywords (400) | 570 |
-| ch03 Built-in Types | 280 | ch03.1 Immutability (136) | 416 |
-| ch04 Control Flow | 280 | — | 280 |
-| ch05 Data Structures | 380 | ch05.1 Constructors (210) + ch05.2 Collections (390) | 980 |
-| ch06 Enums & Matching | 320 | ch06.1 Exhaustive/Null (300) | 620 |
-| ch07 Ownership | 330 | ch07.1 Memory Safety (220) | 550 |
-| ch08 Crates & Modules | 340 | ch08.1 Pkg Mgmt (235) | 575 |
-| ch09 Error Handling | 350 | ch09.1 Best Practices (80) | 430 |
-| ch10 Traits & Generics | 380 | ch10.1 Generics (170) + ch10.2 Inheritance (175) | 725 |
+| ch00 はじめに | 30 | — | 30 |
+| ch01 導入と動機 | 380 | — | 380 |
+| ch02 はじめの一歩 | 170 | ch02.1 キーワード（400） | 570 |
+| ch03 組み込み型 | 280 | ch03.1 イミュータビリティ（136） | 416 |
+| ch04 制御フロー | 280 | — | 280 |
+| ch05 データ構造 | 380 | ch05.1 コンストラクタ（210） ＋ ch05.2 コレクション（390） | 980 |
+| ch06 列挙型とマッチング | 320 | ch06.1 網羅的/Null（300） | 620 |
+| ch07 所有権 | 330 | ch07.1 メモリ安全性（220） | 550 |
+| ch08 クレートとモジュール | 340 | ch08.1 パッケージ管理（235） | 575 |
+| ch09 エラー処理 | 350 | ch09.1 ベストプラクティス（80） | 430 |
+| ch10 トレイトとジェネリクス | 380 | ch10.1 ジェネリクス（170） ＋ ch10.2 継承（175） | 725 |
 | ch11 From/Into | 120 | — | 120 |
-| ch12 Closures & Iterators | 300 | — | 300 |
-| ch13 Concurrency | 260 | — | 260 |
-| ch14 Unsafe & FFI | 120 | — | 120 |
-| ch15 Case Studies | 400 | ch15.1 Patterns/Crates (400) + ch15.2 Adoption (390) | 1,190 |
-| ch16 Best Practices | 340 | ch16.1 Learning Path (100) | 440 |
-| **TOTAL** | | | **~7,986** |
+| ch12 クロージャとイテレータ | 300 | — | 300 |
+| ch13 並行性 | 260 | — | 260 |
+| ch14 Unsafe と FFI | 120 | — | 120 |
+| ch15 ケーススタディ | 400 | ch15.1 パターン/クレート（400） ＋ ch15.2 導入（390） | 1,190 |
+| ch16 ベストプラクティス | 340 | ch16.1 学習パス（100） | 440 |
+| **合計** | | | **約7,986** |
 
-**Reduction from raw total:** 8,384 → ~5,800 unique content (after dedup) + ~120 new content (ch11 bridging, ch14 new) ≈ **5,920 lines of merged output** spread across 16 chapters + 14 sub-chapters.
+**元データからの削減:** 8,384行 → 約5,800行の固有コンテンツ（重複排除後） ＋ 約120行の新規コンテンツ（第11章の補足、第14章の新規作成） ≈ **統合後の総出力は約5,920行**となり、全16章 ＋ 14個のサブチャプターに分散されます。
 
 ---
 
-## Unique C#-Specific Content Preserved
+## 保持された C# 固有のコンテンツ
 
-| Content | Source | Chapter | Why It Matters |
+| コンテンツ | 出典 | 格納先章 | 重要である理由 |
 |---------|--------|---------|----------------|
-| Quick Reference Table | B L93–110 | ch01 | At-a-glance C#→Rust mapping |
-| Keywords Reference (400 lines) | B L842–1244 | ch02.1 | Comprehensive C# keyword → Rust mapping |
-| True Immutability vs Records | A L577–712 | ch03.1 | C# `record` isn't truly immutable |
-| 13 × Mermaid Diagrams | A various | various | Visual concept comparisons |
-| LINQ vs Iterators | A L1195–1337 | ch12 | Maps every LINQ method to Rust |
-| DI → Trait Injection | A L2430–2478 | ch15.2 | IServiceCollection → generic constructors |
-| EF → SQLx Mapping | A L2514–2555 | ch15.2 | DbContext → sqlx::query_as! |
-| IConfiguration → config | A L2556–2595 | ch15.2 | appsettings.json → config crate |
-| Essential Crates Mapping | A L1744–1946 | ch15.1 | Every C# lib → Rust crate equivalent |
-| Repository Pattern | A L1506–1625 | ch15.1 | IRepository → trait + async_trait |
-| Builder Pattern | A L1626–1743 | ch15.1 | C# builder → consuming-self builder |
-| Thread Safety Guarantees | A L1947–2204 | ch13 | Convention → type system enforcement |
-| Migration Decision Tree | A L2850–2883 | ch16 | Mermaid flowchart for adoption decisions |
-| Performance Benchmarks | A L2709–2830 | ch16 | Managed vs native perf data |
-| Team Adoption Timeline | A L2596–2708 | ch15.2 | Month-by-month rollout plan |
+| クイックリファレンステーブル | B L93–110 | ch01 | 一目でわかる C# → Rust の対応関係 |
+| キーワードリファレンス（400行） | B L842–1244 | ch02.1 | 網羅的な C# キーワード → Rust キーワードの対応表 |
+| 真のイミュータビリティ vs レコード | A L577–712 | ch03.1 | C# の `record` が真にイミュータブルではない理由の解説 |
+| 13個の Mermaid ダイアグラム | A 各所 | 各章 | 概念比較の視覚的理解 |
+| LINQ vs イテレータ | A L1195–1337 | ch12 | すべての LINQ メソッドを Rust のイテレータメソッドに対応付け |
+| DI → トレイト注入 | A L2430–2478 | ch15.2 | IServiceCollection → ジェネリックコンストラクタへの変換 |
+| EF → SQLx マッピング | A L2514–2555 | ch15.2 | DbContext → sqlx::query_as! への変換 |
+| IConfiguration → config | A L2556–2595 | ch15.2 | appsettings.json → config クレートへの移行 |
+| 必須クレート対応表 | A L1744–1946 | ch15.1 | あらゆる C# ライブラリに対応する Rust クレートの一覧 |
+| リポジトリパターン | A L1506–1625 | ch15.1 | IRepository → トレイト ＋ async_trait への移行 |
+| Builder パターン | A L1626–1743 | ch15.1 | C# の Builder → 所有権を消費する Rust の Builder |
+| スレッド安全性の保証 | A L1947–2204 | ch13 | 開発規約による運用から型システムによる強制へ |
+| 移行判断の決定木 | A L2850–2883 | ch16 | 導入判断のための Mermaid フローチャート |
+| パフォーマンスベンチマーク | A L2709–2830 | ch16 | マネージド実行 vs ネイティブ実行の性能データ |
+| チーム導入タイムライン | A L2596–2708 | ch15.2 | 月ごとの段階的な展開プラン |

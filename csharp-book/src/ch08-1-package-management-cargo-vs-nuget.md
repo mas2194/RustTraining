@@ -1,13 +1,13 @@
-## Package Management: Cargo vs NuGet
+## パッケージ管理：Cargo と NuGet
 
-> **What you'll learn:** `Cargo.toml` vs `.csproj`, version specifiers, `Cargo.lock`,
-> feature flags for conditional compilation, and common Cargo commands mapped to their NuGet/dotnet equivalents.
+> **学べること:** `Cargo.toml` と `.csproj` の比較、バージョン指定子、`Cargo.lock`、
+> 条件付きコンパイルのためのフィーチャーフラグ、および NuGet/dotnet に対応する一般的な Cargo コマンド。
 >
-> **Difficulty:** 🟢 Beginner
+> **難易度:** 🟢 初級
 
-### Dependency Declaration
+### 依存関係の宣言
 
-#### C# NuGet Dependencies
+#### C# の NuGet 依存関係
 ```xml
 <!-- MyApp.csproj -->
 <Project Sdk="Microsoft.NET.Sdk">
@@ -23,7 +23,7 @@
 </Project>
 ```
 
-#### Rust Cargo Dependencies
+#### Rust の Cargo 依存関係
 ```toml
 # Cargo.toml
 [package]
@@ -32,28 +32,28 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-serde_json = "1.0"               # From crates.io (like NuGet)
-serde = { version = "1.0", features = ["derive"] }  # With features
+serde_json = "1.0"               # crates.io から取得（NuGet に相当）
+serde = { version = "1.0", features = ["derive"] }  # フィーチャーを指定
 log = "0.4"
 tokio = { version = "1.0", features = ["full"] }
 
-# Local dependencies (like ProjectReference)
+# ローカル依存関係（ProjectReference に相当）
 my_library = { path = "../my_library" }
 
-# Git dependencies
+# Git リポジトリからの依存関係
 my_git_crate = { git = "https://github.com/user/repo" }
 
-# Development dependencies (like test packages)
+# 開発用依存関係（テストパッケージ等に相当）
 [dev-dependencies]
-criterion = "0.5"               # Benchmarking
-proptest = "1.0"               # Property testing
+criterion = "0.5"               # ベンチマーク用
+proptest = "1.0"               # プロパティベーステスト用
 ```
 
-### Version Management
+### バージョン管理
 
-#### C# Package Versioning
+#### C# のパッケージバージョニング
 ```xml
-<!-- Centralized package management (Directory.Packages.props) -->
+<!-- 一元管理パッケージ管理（Directory.Packages.props） -->
 <Project>
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
@@ -63,29 +63,29 @@ proptest = "1.0"               # Property testing
   <PackageVersion Include="Serilog" Version="3.0.1" />
 </Project>
 
-<!-- packages.lock.json for reproducible builds -->
+<!-- 再現可能なビルドのための packages.lock.json -->
 ```
 
-#### Rust Version Management
+#### Rust のバージョン管理
 ```toml
-# Cargo.toml - Semantic versioning
+# Cargo.toml - セマンティックバージョニング
 [dependencies]
-serde = "1.0"        # Compatible with 1.x.x (>=1.0.0, <2.0.0)
-log = "0.4.17"       # Compatible with 0.4.x (>=0.4.17, <0.5.0)
-regex = "=1.5.4"     # Exact version
-chrono = "^0.4"      # Caret requirements (default)
-uuid = "~1.3.0"      # Tilde requirements (>=1.3.0, <1.4.0)
+serde = "1.0"        # 1.x.x と互換（>=1.0.0, <2.0.0）
+log = "0.4.17"       # 0.4.x と互換（>=0.4.17, <0.5.0）
+regex = "=1.5.4"     # 正確なバージョン
+chrono = "^0.4"      # キャレット要件（デフォルト）
+uuid = "~1.3.0"      # チルダ要件（>=1.3.0, <1.4.0）
 
-# Cargo.lock - Exact versions for reproducible builds (auto-generated)
+# Cargo.lock - 再現可能なビルドのための厳密なバージョン（自動生成）
 [[package]]
 name = "serde"
 version = "1.0.163"
-# ... exact dependency tree
+# ... 厳密な依存関係ツリー
 ```
 
-### Package Sources
+### パッケージソース
 
-#### C# Package Sources
+#### C# のパッケージソース
 ```xml
 <!-- nuget.config -->
 <configuration>
@@ -96,7 +96,7 @@ version = "1.0.163"
 </configuration>
 ```
 
-#### Rust Package Sources
+#### Rust のパッケージソース
 ```toml
 # .cargo/config.toml
 [source.crates-io]
@@ -105,30 +105,30 @@ replace-with = "my-awesome-registry"
 [source.my-awesome-registry]
 registry = "https://my-intranet:8080/index"
 
-# Alternative registries
+# 代替レジストリ
 [registries]
 my-registry = { index = "https://my-intranet:8080/index" }
 
-# In Cargo.toml
+# Cargo.toml 内
 [dependencies]
 my_crate = { version = "1.0", registry = "my-registry" }
 ```
 
-### Common Commands Comparison
+### よく使われるコマンドの比較
 
-| Task | C# Command | Rust Command |
+| タスク | C# コマンド | Rust コマンド |
 |------|------------|-------------|
-| Restore packages | `dotnet restore` | `cargo fetch` |
-| Add package | `dotnet add package Newtonsoft.Json` | `cargo add serde_json` |
-| Remove package | `dotnet remove package Newtonsoft.Json` | `cargo remove serde_json` |
-| Update packages | `dotnet update` | `cargo update` |
-| List packages | `dotnet list package` | `cargo tree` |
-| Audit security | `dotnet list package --vulnerable` | `cargo audit` |
-| Clean build | `dotnet clean` | `cargo clean` |
+| パッケージの復元 | `dotnet restore` | `cargo fetch` |
+| パッケージの追加 | `dotnet add package Newtonsoft.Json` | `cargo add serde_json` |
+| パッケージの削除 | `dotnet remove package Newtonsoft.Json` | `cargo remove serde_json` |
+| パッケージの更新 | `dotnet update` | `cargo update` |
+| パッケージ一覧の表示 | `dotnet list package` | `cargo tree` |
+| セキュリティ監査 | `dotnet list package --vulnerable` | `cargo audit` |
+| ビルド成果物のクリーンアップ | `dotnet clean` | `cargo clean` |
 
-### Features: Conditional Compilation
+### フィーチャー：条件付きコンパイル
 
-#### C# Conditional Compilation
+#### C# の条件付きコンパイル
 ```csharp
 #if DEBUG
     Console.WriteLine("Debug mode");
@@ -136,20 +136,20 @@ my_crate = { version = "1.0", registry = "my-registry" }
     Console.WriteLine("Release mode");
 #endif
 
-// Project file features
+// プロジェクトファイルのフィーチャー設定
 <PropertyGroup Condition="'$(Configuration)'=='Debug'">
     <DefineConstants>DEBUG;TRACE</DefineConstants>
 </PropertyGroup>
 ```
 
-#### Rust Feature Gates
+#### Rust のフィーチャーゲート
 ```toml
 # Cargo.toml
 [features]
-default = ["json"]              # Default features
-json = ["serde_json"]          # Feature that enables serde_json
-xml = ["serde_xml"]            # Alternative serialization
-advanced = ["json", "xml"]     # Composite feature
+default = ["json"]              # デフォルトのフィーチャー
+json = ["serde_json"]          # serde_json を有効化するフィーチャー
+xml = ["serde_xml"]            # 代替のシリアライズ
+advanced = ["json", "xml"]     # 複合フィーチャー
 
 [dependencies]
 serde_json = { version = "1.0", optional = true }
@@ -157,7 +157,7 @@ serde_xml = { version = "0.4", optional = true }
 ```
 
 ```rust
-// Conditional compilation based on features
+// フィーチャーに基づく条件付きコンパイル
 #[cfg(feature = "json")]
 use serde_json;
 
@@ -172,28 +172,28 @@ pub fn serialize_data(data: &MyStruct) -> String {
     return serde_xml::to_string(data).unwrap();
     
     #[cfg(not(any(feature = "json", feature = "xml")))]
-    return "No serialization feature enabled".to_string();
+    return "有効なシリアライズフィーチャーがありません".to_string();
 }
 ```
 
-### Using External Crates
+### 外部クレートの利用
 
-#### Popular Crates for C# Developers
+#### C# 開発者向けの主要クレート
 
-| C# Library | Rust Crate | Purpose |
+| C# ライブラリ | Rust クレート | 用途 |
 |------------|------------|---------|
-| System.Text.Json / Newtonsoft.Json | `serde_json` | JSON serialization |
-| HttpClient | `reqwest` | HTTP client |
-| Entity Framework | `diesel` / `sqlx` | ORM / SQL toolkit |
-| NLog/Serilog | `log` + `env_logger` | Logging |
-| xUnit/NUnit | Built-in `#[test]` | Unit testing |
-| Moq | `mockall` | Mocking |
-| Flurl | `url` | URL manipulation |
-| Polly | `tower` | Resilience patterns |
+| System.Text.Json / Newtonsoft.Json | `serde_json` | JSON シリアライズ |
+| HttpClient | `reqwest` | HTTP クライアント |
+| Entity Framework | `diesel` / `sqlx` | ORM / SQL ツールキット |
+| NLog/Serilog | `log` + `env_logger` | ロギング |
+| xUnit/NUnit | Built-in `#[test]` | 単体テスト |
+| Moq | `mockall` | モック |
+| Flurl | `url` | URL 操作 |
+| Polly | `tower` | レジリエンスパターン |
 
-#### Example: HTTP Client Migration
+#### 例：HTTP クライアントの移行
 ```csharp
-// C# HttpClient usage
+// C# HttpClient の使用例
 public class ApiClient
 {
     private readonly HttpClient _httpClient;
@@ -208,7 +208,7 @@ public class ApiClient
 ```
 
 ```rust
-// Rust reqwest usage
+// Rust reqwest の使用例
 use reqwest;
 use serde::Deserialize;
 
@@ -236,6 +236,4 @@ impl ApiClient {
 }
 ```
 
-***
-
-
+---

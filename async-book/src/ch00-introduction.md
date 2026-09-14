@@ -1,96 +1,94 @@
-# Async Rust: From Futures to Production
+# 非同期Rust: Futureからプロダクションまで
 
-## Speaker Intro
+## 登壇者紹介
 
-- Principal Firmware Architect in Microsoft SCHIE (Silicon and Cloud Hardware Infrastructure Engineering) team
-- Industry veteran with expertise in security, systems programming (firmware, operating systems, hypervisors), CPU and platform architecture, and C++ systems
-- Started programming in Rust in 2017 (@AWS EC2), and have been in love with the language ever since
+- Microsoft SCHIE (Silicon and Cloud Hardware Infrastructure Engineering) チーム プリンシパルファームウェアアーキテクト
+- セキュリティ、システムプログラミング（ファームウェア、オペレーティングシステム、ハイパーバイザ）、CPUおよびプラットフォームアーキテクチャ、C++システムに関する深い専門知識を持つ業界のベテラン
+- 2017年に（@AWS EC2にて）Rustプログラミングを始め、以来この言語に魅了され続けている
 
 ---
 
-A deep-dive guide to asynchronous programming in Rust. Unlike most async tutorials that start with `tokio::main` and hand-wave the internals, this guide builds understanding from first principles — the `Future` trait, polling, state machines — then progresses to real-world patterns, runtime selection, and production pitfalls.
+本書は、Rustにおける非同期プログラミングの徹底解説ガイドです。`tokio::main` から始めて内部の仕組みを曖昧に流してしまう一般的な非同期チュートリアルとは異なり、本書では `Future` トレイト、ポーリング、ステートマシンといった第一原理から理解を積み上げ、そのうえで実践的なパターン、ランタイムの選定、プロダクション環境で陥りがちな落とし穴へと段階的に進んでいきます。
 
-## Who This Is For
-- Rust developers who can write synchronous Rust but find async confusing
-- Developers from C#, Go, Python, or JavaScript who know `async/await` but not Rust's model
-- Anyone who's been bitten by `Future is not Send`, `Pin<Box<dyn Future>>`, or "why does my program hang?"
+## 対象読者
+- 同期処理のRustは書けるものの、非同期処理に難しさを感じているRust開発者
+- C#、Go、Python、JavaScriptなどの経験があり `async/await` は理解しているが、Rust独自のモデルに不慣れな開発者
+- `Future is not Send` や `Pin<Box<dyn Future>>` に悩まされたり、「なぜプログラムがハングするのか？」という疑問に直面したことのあるすべての方
 
-## Prerequisites
+## 前提知識
 
-You should be comfortable with:
-- Ownership, borrowing, and lifetimes
-- Traits and generics (including `impl Trait`)
-- Using `Result<T, E>` and the `?` operator
-- Basic multi-threading (`std::thread::spawn`, `Arc`, `Mutex`)
+以下の知識があることを前提としています：
+- 所有権、借用、ライフタイム
+- トレイトとジェネリクス（`impl Trait` を含む）
+- `Result<T, E>` と `?` 演算子の利用
+- 基本的なマルチスレッドプログラミング（`std::thread::spawn`、`Arc`、`Mutex`）
 
-No prior async Rust experience is needed.
+事前の非同期Rustの実務経験は不要です。
 
-## How to Use This Book
+## 本書の読み方
 
-**Read linearly the first time.** Parts I–III build on each other. Each chapter has:
+**初回は順番通りに読み進めてください。** 第I部〜第III部は互いに積み重ねる構成になっています。各章には以下の難易度表記があります：
 
-| Symbol | Meaning |
+| 記号 | 意味 |
 |--------|---------|
-| 🟢 | Beginner — foundational concept |
-| 🟡 | Intermediate — requires earlier chapters |
-| 🔴 | Advanced — deep internals or production patterns |
+| 🟢 | 初級 — 基礎概念 |
+| 🟡 | 中級 — 前章までの知識が必要 |
+| 🔴 | 上級 — 深い内部構造やプロダクションパターン |
 
-Each chapter includes:
-- A **"What you'll learn"** block at the top
-- **Mermaid diagrams** for visual learners
-- An **inline exercise** with a hidden solution
-- **Key Takeaways** summarizing the core ideas
-- **Cross-references** to related chapters
+各章には以下が含まれています：
+- 冒頭の **「この章で学ぶこと」**
+- 視覚的理解を助ける **Mermaid ダイアグラム**
+- 折りたたみ解答付きの **インライン演習問題**
+- コアとなる考え方をまとめた **重要ポイント**
+- 関連章への **相互参照リンク**
 
-## Pacing Guide
+## 学習ペースの目安
 
-| Chapters | Topic | Suggested Time | Checkpoint |
+| 章 | トピック | 推奨時間 | チェックポイント |
 |----------|-------|----------------|------------|
-| 1–5 | How Async Works | 6–8 hours | You can explain `Future`, `Poll`, `Pin`, and why Rust has no built-in runtime |
-| 6–10 | The Ecosystem | 6–8 hours | You can build futures by hand, choose a runtime, and use tokio's API |
-| 11–13 | Production Async | 6–8 hours | You can write production-grade async code with streams, proper error handling, and graceful shutdown |
-| Capstone | Chat Server | 4–6 hours | You've built a real async application integrating all concepts |
+| 1–5 | 非同期処理の仕組み | 6–8 時間 | `Future`、`Poll`、`Pin`、そしてなぜRustにランタイムが内蔵されていないかを説明できる |
+| 6–10 | エコシステム | 6–8 時間 | 手動でFutureを構築し、ランタイムを選定し、TokioのAPIを活用できる |
+| 11–13 | プロダクションにおける非同期処理 | 6–8 時間 | ストリーム、適切なエラー処理、グレースフルシャットダウンを備えた本番水準の非同期コードが書ける |
+| 最終課題 | チャットサーバー | 4–6 時間 | すべての概念を統合した実践的な非同期アプリケーションを構築できる |
 
-**Total estimated time: 22–30 hours**
+**総想定学習時間: 22–30 時間**
 
-## Working Through Exercises
+## 演習問題の進め方
 
-Every content chapter has an inline exercise. The capstone (Ch 16) integrates everything into a single project. For maximum learning:
+本編のすべての章にインライン演習問題があります。最終課題（Ch 17）では、すべてを単一のプロジェクトに統合します。学習効果を最大化するために：
 
-1. **Try the exercise before expanding the solution** — struggling is where learning happens
-2. **Type the code, don't copy-paste** — muscle memory matters for Rust's syntax
-3. **Run every example** — `cargo new async-exercises` and test as you go
+1. **解答を展開する前に、自力で挑戦してください** — 試行錯誤の中にこそ学びがあります
+2. **コードはコピー＆ペーストせず、手で入力してください** — Rustの構文にはマッスルメモリ（指の感覚）が重要です
+3. **すべてのサンプルを実行してください** — `cargo new async-exercises` を作成し、進めながらテストしてください
 
-## Table of Contents
+## 目次
 
-### Part I: How Async Works
+### 第I部: 非同期処理の仕組み
 
-- [1. Why Async is Different in Rust](ch01-why-async-is-different-in-rust.md) 🟢 — The fundamental difference: Rust has no built-in runtime
-- [2. The Future Trait](ch02-the-future-trait.md) 🟡 — `poll()`, `Waker`, and the contract that makes it all work
-- [3. How Poll Works](ch03-how-poll-works.md) 🟡 — The polling state machine and a minimal executor
-- [4. Pin and Unpin](ch04-pin-and-unpin.md) 🔴 — Why self-referential structs need pinning
-- [5. The State Machine Reveal](ch05-the-state-machine-reveal.md) 🟢 — What the compiler actually generates from `async fn`
+- [1. なぜRustの非同期処理は特別なのか](ch01-why-async-is-different-in-rust.md) 🟢 — 根本的な違い：Rustにはランタイムが組み込まれていない
+- [2. Future トレイト](ch02-the-future-trait.md) 🟡 — `poll()`、`Waker`、そしてすべてを動かす契約
+- [3. Poll の仕組み](ch03-how-poll-works.md) 🟡 — ポーリングステートマシンと最小限のエグゼキュータ
+- [4. Pin と Unpin](ch04-pin-and-unpin.md) 🔴 — なぜ自己参照構造体にピニングが必要なのか
+- [5. ステートマシンの全貌](ch05-the-state-machine-reveal.md) 🟢 — コンパイラが `async fn` から実際に生成するもの
 
-### Part II: The Ecosystem
+### 第II部: エコシステム
 
-- [6. Building Futures by Hand](ch06-building-futures-by-hand.md) 🟡 — TimerFuture, Join, Select from scratch
-- [7. Executors and Runtimes](ch07-executors-and-runtimes.md) 🟡 — tokio, smol, async-std, embassy — how to choose
-- [8. Tokio Deep Dive](ch08-tokio-deep-dive.md) 🟡 — Runtime flavors, spawn, channels, sync primitives
-- [9. When Tokio Isn't the Right Fit](ch09-when-tokio-isnt-the-right-fit.md) 🟡 — LocalSet, FuturesUnordered, runtime-agnostic design
-- [10. Async Traits](ch10-async-traits.md) 🟡 — RPITIT, dyn dispatch, trait_variant, async closures
+- [6. 手動でのFuture構築](ch06-building-futures-by-hand.md) 🟡 — TimerFuture、Join、Select をゼロから作成する
+- [7. エグゼキュータとランタイム](ch07-executors-and-runtimes.md) 🟡 — tokio、smol、async-std、embassy — 選び方
+- [8. Tokio ディープダイブ](ch08-tokio-deep-dive.md) 🟡 — ランタイムの種類、spawn、チャネル、同期プリミティブ
+- [9. Tokio が適さないケース](ch09-when-tokio-isnt-the-right-fit.md) 🟡 — LocalSet、FuturesUnordered、ランタイム非依存の設計
+- [10. 非同期トレイト](ch10-async-traits.md) 🟡 — RPITIT、動的ディスパッチ、trait_variant、非同期クロージャ
 
-### Part III: Production Async
+### 第III部: プロダクションにおける非同期処理
 
-- [11. Streams and AsyncIterator](ch11-streams-and-asynciterator.md) 🟡 — Async iteration, AsyncRead/Write, stream combinators
-- [12. Common Pitfalls](ch12-common-pitfalls.md) 🔴 — 9 production bugs and how to avoid them
-- [13. Production Patterns](ch13-production-patterns.md) 🔴 — Graceful shutdown, backpressure, Tower middleware
-- [14. Async Is an Optimization, Not an Architecture](ch14-async-is-an-optimization-not-an-architecture.md) 🔴 — Sync core / async shell, the function coloring tax
+- [11. ストリームと AsyncIterator](ch11-streams-and-asynciterator.md) 🟡 — 非同期イテレーション、AsyncRead/Write、ストリームコンビネータ
+- [12. よくある落とし穴](ch12-common-pitfalls.md) 🔴 — 本番環境での9つのバグとその回避策
+- [13. プロダクションパターン](ch13-production-patterns.md) 🔴 — グレースフルシャットダウン、バックプレッシャー、Towerミドルウェア
+- [14. 非同期処理は最適化手段であり、アーキテクチャではない](ch14-async-is-an-optimization-not-an-architecture.md) 🔴 — 同期コア / 非同期シェル、関数の色分けの代償
 
-### Appendices
+### 付録
 
-- [Summary and Reference Card](ch16-summary-and-reference-card.md) — Quick-lookup tables and decision trees
-- [Capstone Project: Async Chat Server](ch17-capstone-project.md) — Build a complete async application
+- [まとめとリファレンスカード](ch16-summary-and-reference-card.md) — 早見表と意思決定ツリー
+- [最終プロジェクト: 非同期チャットサーバー](ch17-capstone-project.md) — 完全な非同期アプリケーションの構築
 
 ***
-
-

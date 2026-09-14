@@ -1,62 +1,60 @@
-## Essential Crates for C# Developers
+## C#開発者のための必須クレート
 
-> **What you'll learn:** The Rust crate equivalents for common .NET libraries — serde (JSON.NET),
-> reqwest (HttpClient), tokio (Task/async), sqlx (Entity Framework), and a deep dive on serde's
-> attribute system compared to `System.Text.Json`.
+> **ここで学ぶこと:** 一般的な .NET ライブラリに対応する Rust クレート群 — serde（JSON.NET）、reqwest（HttpClient）、tokio（Task / async）、sqlx（Entity Framework）など。さらに、`System.Text.Json` と比較した serde の属性システムの詳細な解説。
 >
-> **Difficulty:** 🟡 Intermediate
+> **難易度:** 🟡 中級
 
-### Core Functionality Equivalents
+### 主要機能の対応クレート
 
-```rust
-// Cargo.toml dependencies for C# developers
+```toml
+# C# 開発者向けの Cargo.toml 依存関係
 [dependencies]
-# Serialization (like Newtonsoft.Json or System.Text.Json)
+# シリアライゼーション（Newtonsoft.Json や System.Text.Json に相当）
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
-# HTTP client (like HttpClient)
+# HTTP クライアント（HttpClient に相当）
 reqwest = { version = "0.11", features = ["json"] }
 
-# Async runtime (like Task.Run, async/await)
+# 非同期ランタイム（Task.Run や async/await に相当）
 tokio = { version = "1.0", features = ["full"] }
 
-# Error handling (like custom exceptions)
+# エラー処理（カスタム例外に相当）
 thiserror = "1.0"
 anyhow = "1.0"
 
-# Logging (like ILogger, Serilog)
+# ロギング（ILogger や Serilog に相当）
 log = "0.4"
 env_logger = "0.10"
 
-# Date/time (like DateTime)
+# 日時（DateTime に相当）
 chrono = { version = "0.4", features = ["serde"] }
 
-# UUID (like System.Guid)
+# UUID（System.Guid に相当）
 uuid = { version = "1.0", features = ["v4", "serde"] }
 
-# Collections (like List<T>, Dictionary<K,V>)
-# Built into std, but for advanced collections:
-indexmap = "2.0"  # Ordered HashMap
+# コレクション（List<T> や Dictionary<K,V> に相当）
+# 基本的なものは std に組み込み済み。より高度なコレクション用:
+indexmap = "2.0"  # 順序付き HashMap
 
-# Configuration (like IConfiguration)
+# 設定管理（IConfiguration に相当）
 config = "0.13"
 
-# Database (like Entity Framework)
+# データベース（Entity Framework に相当）
 sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono"] }
 
-# Testing (like xUnit, NUnit)
-# Built into std, but for more features:
-rstest = "0.18"  # Parameterized tests
+# テスト（xUnit や NUnit に相当）
+# 基本的なものは std に組み込み済み。拡張機能用:
+rstest = "0.18"  # パラメータ化テスト
 
-# Mocking (like Moq)
+# モック化（Moq に相当）
 mockall = "0.11"
 
-# Parallel processing (like Parallel.ForEach)
+# 並列処理（Parallel.ForEach に相当）
 rayon = "1.7"
 ```
 
-### Example Usage Patterns
+### 実装パターンの例
 
 ```rust
 use serde::{Deserialize, Serialize};
@@ -66,17 +64,17 @@ use thiserror::Error;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
-// Data models (like C# POCOs with attributes)
+// データモデル（属性付きの C# POCO に相当）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {
-    pub id: Uuid,
+    pub id:标志: Uuid,
     pub name: String,
     pub email: String,
     #[serde(with = "chrono::serde::ts_seconds")]
     pub created_at: DateTime<Utc>,
 }
 
-// Custom error types (like custom exceptions)
+// カスタムエラー型（カスタム例外に相当）
 #[derive(Error, Debug)]
 pub enum ApiError {
     #[error("HTTP request failed: {0}")]
@@ -92,7 +90,7 @@ pub enum ApiError {
     Validation { message: String },
 }
 
-// Service class equivalent
+// サービスクラスに相当
 pub struct UserService {
     client: reqwest::Client,
     base_url: String,
@@ -103,12 +101,12 @@ impl UserService {
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .build()
-            .expect("Failed to create HTTP client");
+            .expect("HTTPクライアントの作成に失敗しました");
             
         UserService { client, base_url }
     }
     
-    // Async method (like C# async Task<User>)
+    // 非同期メソッド（C# の async Task<User> に相当）
     pub async fn get_user(&self, id: Uuid) -> Result<User, ApiError> {
         let url = format!("{}/users/{}", self.base_url, id);
         
@@ -125,7 +123,7 @@ impl UserService {
         Ok(user)
     }
     
-    // Create user (like C# async Task<User>)
+    // ユーザー作成（C# の async Task<User> に相当）
     pub async fn create_user(&self, name: String, email: String) -> Result<User, ApiError> {
         if name.trim().is_empty() {
             return Err(ApiError::Validation {
@@ -151,25 +149,25 @@ impl UserService {
     }
 }
 
-// Usage example (like C# Main method)
+// 使用例（C# の Main メソッドに相当）
 #[tokio::main]
 async fn main() -> Result<(), ApiError> {
-    // Initialize logging (like configuring ILogger)
+    // ロギングの初期化（ILogger の設定に相当）
     env_logger::init();
     
     let service = UserService::new("https://api.example.com".to_string());
     
-    // Create user
+    // ユーザー作成
     let user = service.create_user(
         "John Doe".to_string(),
         "john@example.com".to_string(),
     ).await?;
     
-    println!("Created user: {:?}", user);
+    println!("ユーザーを作成しました: {:?}", user);
     
-    // Get user
+    // ユーザー取得
     let retrieved_user = service.get_user(user.id).await?;
-    println!("Retrieved user: {:?}", retrieved_user);
+    println!("ユーザーを取得しました: {:?}", retrieved_user);
     
     Ok(())
 }
@@ -178,7 +176,7 @@ async fn main() -> Result<(), ApiError> {
 mod tests {
     use super::*;
     
-    #[tokio::test]  // Like C# [Test] or [Fact]
+    #[tokio::test]  // C# の [Test] や [Fact] に相当
     async fn test_user_creation() {
         let service = UserService::new("http://localhost:8080".to_string());
         
@@ -195,7 +193,7 @@ mod tests {
     
     #[test]
     fn test_validation() {
-        // Synchronous test
+        // 同期テスト
         let error = ApiError::Validation {
             message: "Invalid input".to_string(),
         };
@@ -209,11 +207,12 @@ mod tests {
 
 
 <!-- ch15.1a: Serde Deep Dive for C# Developers -->
-## Serde Deep Dive: JSON Serialization for C# Developers
+## Serde徹底解説: C#開発者のためのJSONシリアライゼーション
 
-C# developers rely heavily on `System.Text.Json` or `Newtonsoft.Json`. In Rust, **serde** (serialize/deserialize) is the universal framework — understanding its attribute system unlocks most data-handling scenarios.
+C# 開発者は `System.Text.Json` や `Newtonsoft.Json` を頻繁に利用します。Rust では、**serde**（serialize / deserialize）がデファクトスタンダードのフレームワークです。その属性（attribute）システムを理解することで、大半のデータ処理シナリオにスムーズに対応できるようになります。
 
-### Basic Derive: The Starting Point
+### 基本的な Derive: まずはここから
+
 ```rust
 use serde::{Deserialize, Serialize};
 
@@ -230,7 +229,7 @@ let parsed: User = serde_json::from_str(&json)?;
 ```
 
 ```csharp
-// C# equivalent
+// C# の同等コード
 public class User
 {
     public string Name { get; set; }
@@ -241,42 +240,42 @@ var json = JsonSerializer.Serialize(user, new JsonSerializerOptions { WriteInden
 var parsed = JsonSerializer.Deserialize<User>(json);
 ```
 
-### Field-Level Attributes (Like `[JsonProperty]`)
+### フィールドレベルの属性（`[JsonProperty]` に相当）
 
 ```rust
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
 struct ApiResponse {
-    // Rename field in JSON output (like [JsonPropertyName("user_id")])
+    // JSON 出力時のフィールド名を変更（[JsonPropertyName("user_id")] に相当）
     #[serde(rename = "user_id")]
     id: u64,
 
-    // Use different names for serialize vs deserialize
+    // シリアライズ時とデシリアライズ時で異なる名前を使用
     #[serde(rename(serialize = "userName", deserialize = "user_name"))]
     name: String,
 
-    // Skip this field entirely (like [JsonIgnore])
+    // このフィールドを完全に除外（[JsonIgnore] に相当）
     #[serde(skip)]
     internal_cache: Option<String>,
 
-    // Skip during serialization only
+    // シリアライズ時のみ除外
     #[serde(skip_serializing)]
     password_hash: String,
 
-    // Default value if missing from JSON (like default constructor values)
+    // JSON に存在しない場合のデフォルト値（デフォルトコンストラクタの値に相当）
     #[serde(default)]
     is_active: bool,
 
-    // Custom default
+    // カスタムデフォルト値
     #[serde(default = "default_role")]
     role: String,
 
-    // Flatten a nested struct into the parent (like [JsonExtensionData])
+    // ネストした構造体を親構造体にフラットに展開（[JsonExtensionData] に相当）
     #[serde(flatten)]
     metadata: Metadata,
 
-    // Skip if the value is None (omit null fields)
+    // 値が None の場合はスキップ（null フィールドを省略）
     #[serde(skip_serializing_if = "Option::is_none")]
     nickname: Option<String>,
 }
@@ -291,7 +290,7 @@ struct Metadata {
 ```
 
 ```csharp
-// C# equivalent attributes
+// C# の対応する属性
 public class ApiResponse
 {
     [JsonPropertyName("user_id")]
@@ -305,25 +304,25 @@ public class ApiResponse
 }
 ```
 
-### Enum Representations (Critical Difference from C#)
+### 列挙型（Enum）の表現形式（C#との決定的な違い）
 
-Rust serde supports **four different JSON representations** for enums — a concept that has no direct C# equivalent because C# enums are always integers or strings.
+Rust の serde は、列挙型（Enum）に対して**4種類の異なる JSON 表現形式**をサポートしています。C# の enum は常に整数または文字列であるため、これは C# には直接的な同等物が存在しない重要な概念です。
 
 ```rust
 use serde::{Deserialize, Serialize};
 
-// 1. Externally tagged (DEFAULT) — most common
+// 1. 外部タグ付き（Externally tagged、デフォルト） — 最も一般的
 #[derive(Serialize, Deserialize)]
 enum Message {
     Text(String),
     Image { url: String, width: u32 },
     Ping,
 }
-// Text variant:  {"Text": "hello"}
-// Image variant: {"Image": {"url": "...", "width": 100}}
-// Ping variant:  "Ping"
+// Text バリアント:  {"Text": "hello"}
+// Image バリアント: {"Image": {"url": "...", "width": 100}}
+// Ping バリアント:  "Ping"
 
-// 2. Internally tagged — like discriminated unions in other languages
+// 2. 内部タグ付き（Internally tagged） — 他言語の判別共用体（Discriminated Unions）と同様
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
 enum Event {
@@ -334,7 +333,7 @@ enum Event {
 // {"type": "Created", "id": 1, "name": "Alice"}
 // {"type": "Deleted", "id": 1}
 
-// 3. Adjacently tagged — tag and content in separate fields
+// 3. 隣接タグ付き（Adjacently tagged） — タグとコンテンツを別々のフィールドに分離
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "t", content = "c")]
 enum ApiResult {
@@ -344,7 +343,7 @@ enum ApiResult {
 // {"t": "Success", "c": {"name": "Alice"}}
 // {"t": "Error", "c": "not found"}
 
-// 4. Untagged — serde tries each variant in order
+// 4. タグなし（Untagged） — serde が各バリアントを順番に試行
 #[derive(Serialize, Deserialize)]
 #[serde(untagged)]
 enum FlexibleValue {
@@ -353,14 +352,15 @@ enum FlexibleValue {
     Text(String),
     Bool(bool),
 }
-// 42, 3.14, "hello", true — serde auto-detects the variant
+// 42, 3.14, "hello", true — serde がバリアントを自動判別
 ```
 
-### Custom Serialization (Like `JsonConverter`)
+### カスタムシリアライゼーション（`JsonConverter` に相当）
+
 ```rust
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-// Custom serialization for a specific field
+// 特定のフィールドに対するカスタムシリアライゼーション
 #[derive(Serialize, Deserialize)]
 struct Config {
     #[serde(serialize_with = "serialize_duration", deserialize_with = "deserialize_duration")]
@@ -378,11 +378,11 @@ fn deserialize_duration<'de, D: Deserializer<'de>>(d: D) -> Result<std::time::Du
 // JSON: {"timeout": 5000}  ↔  Config { timeout: Duration::from_millis(5000) }
 ```
 
-### Container-Level Attributes
+### コンテナレベルの属性
 
 ```rust
 #[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]  // All fields become camelCase in JSON
+#[serde(rename_all = "camelCase")]  // JSON 内の全フィールドが camelCase になる
 struct UserProfile {
     first_name: String,      // → "firstName"
     last_name: String,       // → "lastName"
@@ -390,44 +390,43 @@ struct UserProfile {
 }
 
 #[derive(Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]  // Reject JSON with extra fields (strict parsing)
+#[serde(deny_unknown_fields)]  // 未定義の余分なフィールドがある JSON を拒絶する（厳密なパース）
 struct StrictConfig {
     port: u16,
     host: String,
 }
 // serde_json::from_str::<StrictConfig>(r#"{"port":8080,"host":"localhost","extra":true}"#)
-// → Error: unknown field `extra`
+// → エラー: 未知のフィールド `extra` が存在します
 ```
 
-### Quick Reference: Serde Attributes
+### クイックリファレンス: Serde 属性一覧
 
-| Attribute | Level | C# Equivalent | Purpose |
+| 属性 | レベル | C# の相当機能 | 目的 |
 |-----------|-------|---------------|---------|
-| `#[serde(rename = "...")]` | Field | `[JsonPropertyName]` | Rename in JSON |
-| `#[serde(skip)]` | Field | `[JsonIgnore]` | Omit entirely |
-| `#[serde(default)]` | Field | Default value | Use `Default::default()` if missing |
-| `#[serde(flatten)]` | Field | `[JsonExtensionData]` | Merge nested struct into parent |
-| `#[serde(skip_serializing_if = "...")]` | Field | `JsonIgnoreCondition` | Conditional skip |
-| `#[serde(rename_all = "camelCase")]` | Container | `JsonSerializerOptions.PropertyNamingPolicy` | Naming convention |
-| `#[serde(deny_unknown_fields)]` | Container | — | Strict deserialization |
-| `#[serde(tag = "type")]` | Enum | Discriminator pattern | Internal tagging |
-| `#[serde(untagged)]` | Enum | — | Try variants in order |
-| `#[serde(with = "...")]` | Field | `[JsonConverter]` | Custom ser/de |
+| `#[serde(rename = "...")]` | フィールド | `[JsonPropertyName]` | JSON 内のプロパティ名変更 |
+| `#[serde(skip)]` | フィールド | `[JsonIgnore]` | 完全に対象外とする |
+| `#[serde(default)]` | フィールド | デフォルト値 | 存在しない場合に `Default::default()` を使用 |
+| `#[serde(flatten)]` | フィールド | `[JsonExtensionData]` | ネストした構造体を親に統合 |
+| `#[serde(skip_serializing_if = "...")]` | フィールド | `JsonIgnoreCondition` | 条件付きでスキップ |
+| `#[serde(rename_all = "camelCase")]` | コンテナ | `JsonSerializerOptions.PropertyNamingPolicy` | 命名規則の一括適用 |
+| `#[serde(deny_unknown_fields)]` | コンテナ | — | 厳格なデシリアライズ（未知のフィールドを禁止） |
+| `#[serde(tag = "type")]` | 列挙型 | ディスクリミネータパターン | 内部タグ付け（Internal tagging） |
+| `#[serde(untagged)]` | 列挙型 | — | 各バリアントを順番に検証 |
+| `#[serde(with = "...")]` | フィールド | `[JsonConverter]` | カスタムシリアライズ / デシリアライズ |
 
-### Beyond JSON: serde Works Everywhere
+### JSONを超えて: あらゆる形式に対応する Serde
+
 ```rust
-// The SAME derive works for ALL formats — just change the crate
+// クレートを変更するだけで、同じ derive があらゆるフォーマットで動作する
 let user = User { name: "Alice".into(), age: 30, email: "a@b.com".into() };
 
 let json  = serde_json::to_string(&user)?;        // JSON
-let toml  = toml::to_string(&user)?;               // TOML (config files)
+let toml  = toml::to_string(&user)?;               // TOML（設定ファイル向け）
 let yaml  = serde_yaml::to_string(&user)?;          // YAML
-let cbor  = serde_cbor::to_vec(&user)?;             // CBOR (binary, compact)
-let msgpk = rmp_serde::to_vec(&user)?;              // MessagePack (binary)
+let cbor  = serde_cbor::to_vec(&user)?;             // CBOR（バイナリ、コンパクト）
+let msgpk = rmp_serde::to_vec(&user)?;              // MessagePack（バイナリ）
 
-// One #[derive(Serialize, Deserialize)] — every format for free
+// 1つの #[derive(Serialize, Deserialize)] で、すべてのフォーマットが追加コストなしで利用可能
 ```
 
 ***
-
-

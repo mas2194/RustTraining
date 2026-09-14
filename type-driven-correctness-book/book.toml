@@ -1,7 +1,7 @@
 [book]
-title = "Type-Driven Correctness in Rust"
+title = "型主導の正当性"
 authors = ["Rust Training Team"]
-language = "en"
+language = "ja"
 src = "src"
 
 [build]

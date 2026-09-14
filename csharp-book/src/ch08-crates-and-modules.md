@@ -1,17 +1,16 @@
-## Modules and Crates: Code Organization
+## モジュールとクレート：コードの構成
 
-> **What you'll learn:** Rust's module system vs C# namespaces and assemblies, `pub`/`pub(crate)`/`pub(super)` visibility,
-> file-based module organization, and how crates map to .NET assemblies.
+> **学習内容:** Rust のモジュールシステムと C# の名前空間・アセンブリの比較、`pub` / `pub(crate)` / `pub(super)` による可視性、ファイルベースのモジュール構成、そしてクレートと .NET アセンブリの対応関係を学びます。
 >
-> **Difficulty:** 🟢 Beginner
+> **難易度:** 🟢 初級
 
-Understanding Rust's module system is essential for organizing code and managing dependencies. For C# developers, this is analogous to understanding namespaces, assemblies, and NuGet packages.
+Rust のモジュールシステムを理解することは、コードの整理や依存関係の管理において不可欠です。C# 開発者にとっては、名前空間、アセンブリ、および NuGet パッケージを理解することに相当します。
 
-### Rust Modules vs C# Namespaces
+### Rust のモジュール vs C# の名前空間
 
-#### C# Namespace Organization
+#### C# の名前空間構成
 ```csharp
-// File: Models/User.cs
+// ファイル: Models/User.cs
 namespace MyApp.Models
 {
     public class User
@@ -21,7 +20,7 @@ namespace MyApp.Models
     }
 }
 
-// File: Services/UserService.cs
+// ファイル: Services/UserService.cs
 using MyApp.Models;
 
 namespace MyApp.Services
@@ -35,7 +34,7 @@ namespace MyApp.Services
     }
 }
 
-// File: Program.cs
+// ファイル: Program.cs
 using MyApp.Models;
 using MyApp.Services;
 
@@ -52,9 +51,9 @@ namespace MyApp
 }
 ```
 
-#### Rust Module Organization
+#### Rust のモジュール構成
 ```rust
-// File: src/models.rs
+// ファイル: src/models.rs
 pub struct User {
     pub name: String,
     pub age: u32,
@@ -66,7 +65,7 @@ impl User {
     }
 }
 
-// File: src/services.rs
+// ファイル: src/services.rs
 use crate::models::User;
 
 pub struct UserService;
@@ -77,7 +76,7 @@ impl UserService {
     }
 }
 
-// File: src/lib.rs (or main.rs)
+// ファイル: src/lib.rs (または main.rs)
 pub mod models;
 pub mod services;
 
@@ -90,14 +89,14 @@ fn main() {
 }
 ```
 
-### Module Hierarchy and Visibility
+### モジュール階層と可視性
 
 ```mermaid
 graph TD
-    Crate["crate (root)"] --> ModA["mod data"]
+    Crate["crate (ルート)"] --> ModA["mod data"]
     Crate --> ModB["mod api"]
     ModA --> SubA1["pub struct Repo"]
-    ModA --> SubA2["fn helper  (private)"]
+    ModA --> SubA2["fn helper  (プライベート)"]
     ModB --> SubB1["pub fn handle()"]
     ModB --> SubB2["pub(crate) fn internal()"]
     ModB --> SubB3["pub(super) fn parent_only()"]
@@ -109,71 +108,71 @@ graph TD
     style SubB3 fill:#fff9c4,color:#000
 ```
 
-> 🟢 Green = public everywhere &nbsp;|&nbsp; 🟡 Yellow = restricted visibility &nbsp;|&nbsp; 🔴 Red = private
+> 🟢 緑 = どこからでも公開（public） &nbsp;|&nbsp; 🟡 黄 = 制限付き可視性 &nbsp;|&nbsp; 🔴 赤 = 非公開（private）
 
-#### C# Visibility Modifiers
+#### C# のアクセス修飾子
 ```csharp
 namespace MyApp.Data
 {
-    // public - accessible from anywhere
+    // public - どこからでもアクセス可能
     public class Repository
     {
-        // private - only within this class
+        // private - このクラス内でのみ
         private string connectionString;
         
-        // internal - within this assembly
+        // internal - このアセンブリ内でのみ
         internal void Connect() { }
         
-        // protected - this class and subclasses
+        // protected - このクラスとサブクラス
         protected virtual void Initialize() { }
         
-        // public - accessible from anywhere
+        // public - どこからでもアクセス可能
         public void Save(object data) { }
     }
 }
 ```
 
-#### Rust Visibility Rules
+#### Rust の可視性ルール
 ```rust
-// Everything is private by default in Rust
+// Rust ではデフォルトですべてが非公開（private）
 mod data {
-    struct Repository {  // Private struct
-        connection_string: String,  // Private field
+    struct Repository {  // 非公開構造体
+        connection_string: String,  // 非公開フィールド
     }
     
     impl Repository {
-        fn new() -> Repository {  // Private function
+        fn new() -> Repository {  // 非公開関数
             Repository {
                 connection_string: "localhost".to_string(),
             }
         }
         
-        pub fn connect(&self) {  // Public method
-            // Only accessible within this module and its children
+        pub fn connect(&self) {  // 公開メソッド
+            // このモジュールとその子モジュール内でのみアクセス可能
         }
         
-        pub(crate) fn initialize(&self) {  // Crate-level public
-            // Accessible anywhere in this crate
+        pub(crate) fn initialize(&self) {  // クレートレベルで公開
+            // このクレート内のどこからでもアクセス可能
         }
         
-        pub(super) fn internal_method(&self) {  // Parent module public
-            // Accessible in parent module
+        pub(super) fn internal_method(&self) {  // 親モジュールに対して公開
+            // 親モジュール内でアクセス可能
         }
     }
     
-    // Public struct - accessible from outside the module
+    // 公開構造体 - モジュール外からアクセス可能
     pub struct PublicRepository {
-        pub data: String,  // Public field
-        private_data: String,  // Private field (no pub)
+        pub data: String,  // 公開フィールド
+        private_data: String,  // 非公開フィールド（pub なし）
     }
 }
 
-pub use data::PublicRepository;  // Re-export for external use
+pub use data::PublicRepository;  // 外部で使用できるように再エクスポート
 ```
 
-### Module File Organization
+### モジュールファイルの構成
 
-#### C# Project Structure
+#### C# のプロジェクト構造
 ```text
 MyApp/
 ├── MyApp.csproj
@@ -188,18 +187,18 @@ MyApp/
 └── Program.cs
 ```
 
-#### Rust Module File Structure
+#### Rust のモジュールファイル構造
 ```text
 my_app/
 ├── Cargo.toml
 └── src/
-    ├── main.rs (or lib.rs)
+    ├── main.rs (または lib.rs)
     ├── models/
-    │   ├── mod.rs        // Module declaration
+    │   ├── mod.rs        // モジュール宣言
     │   ├── user.rs
     │   └── product.rs
     ├── services/
-    │   ├── mod.rs        // Module declaration
+    │   ├── mod.rs        // モジュール宣言
     │   ├── user_service.rs
     │   └── product_service.rs
     └── controllers/
@@ -207,38 +206,38 @@ my_app/
         └── api_controller.rs
 ```
 
-#### Module Declaration Patterns
+#### モジュール宣言パターン
 ```rust
 // src/models/mod.rs
-pub mod user;      // Declares user.rs as a submodule
-pub mod product;   // Declares product.rs as a submodule
+pub mod user;      // user.rs をサブモジュールとして宣言
+pub mod product;   // product.rs をサブモジュールとして宣言
 
-// Re-export commonly used types
+// よく使われる型を再エクスポート
 pub use user::User;
 pub use product::Product;
 
 // src/main.rs
-mod models;     // Declares models/ as a module
-mod services;   // Declares services/ as a module
+mod models;     // models/ をモジュールとして宣言
+mod services;   // services/ をモジュールとして宣言
 
-// Import specific items
+// 特定のアイテムをインポート
 use models::{User, Product};
 use services::UserService;
 
-// Or import the entire module
-use models::user::*;  // Import all public items from user module
+// またはモジュール全体をインポート
+use models::user::*;  // user モジュールからすべての公開アイテムをインポート
 ```
 
 ***
 
-## Crates vs .NET Assemblies
+## クレート vs .NET アセンブリ
 
-### Understanding Crates
-In Rust, a **crate** is the fundamental unit of compilation and code distribution, similar to how an **assembly** works in .NET.
+### クレートの理解
+Rust では、**クレート（crate）** がコンパイルとコード配布の基本単位であり、.NET における **アセンブリ（assembly）** の働きと類似しています。
 
-#### C# Assembly Model
+#### C# のアセンブリモデル
 ```csharp
-// MyLibrary.dll - Compiled assembly
+// MyLibrary.dll - コンパイルされたアセンブリ
 namespace MyLibrary
 {
     public class Calculator
@@ -247,7 +246,7 @@ namespace MyLibrary
     }
 }
 
-// MyApp.exe - Executable assembly that references MyLibrary.dll
+// MyApp.exe - MyLibrary.dll を参照する実行可能アセンブリ
 using MyLibrary;
 
 class Program
@@ -260,9 +259,9 @@ class Program
 }
 ```
 
-#### Rust Crate Model
+#### Rust のクレートモデル
 ```toml
-# Cargo.toml for library crate
+# ライブラリクレート用の Cargo.toml
 [package]
 name = "my_calculator"
 version = "0.1.0"
@@ -273,7 +272,7 @@ name = "my_calculator"
 ```
 
 ```rust
-// src/lib.rs - Library crate
+// src/lib.rs - ライブラリクレート
 pub struct Calculator;
 
 impl Calculator {
@@ -284,7 +283,7 @@ impl Calculator {
 ```
 
 ```toml
-# Cargo.toml for binary crate that uses the library
+# ライブラリを使用するバイナリクレート用の Cargo.toml
 [package]
 name = "my_app"
 version = "0.1.0"
@@ -295,7 +294,7 @@ my_calculator = { path = "../my_calculator" }
 ```
 
 ```rust
-// src/main.rs - Binary crate
+// src/main.rs - バイナリクレート
 use my_calculator::Calculator;
 
 fn main() {
@@ -304,21 +303,21 @@ fn main() {
 }
 ```
 
-### Crate Types Comparison
+### クレート種類の比較
 
-| C# Concept | Rust Equivalent | Purpose |
+| C# の概念 | Rust の同等機能 | 用途 |
 |------------|----------------|---------|
-| Class Library (.dll) | Library crate | Reusable code |
-| Console App (.exe) | Binary crate | Executable program |
-| NuGet Package | Published crate | Distribution unit |
-| Assembly (.dll/.exe) | Compiled crate | Compilation unit |
-| Solution (.sln) | Workspace | Multi-project organization |
+| クラスライブラリ (.dll) | ライブラリクレート | 再利用可能なコード |
+| コンソールアプリ (.exe) | バイナリクレート | 実行可能プログラム |
+| NuGet パッケージ | 公開されたクレート | 配布単位 |
+| アセンブリ (.dll/.exe) | コンパイルされたクレート | コンパイル単位 |
+| ソリューション (.sln) | ワークスペース | 複数プロジェクトの管理 |
 
-### Workspace vs Solution
+### ワークスペース vs ソリューション
 
-#### C# Solution Structure
+#### C# のソリューション構造
 ```xml
-<!-- MySolution.sln structure -->
+<!-- MySolution.sln の構造 -->
 <Solution>
     <Project Include="WebApi/WebApi.csproj" />
     <Project Include="Business/Business.csproj" />
@@ -327,9 +326,9 @@ fn main() {
 </Solution>
 ```
 
-#### Rust Workspace Structure
+#### Rust のワークスペース構造
 ```toml
-# Cargo.toml at workspace root
+# ワークスペースルートの Cargo.toml
 [workspace]
 members = [
     "web_api",
@@ -339,7 +338,7 @@ members = [
 ]
 
 [workspace.dependencies]
-serde = "1.0"           # Shared dependency versions
+serde = "1.0"           # 共通の依存関係バージョン
 tokio = "1.0"
 ```
 
@@ -352,18 +351,18 @@ edition = "2021"
 
 [dependencies]
 business = { path = "../business" }
-serde = { workspace = true }    # Use workspace version
+serde = { workspace = true }    # ワークスペースのバージョンを使用
 tokio = { workspace = true }
 ```
 
 ---
 
-## Exercises
+## 演習
 
 <details>
-<summary><strong>🏋️ Exercise: Design a Module Tree</strong> (click to expand)</summary>
+<summary><strong>🏋️ 演習: モジュールツリーの設計</strong> (クリックして展開)</summary>
 
-Given this C# project layout, design the equivalent Rust module tree:
+次の C# プロジェクト構成が与えられたとき、同等の Rust モジュールツリーを設計してください：
 
 ```csharp
 // C#
@@ -373,15 +372,15 @@ namespace MyApp.Models { public class User { } }
 namespace MyApp.Models { public class Session { } }
 ```
 
-Requirements:
-1. `AuthService` and both models must be public
-2. `TokenStore` must be private to the `services` module
-3. Provide the file layout **and** the `mod` / `pub` declarations in `lib.rs`
+要件:
+1. `AuthService` と両方のモデルは公開（public）でなければならない
+2. `TokenStore` は `services` モジュールに対して非公開でなければならない
+3. ファイル構成**および** `lib.rs` 内の `mod` / `pub` 宣言を提示すること
 
 <details>
-<summary>🔑 Solution</summary>
+<summary>🔑 解答例</summary>
 
-File layout:
+ファイル構成:
 ```
 src/
 ├── lib.rs
@@ -401,20 +400,20 @@ pub mod services;
 pub mod models;
 
 // src/services/mod.rs
-mod token_store;          // private — like C# internal
-pub mod auth_service;     // public
+mod token_store;          // 非公開 — C# の internal に類似
+pub mod auth_service;     // 公開
 
 // src/services/auth_service.rs
-use super::token_store::TokenStore; // visible within the module
+use super::token_store::TokenStore; // モジュール内で可視
 
 pub struct AuthService;
 
 impl AuthService {
-    pub fn login(&self) { /* uses TokenStore internally */ }
+    pub fn login(&self) { /* 内部で TokenStore を使用 */ }
 }
 
 // src/services/token_store.rs
-pub(super) struct TokenStore; // visible to parent (services) only
+pub(super) struct TokenStore; // 親（services）に対してのみ可視
 
 // src/models/mod.rs
 pub mod user;
@@ -435,5 +434,3 @@ pub struct Session {
 </details>
 
 ***
-
-

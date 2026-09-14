@@ -1,235 +1,234 @@
-## Tuples and Destructuring
+## タプルと分配束縛
 
-> **What you'll learn:** Rust tuples vs C# `ValueTuple`, arrays and slices, structs vs classes,
-> the newtype pattern for domain modeling with zero-cost type safety, and destructuring syntax.
+> **学習内容:** Rust のタプル vs C# の `ValueTuple`、配列とスライス、構造体 vs クラス、ゼロコストの型安全性を実現するドメインモデリングのための Newtype パターン、そして分配束縛（デストラクチャリング）の構文を学びます。
 >
-> **Difficulty:** 🟢 Beginner
+> **難易度:** 🟢 初級
 
-C# has `ValueTuple` (since C# 7). Rust tuples are similar but more deeply integrated into the language.
+C# には（C# 7 以降）`ValueTuple` が導入されています。Rust のタプルも似ていますが、言語により深く統合されています。
 
-### C# Tuples
+### C# のタプル
 ```csharp
 // C# ValueTuple (C# 7+)
 var point = (10, 20);                         // (int, int)
-var named = (X: 10, Y: 20);                   // Named elements
+var named = (X: 10, Y: 20);                   // 名前付き要素
 Console.WriteLine($"{named.X}, {named.Y}");
 
-// Tuple as return type
+// 戻り値の型としてのタプル
 public (int Quotient, int Remainder) Divide(int a, int b)
 {
     return (a / b, a % b);
 }
 
-var (q, r) = Divide(10, 3);    // Deconstruction
-Console.WriteLine($"{q} remainder {r}");
+var (q, r) = Divide(10, 3);    // 分解（Deconstruction）
+Console.WriteLine($"{q} 余り {r}");
 
-// Discards
-var (_, remainder) = Divide(10, 3);  // Ignore quotient
+// 破棄（Discards）
+var (_, remainder) = Divide(10, 3);  // 商を無視する
 ```
 
-### Rust Tuples
+### Rust のタプル
 ```rust
-// Rust tuples — immutable by default, no named elements
+// Rust のタプル — デフォルトで不変、名前付き要素はなし
 let point = (10, 20);                // (i32, i32)
 let point3d: (f64, f64, f64) = (1.0, 2.0, 3.0);
 
-// Access by index (0-based)
+// インデックスによるアクセス（0始まり）
 println!("x={}, y={}", point.0, point.1);
 
-// Tuple as return type
+// 戻り値の型としてのタプル
 fn divide(a: i32, b: i32) -> (i32, i32) {
     (a / b, a % b)
 }
 
-let (q, r) = divide(10, 3);       // Destructuring
-println!("{q} remainder {r}");
+let (q, r) = divide(10, 3);       // 分配束縛（Destructuring）
+println!("{q} 余り {r}");
 
-// Discards with _
+// _ による破棄
 let (_, remainder) = divide(10, 3);
 
-// Unit type () — the "empty tuple" (like C# void)
-fn greet() {          // implicit return type is ()
+// ユニット型 () — 「空のタプル」（C# の void に相当）
+fn greet() {          // 暗黙の戻り値の型は ()
     println!("hi");
 }
 ```
 
-### Key Differences
+### 主な違い
 
-| Feature | C# `ValueTuple` | Rust Tuple |
+| 機能 | C# `ValueTuple` | Rust のタプル |
 |---------|-----------------|------------|
-| Named elements | `(int X, int Y)` | Not supported — use structs |
-| Max arity | ~8 (nesting for more) | Unlimited (practical limit ~12) |
-| Comparisons | Automatic | Automatic for tuples ≤ 12 elements |
-| Used as dict key | Yes | Yes (if elements implement `Hash`) |
-| Return from functions | Common | Common |
-| Mutable elements | Always mutable | Only with `let mut` |
+| 名前付き要素 | `(int X, int Y)` | 非対応 — 構造体を使用 |
+| 最大要素数 | 約8（それ以上はネスト） | 無制限（実用的な制限は約12） |
+| 比較 | 自動 | 12要素以下のタプルで自動 |
+| 辞書のキーとしての使用 | 可能 | 可能（要素が `Hash` を実装している場合） |
+| 関数からの戻り値 | 一般的 | 一般的 |
+| 要素の可変性 | 常に可変 | `let mut` の場合のみ可変 |
 
-### Tuple Structs (Newtypes)
+### タプル構造体（Newtype）
 ```rust
-// When a plain tuple isn't descriptive enough, use a tuple struct:
-struct Meters(f64);     // Single-field "newtype" wrapper
+// 単なるタプルでは表現力が不足している場合、タプル構造体を使用します:
+struct Meters(f64);     // 単一フィールドの "newtype" ラッパー
 struct Celsius(f64);
 struct Fahrenheit(f64);
 
-// The compiler treats these as DIFFERENT types:
+// コンパイラはこれらを「異なる型」として扱います:
 let distance = Meters(100.0);
 let temp = Celsius(36.6);
-// distance == temp;  // ❌ ERROR: can't compare Meters with Celsius
+// distance == temp;  // ❌ エラー: Meters と Celsius は比較できません
 
-// Newtype pattern prevents unit-confusion bugs at compile time!
-// In C# you'd need a full class/struct for the same safety.
+// Newtype パターンは単位の混同によるバグをコンパイル時に防ぎます！
+// C# で同様の安全性を得るには、完全な class や struct を定義する必要があります。
 ```
 
 ```csharp
-// C# equivalent requires more ceremony:
+// C# で同等のことを行うには、より多くのボイラープレートが必要です:
 public readonly record struct Meters(double Value);
 public readonly record struct Celsius(double Value);
-// Not interchangeable, but records add overhead vs Rust's zero-cost newtypes
+// 相互に代入はできませんが、Rust のゼロコスト newtype と比較すると records にはオーバーヘッドが伴います
 ```
 
-### The Newtype Pattern in Depth: Domain Modeling with Zero Cost
+### Newtype パターンの詳細: ゼロコストでのドメインモデリング
 
-Newtypes go far beyond preventing unit confusion. They're Rust's primary tool for **encoding business rules into the type system** — replacing the "guard clause" and "validation class" patterns common in C#.
+Newtype は単位の混同を防ぐだけに留まりません。C# で一般的な「ガード節」や「バリデーションクラス」のパターンを置き換え、**ビジネスルールを型システムにエンコードする**ための Rust の主要な道具です。
 
-#### C# Validation Approach: Runtime Guards
+#### C# のバリデーションアプローチ: 実行時ガード
 ```csharp
-// C# — validation happens at runtime, every time
+// C# — 検証は毎回実行時に行われる
 public class UserService
 {
     public User CreateUser(string email, int age)
     {
         if (string.IsNullOrWhiteSpace(email) || !email.Contains('@'))
-            throw new ArgumentException("Invalid email");
+            throw new ArgumentException("無効なメールアドレスです");
         if (age < 0 || age > 150)
-            throw new ArgumentException("Invalid age");
+            throw new ArgumentException("無効な年齢です");
 
         return new User { Email = email, Age = age };
     }
 
     public void SendEmail(string email)
     {
-        // Must re-validate — or trust the caller?
-        if (!email.Contains('@')) throw new ArgumentException("Invalid email");
+        // 再検証が必要 — それとも呼び出し元を信用する？
+        if (!email.Contains('@')) throw new ArgumentException("無効なメールアドレスです");
         // ...
     }
 }
 ```
 
-#### Rust Newtype Approach: Compile-Time Proof
+#### Rust の Newtype アプローチ: コンパイル時の証明
 ```rust
-/// A validated email address — the type itself IS the proof of validity.
+/// 検証済みのメールアドレス — 型そのものが正当性の「証明」となります。
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Email(String);
 
 impl Email {
-    /// The ONLY way to create an Email — validation happens once at construction.
+    /// Email を作成する「唯一」の方法 — 生成時に一度だけ検証が行われます。
     pub fn new(raw: &str) -> Result<Self, &'static str> {
         if raw.contains('@') && raw.len() > 3 {
             Ok(Email(raw.to_lowercase()))
         } else {
-            Err("invalid email format")
+            Err("無効なメールアドレス形式です")
         }
     }
 
-    /// Safe access to the inner value
+    /// 内部の値への安全なアクセス
     pub fn as_str(&self) -> &str { &self.0 }
 }
 
-/// A validated age — impossible to create an invalid one.
+/// 検証済みの年齢 — 不正な値を作成することは不可能です。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Age(u8);
 
 impl Age {
     pub fn new(raw: u8) -> Result<Self, &'static str> {
-        if raw <= 150 { Ok(Age(raw)) } else { Err("age out of range") }
+        if raw <= 150 { Ok(Age(raw)) } else { Err("年齢が範囲外です") }
     }
     pub fn value(&self) -> u8 { self.0 }
 }
 
-// Now functions take PROVEN types — no re-validation needed!
+// 関数は「証明済みの型」を受け取る — 再検証は不要！
 fn create_user(email: Email, age: Age) -> User {
-    // email is GUARANTEED valid — it's a type invariant
+    // email は正当であることが保証されている — これは型の不変条件です
     User { email, age }
 }
 
 fn send_email(to: &Email) {
-    // No validation needed — Email type proves validity
-    println!("Sending to: {}", to.as_str());
+    // 検証不要 — Email 型が正当性を証明している
+    println!("送信先: {}", to.as_str());
 }
 ```
 
-#### Common Newtype Uses for C# Developers
+#### C# 開発者のための一般的な Newtype の用途
 
-| C# Pattern | Rust Newtype | What It Prevents |
+| C# のパターン | Rust の Newtype | 防げる問題 |
 |------------|-------------|------------------|
-| `string` for UserId, Email, etc. | `struct UserId(Uuid)` | Passing wrong string to wrong parameter |
-| `int` for Port, Count, Index | `struct Port(u16)` | Port and Count are not interchangeable |
-| Guard clauses everywhere | Constructor validation once | Re-validation, missed validation |
-| `decimal` for USD, EUR | `struct Usd(Decimal)` | Adding USD to EUR by accident |
-| `TimeSpan` for different semantics | `struct Timeout(Duration)` | Passing connection timeout as request timeout |
+| UserId や Email などに `string` を使用 | `struct UserId(Uuid)` | 誤ったパラメータに誤った文字列を渡すミス |
+| Port、Count、Index などに `int` を使用 | `struct Port(u16)` | Port と Count の取り違えを防止 |
+| あらゆる場所でのガード節 | コンストラクタで1度だけ検証 | 再検証の重複、検証漏れ |
+| USD、EUR などに `decimal` を使用 | `struct Usd(Decimal)` | 誤って USD と EUR を加算するバグ |
+| 異なるセマンティクスに `TimeSpan` を使用 | `struct Timeout(Duration)` | 接続タイムアウトをリクエストタイムアウトとして渡すミス |
 
 ```rust
-// Zero-cost: newtypes compile to the same assembly as the inner type.
-// This Rust code:
+// ゼロコスト: Newtype は内部の型とまったく同じアセンブリにコンパイルされます。
+// 以下の Rust コード:
 struct UserId(u64);
 fn lookup(id: UserId) -> Option<User> { /* ... */ }
 
-// Generates the SAME machine code as:
+// これは以下と「同じ」機械語コードを生成します:
 fn lookup(id: u64) -> Option<User> { /* ... */ }
-// But with full type safety at compile time!
+// それでありながら、コンパイル時の完全な型安全性が得られます！
 ```
 
 ***
 
-## Arrays and Slices
+## 配列とスライス
 
-Understanding the difference between arrays, slices, and vectors is crucial.
+配列、スライス、ベクタの違いを理解することは非常に重要です。
 
-### C# Arrays
+### C# の配列
 ```csharp
-// C# arrays
-int[] numbers = new int[5];         // Fixed size, heap allocated
-int[] initialized = { 1, 2, 3, 4, 5 }; // Array literal
+// C# の配列
+int[] numbers = new int[5];         // 固定サイズ、ヒープ割り当て
+int[] initialized = { 1, 2, 3, 4, 5 }; // 配列リテラル
 
-// Access
+// アクセス
 numbers[0] = 10;
 int first = numbers[0];
 
-// Length
+// 長さ
 int length = numbers.Length;
 
-// Array as parameter (reference type)
+// パラメータとしての配列（参照型）
 void ProcessArray(int[] array)
 {
-    array[0] = 99;  // Modifies original
+    array[0] = 99;  // 元の配列を変更する
 }
 ```
 
-### Rust Arrays, Slices, and Vectors
+### Rust の配列、スライス、ベクタ
 ```rust
-// 1. Arrays - Fixed size, stack allocated
-let numbers: [i32; 5] = [1, 2, 3, 4, 5];  // Type: [i32; 5]
-let zeros = [0; 10];                       // 10 zeros
+// 1. 配列 - 固定サイズ、スタック割り当て
+let numbers: [i32; 5] = [1, 2, 3, 4, 5];  // 型: [i32; 5]
+let zeros = [0; 10];                       // 10個の0
 
-// Access
+// アクセス
 let first = numbers[0];
-// numbers[0] = 10;  // ❌ Error: arrays are immutable by default
+// numbers[0] = 10;  // ❌ エラー: 配列はデフォルトで不変
 
 let mut mut_array = [1, 2, 3, 4, 5];
-mut_array[0] = 10;  // ✅ Works with mut
+mut_array[0] = 10;  // ✅ mut を付ければ動作する
 
-// 2. Slices - Views into arrays or vectors
-let slice: &[i32] = &numbers[1..4];  // Elements 1, 2, 3
-let all_slice: &[i32] = &numbers;    // Entire array as slice
+// 2. スライス - 配列やベクタへのビュー（参照）
+let slice: &[i32] = &numbers[1..4];  // 要素 1, 2, 3
+let all_slice: &[i32] = &numbers;    // 配列全体をスライスとして参照
 
-// 3. Vectors - Dynamic size, heap allocated (covered earlier)
+// 3. ベクタ - 動的サイズ、ヒープ割り当て
 let mut vec = vec![1, 2, 3, 4, 5];
-vec.push(6);  // Can grow
+vec.push(6);  // 要素を追加して拡張可能
 ```
 
-### Slices as Function Parameters
+### 関数のパラメータとしてのスライス
 ```csharp
-// C# - Method that works with arrays
+// C# - 配列のみを受け取るメソッド
 public void ProcessNumbers(int[] numbers)
 {
     for (int i = 0; i < numbers.Length; i++)
@@ -238,15 +237,15 @@ public void ProcessNumbers(int[] numbers)
     }
 }
 
-// Works with arrays only
+// 配列のみで動作する
 ProcessNumbers(new int[] { 1, 2, 3 });
 ```
 
 ```rust
-// Rust - Function that works with any sequence
-fn process_numbers(numbers: &[i32]) {  // Slice parameter
+// Rust - 任意のシーケンスを受け取れる関数
+fn process_numbers(numbers: &[i32]) {  // スライスパラメータ
     for (i, num) in numbers.iter().enumerate() {
-        println!("Index {}: {}", i, num);
+        println!("インデックス {}: {}", i, num);
     }
 }
 
@@ -254,16 +253,16 @@ fn main() {
     let array = [1, 2, 3, 4, 5];
     let vec = vec![1, 2, 3, 4, 5];
     
-    // Same function works with both!
-    process_numbers(&array);      // Array as slice
-    process_numbers(&vec);        // Vector as slice
-    process_numbers(&vec[1..4]);  // Partial slice
+    // 同じ関数が配列にもベクタにも動作する！
+    process_numbers(&array);      // 配列をスライスとして渡す
+    process_numbers(&vec);        // ベクタをスライスとして渡す
+    process_numbers(&vec[1..4]);  // 部分スライスを渡す
 }
 ```
 
-### String Slices (&str) Revisited
+### 文字列スライス（&str）の再確認
 ```rust
-// String and &str relationship
+// String と &str の関係
 fn string_slice_example() {
     let owned = String::from("Hello, World!");
     let slice: &str = &owned[0..5];      // "Hello"
@@ -272,10 +271,10 @@ fn string_slice_example() {
     println!("{}", slice);   // "Hello"
     println!("{}", slice2);  // "World!"
     
-    // Function that accepts any string type
-    print_string("String literal");      // &str
-    print_string(&owned);               // String as &str
-    print_string(slice);                // &str slice
+    // 任意の文字列型を受け取る関数
+    print_string("文字列リテラル");       // &str
+    print_string(&owned);               // String を &str として渡す
+    print_string(slice);                // &str スライス
 }
 
 fn print_string(s: &str) {
@@ -283,25 +282,25 @@ fn print_string(s: &str) {
 }
 ```
 
-### Modern C#: Span\<T\> and Inline Arrays
+### 現代の C#: Span\<T\> と Inline Arrays
 
-C# has evolved beyond traditional arrays. `Span<T>` provides type-safe, contiguous memory views that can live on the stack, while Inline Arrays (C# 12) offer fixed-size stack buffers.
+C# は従来の配列から進化してきました。`Span<T>` はスタック上に配置できる型安全な連続メモリビューを提供し、Inline Arrays（C# 12）は固定サイズのスタックバッファを提供します。
 
 ```csharp
-// C# Span<T> - view into contiguous memory
+// C# Span<T> - 連続したメモリへのビュー
 Span<int> span = stackalloc int[] { 1, 2, 3, 4, 5 };
 span[0] = 10;
 
 ReadOnlySpan<char> text = "Hello".AsSpan();
 
-// Method accepting any contiguous memory view
+// 任意の連続メモリビューを受け取るメソッド
 void ProcessSpan(ReadOnlySpan<int> data)
 {
     for (int i = 0; i < data.Length; i++)
         Console.WriteLine(data[i]);
 }
 
-// Inline Arrays (C# 12) - fixed-size stack buffer
+// Inline Arrays (C# 12) - 固定サイズスタックバッファ
 [InlineArray(5)]
 struct IntBuffer
 {
@@ -310,7 +309,7 @@ struct IntBuffer
 ```
 
 ```rust
-// Rust &[T] / &mut [T] - borrowed view into contiguous memory
+// Rust &[T] / &mut [T] - 連続したメモリへの借用ビュー
 let mut array = [1, 2, 3, 4, 5];
 let slice: &mut [i32] = &mut array;
 slice[0] = 10;
@@ -318,55 +317,55 @@ slice[0] = 10;
 let slice: &[i32] = &array;
 let text: &str = "Hello";
 
-// Function accepting any sequential data
+// 任意のシーケンシャルデータを受け取る関数
 fn process_slice(data: &[i32]) {
     for (i, num) in data.iter().enumerate() {
-        println!("Index {}: {}", i, num);
+        println!("インデックス {}: {}", i, num);
     }
 }
 
-// Fixed-size arrays (stack allocated)
+// 固定長配列（スタック割り当て）
 let buffer: [i32; 5] = [0; 5];
 ```
 
 | C# | Rust |
 |----|------|
-| `Span<T>` (ref struct, stack-only) | `&mut [T]` / `&[T]` (borrowed slice) |
-| `ReadOnlySpan<T>` | `&[T]` (immutable slice) |
-| `ReadOnlySpan<char>` / `string.AsSpan()` | `&str` (string slice) |
-| `[InlineArray(N)]` struct (C# 12) | `[T; N]` (fixed-size array) |
-| `stackalloc T[]` with `Span<T>` | `let arr: [T; N] = ...` (local array) |
+| `Span<T>`（ref struct、スタック専用） | `&mut [T]` / `&[T]`（借用スライス） |
+| `ReadOnlySpan<T>` | `&[T]`（不変スライス） |
+| `ReadOnlySpan<char>` / `string.AsSpan()` | `&str`（文字列スライス） |
+| `[InlineArray(N)]` struct (C# 12) | `[T; N]`（固定長配列） |
+| `Span<T>` を伴う `stackalloc T[]` | `let arr: [T; N] = ...`（ローカル配列） |
 
-> **Key insight:** Rust's `&[T]` combines the role of C#'s `ArraySegment<T>`, `Span<T>`, and `ReadOnlySpan<T>` — it's a fat pointer (pointer + length) that works with arrays, vectors, and subslices. C#'s Inline Arrays map naturally to Rust's `[T; N]` arrays, which are also stack-allocated by default.
+> **重要な洞察:** Rust の `&[T]` は、C# における `ArraySegment<T>`、`Span<T>`、`ReadOnlySpan<T>` の役割を兼ね備えています。これは fat ポインタ（ポインタ + 長さ）であり、配列、ベクタ、部分スライスのすべてに対して機能します。C# の Inline Arrays は、デフォルトでスタック割り当てされる Rust の `[T; N]` 配列に自然に対応します。
 
 ***
 
-## Structs vs Classes
+## 構造体 vs クラス
 
-Structs in Rust are similar to classes in C#, but with some key differences around ownership and methods.
+Rust の構造体（struct）は C# のクラスに似ていますが、所有権やメソッドの扱いに関して重要な違いがあります。
 
 ```mermaid
 graph TD
-    subgraph "C# Class (Heap)"
-        CObj["Object Header<br/>+ vtable ptr"] --> CFields["Name: string ref<br/>Age: int<br/>Hobbies: List ref"]
-        CFields --> CHeap1["#quot;Alice#quot; on heap"]
-        CFields --> CHeap2["List&lt;string&gt; on heap"]
+    subgraph "C# のクラス（ヒープ）"
+        CObj["オブジェクトヘッダー<br/>+ vtable ポインタ"] --> CFields["Name: string 参照<br/>Age: int<br/>Hobbies: List 参照"]
+        CFields --> CHeap1["#quot;Alice#quot;（ヒープ上）"]
+        CFields --> CHeap2["List&lt;string&gt;（ヒープ上）"]
     end
-    subgraph "Rust Struct (Stack)"
+    subgraph "Rust の構造体（スタック）"
         RFields["name: String<br/>  ptr | len | cap<br/>age: i32<br/>hobbies: Vec<br/>  ptr | len | cap"]
-        RFields --> RHeap1["#quot;Alice#quot; heap buffer"]
-        RFields --> RHeap2["Vec heap buffer"]
+        RFields --> RHeap1["#quot;Alice#quot; ヒープバッファ"]
+        RFields --> RHeap2["Vec ヒープバッファ"]
     end
 
     style CObj fill:#bbdefb,color:#000
     style RFields fill:#c8e6c9,color:#000
 ```
 
-> **Key insight**: C# classes always live on the heap behind a reference. Rust structs live on the stack by default — only the dynamically-sized data (like `String` contents) goes to the heap. This eliminates GC overhead for small, frequently-created objects.
+> **重要な洞察**: C# のクラスは常に参照を介してヒープ上に配置されます。Rust の構造体はデフォルトでスタック上に配置され、動的サイズを持つデータ（`String` の内容など）のみがヒープに送られます。これにより、小さく頻繁に生成されるオブジェクトに対する GC オーバーヘッドが排除されます。
 
-### C# Class Definition
+### C# のクラス定義
 ```csharp
-// C# class with properties and methods
+// プロパティとメソッドを持つ C# クラス
 public class Person
 {
     public string Name { get; set; }
@@ -392,18 +391,18 @@ public class Person
 }
 ```
 
-### Rust Struct Definition
+### Rust の構造体定義
 ```rust
-// Rust struct with associated functions and methods
-#[derive(Debug)]  // Automatically implement Debug trait
+// 関連関数とメソッドを持つ Rust 構造体
+#[derive(Debug)]  // Debug トレイトを自動実装
 pub struct Person {
-    pub name: String,    // Public field
-    pub age: u32,        // Public field
-    hobbies: Vec<String>, // Private field (no pub)
+    pub name: String,    // パブリックフィールド
+    pub age: u32,        // パブリックフィールド
+    hobbies: Vec<String>, // プライベートフィールド（pub なし）
 }
 
 impl Person {
-    // Associated function (like static method)
+    // 関連関数（静的メソッドに相当）
     pub fn new(name: String, age: u32) -> Person {
         Person {
             name,
@@ -412,80 +411,80 @@ impl Person {
         }
     }
     
-    // Method (takes &self, &mut self, or self)
+    // メソッド（&self, &mut self, または self を受け取る）
     pub fn add_hobby(&mut self, hobby: String) {
         self.hobbies.push(hobby);
     }
     
-    // Method that borrows immutably
+    // 不変借用するメソッド
     pub fn get_info(&self) -> String {
         format!("{} is {} years old", self.name, self.age)
     }
     
-    // Getter for private field
+    // プライベートフィールドのゲッター
     pub fn hobbies(&self) -> &Vec<String> {
         &self.hobbies
     }
 }
 ```
 
-### Creating and Using Instances
+### インスタンスの生成と使用
 ```csharp
-// C# object creation and usage
+// C# でのオブジェクト生成と使用
 var person = new Person("Alice", 30);
 person.AddHobby("Reading");
 person.AddHobby("Swimming");
 
 Console.WriteLine(person.GetInfo());
-Console.WriteLine($"Hobbies: {string.Join(", ", person.Hobbies)}");
+Console.WriteLine($"趣味: {string.Join(", ", person.Hobbies)}");
 
-// Modify properties directly
+// プロパティを直接変更
 person.Age = 31;
 ```
 
 ```rust
-// Rust struct creation and usage
+// Rust での構造体生成と使用
 let mut person = Person::new("Alice".to_string(), 30);
 person.add_hobby("Reading".to_string());
 person.add_hobby("Swimming".to_string());
 
 println!("{}", person.get_info());
-println!("Hobbies: {:?}", person.hobbies());
+println!("趣味: {:?}", person.hobbies());
 
-// Modify public fields directly
+// パブリックフィールドを直接変更
 person.age = 31;
 
-// Debug print the entire struct
+// 構造体全体をデバッグ出力
 println!("{:?}", person);
 ```
 
-### Struct Initialization Patterns
+### 構造体の初期化パターン
 ```csharp
-// C# object initialization
+// C# のオブジェクト初期化子
 var person = new Person("Bob", 25)
 {
     Hobbies = new List<string> { "Gaming", "Coding" }
 };
 
-// Anonymous types
+// 匿名型
 var anonymous = new { Name = "Charlie", Age = 35 };
 ```
 
 ```rust
-// Rust struct initialization
+// Rust の構造体初期化
 let person = Person {
     name: "Bob".to_string(),
     age: 25,
     hobbies: vec!["Gaming".to_string(), "Coding".to_string()],
 };
 
-// Struct update syntax (like object spread)
+// 構造体更新構文（オブジェクトスプレッドに類似）
 let older_person = Person {
     age: 26,
-    ..person  // Use remaining fields from person (moves person!)
+    ..person  // person の残りのフィールドを使用（person はムーブされます！）
 };
 
-// Tuple structs (like anonymous types)
+// タプル構造体
 #[derive(Debug)]
 struct Point(i32, i32);
 
@@ -495,35 +494,35 @@ println!("Point: ({}, {})", point.0, point.1);
 
 ***
 
-## Methods and Associated Functions
+## メソッドと関連関数
 
-Understanding the difference between methods and associated functions is key.
+メソッドと関連関数の違いを理解することが重要です。
 
-### C# Method Types
+### C# のメソッド種別
 ```csharp
 public class Calculator
 {
     private int memory = 0;
     
-    // Instance method
+    // インスタンスメソッド
     public int Add(int a, int b)
     {
         return a + b;
     }
     
-    // Instance method that uses state
+    // 状態を使用するインスタンスメソッド
     public void StoreInMemory(int value)
     {
         memory = value;
     }
     
-    // Static method
+    // 静的メソッド
     public static int Multiply(int a, int b)
     {
         return a * b;
     }
     
-    // Static factory method
+    // 静的ファクトリメソッド
     public static Calculator CreateWithMemory(int initialMemory)
     {
         var calc = new Calculator();
@@ -533,7 +532,7 @@ public class Calculator
 }
 ```
 
-### Rust Method Types
+### Rust のメソッド種別
 ```rust
 #[derive(Debug)]
 pub struct Calculator {
@@ -541,104 +540,104 @@ pub struct Calculator {
 }
 
 impl Calculator {
-    // Associated function (like static method) - no self parameter
+    // 関連関数（静的メソッドに相当） - self パラメータなし
     pub fn new() -> Calculator {
         Calculator { memory: 0 }
     }
     
-    // Associated function with parameters
+    // パラメータ付きの関連関数
     pub fn with_memory(initial_memory: i32) -> Calculator {
         Calculator { memory: initial_memory }
     }
     
-    // Method that borrows immutably (&self)
+    // 不変借用するメソッド (&self)
     pub fn add(&self, a: i32, b: i32) -> i32 {
         a + b
     }
     
-    // Method that borrows mutably (&mut self)
+    // 可変借用するメソッド (&mut self)
     pub fn store_in_memory(&mut self, value: i32) {
         self.memory = value;
     }
     
-    // Method that takes ownership (self)
+    // 所有権を取得するメソッド (self)
     pub fn into_memory(self) -> i32 {
-        self.memory  // Calculator is consumed
+        self.memory  // Calculator は消費（ムーブ）される
     }
     
-    // Getter method
+    // ゲッターメソッド
     pub fn memory(&self) -> i32 {
         self.memory
     }
 }
 
 fn main() {
-    // Associated functions called with ::
+    // 関連関数は :: で呼び出す
     let mut calc = Calculator::new();
     let calc2 = Calculator::with_memory(42);
     
-    // Methods called with .
+    // メソッドは . で呼び出す
     let result = calc.add(5, 3);
     calc.store_in_memory(result);
     
-    println!("Memory: {}", calc.memory());
+    println!("メモリ: {}", calc.memory());
     
-    // Consuming method
-    let memory_value = calc.into_memory();  // calc is no longer usable
-    println!("Final memory: {}", memory_value);
+    // インスタンスを消費するメソッド
+    let memory_value = calc.into_memory();  // calc はこれ以降使用不可
+    println!("最終メモリ値: {}", memory_value);
 }
 ```
 
-### Method Receiver Types Explained
+### メソッドレシーバの型の解説
 ```rust
 impl Person {
-    // &self - Immutable borrow (most common)
-    // Use when you only need to read the data
+    // &self - 不変借用（最も一般的）
+    // データの読み取りのみが必要な場合に使用
     pub fn get_name(&self) -> &str {
         &self.name
     }
     
-    // &mut self - Mutable borrow
-    // Use when you need to modify the data
+    // &mut self - 可変借用
+    // データの変更が必要な場合に使用
     pub fn set_name(&mut self, name: String) {
         self.name = name;
     }
     
-    // self - Take ownership (less common)
-    // Use when you want to consume the struct
+    // self - 所有権の取得（消費）（使用頻度は低め）
+    // 構造体を消費（破棄・変換）したい場合に使用
     pub fn consume(self) -> String {
-        self.name  // Person is moved, no longer accessible
+        self.name  // Person はムーブされ、以降アクセス不可
     }
 }
 
 fn method_examples() {
     let mut person = Person::new("Alice".to_string(), 30);
     
-    // Immutable borrow
-    let name = person.get_name();  // person can still be used
-    println!("Name: {}", name);
+    // 不変借用
+    let name = person.get_name();  // person はその後も使用可能
+    println!("名前: {}", name);
     
-    // Mutable borrow
-    person.set_name("Alice Smith".to_string());  // person can still be used
+    // 可変借用
+    person.set_name("Alice Smith".to_string());  // person はその後も使用可能
     
-    // Taking ownership
-    let final_name = person.consume();  // person is no longer usable
-    println!("Final name: {}", final_name);
+    // 所有権の取得
+    let final_name = person.consume();  // person はこれ以降使用不可
+    println!("最終的な名前: {}", final_name);
 }
 ```
 
 ---
 
-## Exercises
+## 演習問題
 
 <details>
-<summary><strong>🏋️ Exercise: Slice Window Average</strong> (click to expand)</summary>
+<summary><strong>🏋️ 演習: スライスの移動平均</strong> (クリックして展開)</summary>
 
-**Challenge**: Write a function that takes a slice of `f64` values and a window size, and returns a `Vec<f64>` of rolling averages. For example, `[1.0, 2.0, 3.0, 4.0, 5.0]` with window 3 → `[2.0, 3.0, 4.0]`.
+**課題**: `f64` 値のスライスとウィンドウサイズを受け取り、移動平均の `Vec<f64>` を返す関数を作成してください。例えば、`[1.0, 2.0, 3.0, 4.0, 5.0]` に対してウィンドウサイズ 3 を指定すると、`[2.0, 3.0, 4.0]` が返されます。
 
 ```rust
 fn rolling_average(data: &[f64], window: usize) -> Vec<f64> {
-    // Your implementation here
+    // ここに実装を記述
     todo!()
 }
 
@@ -650,7 +649,7 @@ fn main() {
 ```
 
 <details>
-<summary>🔑 Solution</summary>
+<summary>🔑 解答</summary>
 
 ```rust
 fn rolling_average(data: &[f64], window: usize) -> Vec<f64> {
@@ -667,25 +666,25 @@ fn main() {
 }
 ```
 
-**Key takeaway**: Slices have powerful built-in methods like `.windows()`, `.chunks()`, and `.split()` that replace manual index arithmetic. In C#, you'd use `Enumerable.Range` or LINQ `.Skip().Take()`.
+**重要なポイント**: スライスには `.windows()`、`.chunks()`、`.split()` といった強力な組み込みメソッドがあり、インデックスの手動計算が不要になります。C# では `Enumerable.Range` や LINQ の `.Skip().Take()` を使用するところです。
 
 </details>
 </details>
 
 <details>
-<summary><strong>🏋️ Exercise: Mini Address Book</strong> (click to expand)</summary>
+<summary><strong>🏋️ 演習: ミニ連絡先帳</strong> (クリックして展開)</summary>
 
-Build a small address book using structs, enums, and methods:
+構造体、列挙型、メソッドを使用して小さな連絡先帳を作成してください:
 
-1. Define an enum `PhoneType { Mobile, Home, Work }`
-2. Define a struct `Contact` with `name: String` and `phones: Vec<(PhoneType, String)>`
-3. Implement `Contact::new(name: impl Into<String>) -> Self`
-4. Implement `Contact::add_phone(&mut self, kind: PhoneType, number: impl Into<String>)`
-5. Implement `Contact::mobile_numbers(&self) -> Vec<&str>` that returns only mobile numbers
-6. In `main`, create a contact, add two phones, and print the mobile numbers
+1. 列挙型 `PhoneType { Mobile, Home, Work }` を定義する
+2. `name: String` と `phones: Vec<(PhoneType, String)>` を持つ構造体 `Contact` を定義する
+3. `Contact::new(name: impl Into<String>) -> Self` を実装する
+4. `Contact::add_phone(&mut self, kind: PhoneType, number: impl Into<String>)` を実装する
+5. 携帯電話番号のみを返す `Contact::mobile_numbers(&self) -> Vec<&str>` を実装する
+6. `main` で連絡先を作成し、2つの電話番号を追加して、携帯電話番号を出力する
 
 <details>
-<summary>🔑 Solution</summary>
+<summary>🔑 解答</summary>
 
 ```rust
 #[derive(Debug, PartialEq)]
@@ -721,7 +720,7 @@ fn main() {
     alice.add_phone(PhoneType::Work, "+1-555-0200");
     alice.add_phone(PhoneType::Mobile, "+1-555-0101");
 
-    println!("{}'s mobile numbers: {:?}", alice.name, alice.mobile_numbers());
+    println!("{} の携帯電話番号: {:?}", alice.name, alice.mobile_numbers());
 }
 ```
 
@@ -729,5 +728,3 @@ fn main() {
 </details>
 
 ***
-
-

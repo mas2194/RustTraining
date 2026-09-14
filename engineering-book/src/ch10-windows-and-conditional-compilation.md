@@ -1,21 +1,19 @@
-# Windows and Conditional Compilation 🟡
+# Windows と条件付きコンパイル 🟡
 
-> **What you'll learn:**
-> - Windows support patterns: `windows-sys`/`windows` crates, `cargo-xwin`
-> - Conditional compilation with `#[cfg]` — checked by the compiler, not the preprocessor
-> - Platform abstraction architecture: when `#[cfg]` blocks suffice vs when to use traits
-> - Cross-compiling for Windows from Linux
+> **学べること:**
+> - Windows サポートのパターン: `windows-sys`/`windows` クレート、`cargo-xwin`
+> - `#[cfg]` による条件付きコンパイル — プリプロセッサではなくコンパイラによってチェックされる仕組み
+> - プラットフォーム抽象化のアーキテクチャ: `#[cfg]` ブロックで十分な場合とトレイトを使うべき場合
+> - Linux から Windows へのクロスコンパイル
 >
-> **Cross-references:** [`no_std` & Features](ch09-no-std-and-feature-verification.md) — `cargo-hack` and feature verification · [Cross-Compilation](ch02-cross-compilation-one-source-many-target.md) — general cross-build setup · [Build Scripts](ch01-build-scripts-buildrs-in-depth.md) — `cfg` flags emitted by `build.rs`
+> **関連リンク:** [`no_std` とフィーチャの検証](ch09-no-std-and-feature-verification.md) — `cargo-hack` とフィーチャの検証 · [クロスコンパイル](ch02-cross-compilation-one-source-many-target.md) — 一般的なクロスビルド環境の構築 · [ビルドスクリプト](ch01-build-scripts-buildrs-in-depth.md) — `build.rs` から出力される `cfg` フラグ
 
-### Windows Support — Platform Abstractions
+### Windows サポート — プラットフォームの抽象化
 
-Rust's `#[cfg()]` attributes and Cargo features allow a single codebase to
-target both Linux and Windows cleanly. The project already
-demonstrates this pattern in `platform::run_command`:
+Rust の `#[cfg()]` 属性と Cargo フィーチャを使用すると、単一のコードベースで Linux と Windows の両方を綺麗に対象にできます。本プロジェクトでは、`platform::run_command` においてすでにこのパターンが実践されています：
 
 ```rust
-// Real pattern from the project — platform-specific shell invocation
+// プロジェクトの実装パターン — プラットフォーム固有のシェル起動
 pub fn exec_cmd(cmd: &str, timeout_secs: Option<u64>) -> Result<CommandResult, CommandError> {
     #[cfg(windows)]
     let mut child = Command::new("cmd")
@@ -31,50 +29,50 @@ pub fn exec_cmd(cmd: &str, timeout_secs: Option<u64>) -> Result<CommandResult, C
         .stderr(Stdio::piped())
         .spawn()?;
 
-    // ... rest is platform-independent ...
+    // ... 残りの処理はプラットフォーム非依存 ...
 }
 ```
 
-**Available `cfg` predicates:**
+**利用可能な `cfg` 述語:**
 
 ```rust
-// Operating system
-#[cfg(target_os = "linux")]         // Linux specifically
+// オペレーティングシステム
+#[cfg(target_os = "linux")]         // Linux を明示的に指定
 #[cfg(target_os = "windows")]       // Windows
 #[cfg(target_os = "macos")]         // macOS
-#[cfg(unix)]                        // Linux, macOS, BSDs, etc.
-#[cfg(windows)]                     // Windows (shorthand)
+#[cfg(unix)]                        // Linux, macOS, BSD 等
+#[cfg(windows)]                     // Windows (短縮表記)
 
-// Architecture
-#[cfg(target_arch = "x86_64")]      // x86 64-bit
-#[cfg(target_arch = "aarch64")]     // ARM 64-bit
-#[cfg(target_arch = "x86")]         // x86 32-bit
+// アーキテクチャ
+#[cfg(target_arch = "x86_64")]      // x86 64 ビット
+#[cfg(target_arch = "aarch64")]     // ARM 64 ビット
+#[cfg(target_arch = "x86")]         // x86 32 ビット
 
-// Pointer width (portable alternative to arch)
-#[cfg(target_pointer_width = "64")] // Any 64-bit platform
-#[cfg(target_pointer_width = "32")] // Any 32-bit platform
+// ポインタ幅 (アーキテクチャに依存しない代替手段)
+#[cfg(target_pointer_width = "64")] // 任意の 64 ビットプラットフォーム
+#[cfg(target_pointer_width = "32")] // 任意の 32 ビットプラットフォーム
 
-// Environment / C library
+// 環境 / C ライブラリ
 #[cfg(target_env = "gnu")]          // glibc
 #[cfg(target_env = "musl")]         // musl libc
-#[cfg(target_env = "msvc")]         // MSVC on Windows
+#[cfg(target_env = "msvc")]         // Windows 上の MSVC
 
-// Endianness
+// エンディアン
 #[cfg(target_endian = "little")]
 #[cfg(target_endian = "big")]
 
-// Combinations with any(), all(), not()
+// any(), all(), not() を使った組み合わせ
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 #[cfg(not(windows))]
 ```
 
-### The `windows-sys` and `windows` Crates
+### `windows-sys` および `windows` クレート
 
-For calling Windows APIs directly:
+Windows API を直接呼び出す場合：
 
 ```toml
-# Cargo.toml — use windows-sys for raw FFI (lighter, no abstraction)
+# Cargo.toml — 生の FFI には windows-sys を使用（軽量、抽象化なし）
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = [
     "Win32_Foundation",
@@ -82,12 +80,11 @@ windows-sys = { version = "0.59", features = [
     "Win32_System_Registry",
     "Win32_System_Power",
 ] }
-# NOTE: windows-sys uses semver-incompatible releases (0.48 → 0.52 → 0.59).
-# Pin to a single minor version — each release may remove or rename API bindings.
-# Check https://github.com/microsoft/windows-rs for the latest version
-# before starting a new project.
+# 注意: windows-sys はセマンティックバージョニング的に非互換のリリースを行います (0.48 → 0.52 → 0.59)。
+# 特定のマイナーバージョンに固定してください — 各リリースで API バインディングが削除または名前変更される可能性があります。
+# 新規プロジェクトを開始する前に、https://github.com/microsoft/windows-rs で最新バージョンを確認してください。
 
-# Or use the windows crate for safe wrappers (heavier, more ergonomic)
+# または安全なラッパーを提供する windows クレートを使用（重量級、より人間工学的）
 # windows = { version = "0.59", features = [...] }
 ```
 
@@ -101,8 +98,8 @@ mod win {
 
     pub fn get_battery_status() -> Option<u8> {
         let mut status = SYSTEM_POWER_STATUS::default();
-        // SAFETY: GetSystemPowerStatus writes to the provided buffer.
-        // The buffer is correctly sized and aligned.
+        // SAFETY: GetSystemPowerStatus は提供されたバッファに書き込みます。
+        // バッファは適切にサイズ設定されアラインメントされています。
         let ok = unsafe { GetSystemPowerStatus(&mut status) };
         if ok != 0 {
             Some(status.BatteryLifePercent)
@@ -113,53 +110,53 @@ mod win {
 }
 ```
 
-**`windows-sys` vs `windows` crate:**
+**`windows-sys` vs `windows` クレート:**
 
-| Aspect | `windows-sys` | `windows` |
-|--------|---------------|----------|
-| API style | Raw FFI (`unsafe` calls) | Safe Rust wrappers |
-| Binary size | Minimal (just extern declarations) | Larger (wrapper code) |
-| Compile time | Fast | Slower |
-| Ergonomics | C-style, manual safety | Rust-idiomatic |
-| Error handling | Raw `BOOL` / `HRESULT` | `Result<T, windows::core::Error>` |
-| Use when | Performance-critical, thin wrapper | Application code, ease of use |
+| 観点 | `windows-sys` | `windows` |
+|------|---------------|-----------|
+| API スタイル | 生の FFI（`unsafe` 呼び出し） | 安全な Rust ラッパー |
+| バイナリサイズ | 最小限（extern 宣言のみ） | やや大きめ（ラッパーコード分） |
+| コンパイル時間 | 高速 | やや遅い |
+| 人間工学性（書きやすさ） | C スタイル、手動での安全性担保 | Rust に慣用的 |
+| エラー処理 | 生の `BOOL` / `HRESULT` | `Result<T, windows::core::Error>` |
+| 推奨用途 | パフォーマンス重視、薄いラッパー | アプリケーションコード、使いやすさ重視 |
 
-### Cross-Compiling for Windows from Linux
+### Linux から Windows へのクロスコンパイル
 
 ```bash
-# Option 1: MinGW (GNU ABI)
+# オプション 1: MinGW (GNU ABI)
 rustup target add x86_64-pc-windows-gnu
 sudo apt install gcc-mingw-w64-x86-64
 cargo build --target x86_64-pc-windows-gnu
-# Produces a .exe — runs on Windows, links against msvcrt
+# .exe を生成 — Windows 上で動作し、msvcrt とリンク
 
-# Option 2: MSVC ABI via xwin (for full MSVC compatibility)
+# オプション 2: xwin 経由の MSVC ABI (完全な MSVC 互換性向け)
 cargo install cargo-xwin
 cargo xwin build --target x86_64-pc-windows-msvc
-# Uses Microsoft's CRT and SDK headers downloaded automatically
+# 自動的にダウンロードされた Microsoft の CRT および SDK ヘッダーを使用
 
-# Option 3: Zig-based cross-compilation
+# オプション 3: Zig ベースのクロスコンパイル
 cargo zigbuild --target x86_64-pc-windows-gnu
 ```
 
-**GNU vs MSVC ABI on Windows:**
+**Windows における GNU vs MSVC ABI:**
 
-| Aspect | `x86_64-pc-windows-gnu` | `x86_64-pc-windows-msvc` |
-|--------|-------------------------|---------------------------|
-| Linker | MinGW `ld` | MSVC `link.exe` or `lld-link` |
-| C runtime | `msvcrt.dll` (universal) | `ucrtbase.dll` (modern) |
-| C++ interop | GCC ABI | MSVC ABI |
-| Cross-compile from Linux | Easy (MinGW) | Possible (`cargo-xwin`) |
-| Windows API support | Full | Full |
-| Debug info format | DWARF | PDB |
-| Recommended for | Simple tools, CI builds | Full Windows integration |
+| 観点 | `x86_64-pc-windows-gnu` | `x86_64-pc-windows-msvc` |
+|------|-------------------------|---------------------------|
+| リンカ | MinGW `ld` | MSVC `link.exe` または `lld-link` |
+| C ランタイム | `msvcrt.dll`（汎用） | `ucrtbase.dll`（モダン） |
+| C++ 相互運用 | GCC ABI | MSVC ABI |
+| Linux からのクロスコンパイル | 容易（MinGW） | 可能（`cargo-xwin`） |
+| Windows API サポート | 完全 | 完全 |
+| デバッグ情報フォーマット | DWARF | PDB |
+| 推奨用途 | 単純なツール、CI ビルド | 完全な Windows 統合 |
 
-### Conditional Compilation Patterns
+### 条件付きコンパイルのパターン
 
-**Pattern 1: Platform module selection**
+**パターン 1: プラットフォームモジュールの選択**
 
 ```rust
-// src/platform/mod.rs — compile different modules per OS
+// src/platform/mod.rs — OS ごとに異なるモジュールをコンパイル
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "linux")]
@@ -170,34 +167,34 @@ mod windows;
 #[cfg(target_os = "windows")]
 pub use windows::*;
 
-// Both modules implement the same public API:
+// 両モジュールとも同じ公開 API を実装:
 // pub fn get_cpu_temperature() -> Result<f64, PlatformError>
 // pub fn list_pci_devices() -> Result<Vec<PciDevice>, PlatformError>
 ```
 
-**Pattern 2: Feature-gated platform support**
+**パターン 2: フィーチャゲートによるプラットフォームサポート**
 
 ```toml
 # Cargo.toml
 [features]
 default = ["linux"]
-linux = []              # Linux-specific hardware access
-windows = ["dep:windows-sys"]  # Windows-specific APIs
+linux = []              # Linux 固有のハードウェアアクセス
+windows = ["dep:windows-sys"]  # Windows 固有の API
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = [...], optional = true }
 ```
 
 ```rust
-// Compile error if someone tries to build for Windows without the feature:
+// フィーチャを有効にせずに Windows 向けにビルドしようとした場合、コンパイルエラーにする:
 #[cfg(all(target_os = "windows", not(feature = "windows")))]
-compile_error!("Enable the 'windows' feature to build for Windows");
+compile_error!("Windows 向けにビルドするには 'windows' フィーチャを有効にしてください");
 ```
 
-**Pattern 3: Trait-based platform abstraction**
+**パターン 3: トレイトベースのプラットフォーム抽象化**
 
 ```rust
-/// Platform-independent interface for hardware access.
+/// ハードウェアアクセスのためのプラットフォーム非依存インターフェース
 pub trait HardwareAccess {
     type Error: std::error::Error;
 
@@ -215,7 +212,7 @@ impl HardwareAccess for LinuxHardware {
     type Error = LinuxHwError;
 
     fn read_cpu_temperature(&self) -> Result<f64, Self::Error> {
-        // Read from /sys/class/thermal/thermal_zone0/temp
+        // /sys/class/thermal/thermal_zone0/temp から読み込み
         let raw = std::fs::read_to_string("/sys/class/thermal/thermal_zone0/temp")?;
         Ok(raw.trim().parse::<f64>()? / 1000.0)
     }
@@ -230,13 +227,13 @@ impl HardwareAccess for WindowsHardware {
     type Error = WindowsHwError;
 
     fn read_cpu_temperature(&self) -> Result<f64, Self::Error> {
-        // Read via WMI (Win32_TemperatureProbe) or Open Hardware Monitor
+        // WMI (Win32_TemperatureProbe) または Open Hardware Monitor 経由で読み込み
         todo!("WMI temperature query")
     }
     // ...
 }
 
-/// Create the platform-appropriate implementation
+/// プラットフォームに応じた適切な実装を生成
 pub fn create_hardware() -> impl HardwareAccess {
     #[cfg(target_os = "linux")]
     { LinuxHardware }
@@ -245,24 +242,24 @@ pub fn create_hardware() -> impl HardwareAccess {
 }
 ```
 
-### Platform Abstraction Architecture
+### プラットフォーム抽象化のアーキテクチャ
 
-For a project that targets multiple platforms, organize code into three layers:
+複数のプラットフォームを対象とするプロジェクトでは、コードを 3 つの階層に構造化します：
 
 ```text
 ┌──────────────────────────────────────────────────┐
-│ Application Logic (platform-independent)          │
-│  diag_tool, accel_diag, network_diag, event_log, etc.      │
-│  Uses only the platform abstraction trait          │
+│ アプリケーションロジック (プラットフォーム非依存) │
+│  diag_tool, accel_diag, network_diag, event_log  │
+│  プラットフォーム抽象化トレイトのみを使用         │
 ├──────────────────────────────────────────────────┤
-│ Platform Abstraction Layer (trait definitions)    │
+│ プラットフォーム抽象化層 (トレイト定義)          │
 │  trait HardwareAccess { ... }                     │
 │  trait CommandRunner { ... }                      │
 │  trait FileSystem { ... }                         │
 ├──────────────────────────────────────────────────┤
-│ Platform Implementations (cfg-gated)              │
+│ プラットフォーム固有実装 (cfg でゲート)          │
 │  ┌──────────────┐  ┌──────────────┐              │
-│  │ Linux impl   │  │ Windows impl │              │
+│  │ Linux 実装   │  │ Windows 実装 │              │
 │  │ /sys, /proc  │  │ WMI, Registry│              │
 │  │ ipmitool     │  │ ipmiutil     │              │
 │  │ lspci        │  │ devcon       │              │
@@ -270,7 +267,7 @@ For a project that targets multiple platforms, organize code into three layers:
 └──────────────────────────────────────────────────┘
 ```
 
-**Testing the abstraction**: Mock the platform trait for unit tests:
+**抽象化のテスト**: 単体テスト用にプラットフォームトレイトをモック化します：
 
 ```rust
 #[cfg(test)]
@@ -299,7 +296,7 @@ mod tests {
         }
 
         fn list_pci_devices(&self) -> Result<Vec<PciDevice>, Self::Error> {
-            Ok(vec![]) // Mock returns empty
+            Ok(vec![]) // モックは空を返す
         }
 
         fn send_ipmi_command(&self, _cmd: &IpmiCmd) -> Result<IpmiResponse, Self::Error> {
@@ -319,72 +316,64 @@ mod tests {
 }
 ```
 
-### Application: Linux-First, Windows-Ready
+### 実践適用: Linux ファースト、Windows 対応の準備
 
-The project is already partially Windows-ready. Use
-[`cargo-hack`](ch09-no-std-and-feature-verification.md) to verify all feature
-combinations, and [cross-compile](ch02-cross-compilation-one-source-many-target.md)
-to test on Windows from Linux:
+本プロジェクトはすでに部分的に Windows に対応しています。[`cargo-hack`](ch09-no-std-and-feature-verification.md) を使用してすべてのフィーチャの組み合わせを検証し、[クロスコンパイル](ch02-cross-compilation-one-source-many-target.md) により Linux から Windows 向けにテストを行います：
 
-**Already done:**
-- `platform::run_command` uses `#[cfg(windows)]` for shell selection
-- Tests use `#[cfg(windows)]` / `#[cfg(not(windows))]` for platform-appropriate
-  test commands
+**すでに対応済みの事項:**
+- `platform::run_command` はシェル選択に `#[cfg(windows)]` を使用
+- テストコードはプラットフォームに応じたテストコマンドの選択に `#[cfg(windows)]` / `#[cfg(not(windows))]` を使用
 
-**Recommended evolution path for Windows support:**
+**Windows サポートの推奨移行ロードマップ:**
 
 ```text
-Phase 1: Extract platform abstraction trait (current → 2 weeks)
-  ├─ Define HardwareAccess trait in core_lib
-  ├─ Wrap current Linux code behind LinuxHardware impl
-  └─ All diagnostic modules depend on trait, not Linux specifics
+フェーズ 1: プラットフォーム抽象化トレイトの抽出 (現状 → 2 週間)
+  ├─ core_lib に HardwareAccess トレイトを定義
+  ├─ 現在の Linux コードを LinuxHardware 実装の背後にラップ
+  └─ すべての診断モジュールが Linux 固有処理ではなくトレイトに依存するように変更
 
-Phase 2: Add Windows stubs (2 weeks)
-  ├─ Implement WindowsHardware with TODO stubs
-  ├─ CI builds for x86_64-pc-windows-msvc (compile check only)
-  └─ Tests pass with MockHardware on all platforms
+フェーズ 2: Windows スタブの追加 (2 週間)
+  ├─ TODO スタブを持つ WindowsHardware を実装
+  ├─ x86_64-pc-windows-msvc 向けの CI ビルド（コンパイルチェックのみ）
+  └─ 全プラットフォームで MockHardware を使ったテストをパスさせる
 
-Phase 3: Windows implementation (ongoing)
-  ├─ IPMI via ipmiutil.exe or OpenIPMI Windows driver
-  ├─ GPU via accel-mgmt (accel-api.dll) — same API as Linux
-  ├─ PCIe via Windows Setup API (SetupDiEnumDeviceInfo)
-  └─ NIC via WMI (Win32_NetworkAdapter)
+フェーズ 3: Windows 実装 (継続的)
+  ├─ ipmiutil.exe または OpenIPMI Windows ドライバ経由の IPMI
+  ├─ accel-mgmt (accel-api.dll) 経由の GPU — Linux と同一の API
+  ├─ Windows Setup API (SetupDiEnumDeviceInfo) 経由の PCIe
+  └─ WMI (Win32_NetworkAdapter) 経由の NIC
 ```
 
-**Cross-platform CI addition:**
+**クロスプラットフォーム CI の追加:**
 
 ```yaml
-# Add to CI matrix
+# CI マトリクスに追加
 - target: x86_64-pc-windows-msvc
   os: windows-latest
   name: windows-x86_64
 ```
 
-This ensures the codebase compiles on Windows even before full Windows
-implementation is complete — catching `cfg` mistakes early.
+これにより、Windows 向けの実装が完全に完了する前であってもコードベースが Windows 上でコンパイルできることが保証され、`cfg` の記述ミスを早期に検出できます。
 
-> **Key insight**: The abstraction doesn't need to be perfect on day one.
-> Start with `#[cfg]` blocks in leaf functions (like `exec_cmd` already does),
-> then refactor to traits when you have two or more platform implementations.
-> Premature abstraction is worse than `#[cfg]` blocks.
+> **重要な洞察**: 最初から抽象化が完璧である必要はありません。末端関数内の `#[cfg]` ブロック（すでに `exec_cmd` で行われているように）から始め、2 つ以上のプラットフォーム実装が揃った時点でトレイトへとリファクタリングしてください。時期尚早な抽象化は、`#[cfg]` ブロックのベタ書きよりも有害です。
 
-### Conditional Compilation Decision Tree
+### 条件付きコンパイルの決定木
 
 ```mermaid
 flowchart TD
-    START["Platform-specific code?"] --> HOW_MANY{"How many platforms?"}
+    START["プラットフォーム固有のコード？"] --> HOW_MANY{"いくつのプラットフォーム？"}
     
-    HOW_MANY -->|"2 (Linux + Windows)"| CFG_BLOCKS["#[cfg] blocks<br/>in leaf functions"]
-    HOW_MANY -->|"3+"| TRAIT_APPROACH["Platform trait<br/>+ per-platform impl"]
+    HOW_MANY -->|"2つ (Linux + Windows)"| CFG_BLOCKS["末端関数内の<br/>#[cfg] ブロック"]
+    HOW_MANY -->|"3つ以上"| TRAIT_APPROACH["プラットフォームトレイト<br/>+ プラットフォームごとの実装"]
     
-    CFG_BLOCKS --> WINAPI{"Need Windows APIs?"}
-    WINAPI -->|"Minimal"| WIN_SYS["windows-sys<br/>Raw FFI bindings"]
-    WINAPI -->|"Rich (COM, etc)"| WIN_RS["windows crate<br/>Safe idiomatic wrappers"]
-    WINAPI -->|"None<br/>(just #[cfg])"| NATIVE["cfg(windows)<br/>cfg(unix)"]
+    CFG_BLOCKS --> WINAPI{"Windows API が必要？"}
+    WINAPI -->|"最小限"| WIN_SYS["windows-sys<br/>生の FFI バインディング"]
+    WINAPI -->|"リッチ (COM 等)"| WIN_RS["windows クレート<br/>安全で慣用的なラッパー"]
+    WINAPI -->|"不要<br/>(#[cfg] のみ)"| NATIVE["cfg(windows)<br/>cfg(unix)"]
     
     TRAIT_APPROACH --> CI_CHECK["cargo-hack<br/>--each-feature"]
     CFG_BLOCKS --> CI_CHECK
-    CI_CHECK --> XCOMPILE["Cross-compile in CI<br/>cargo-xwin or<br/>native runners"]
+    CI_CHECK --> XCOMPILE["CI でのクロスコンパイル<br/>cargo-xwin または<br/>ネイティブランナー"]
     
     style CFG_BLOCKS fill:#91e5a3,color:#000
     style TRAIT_APPROACH fill:#ffd43b,color:#000
@@ -392,14 +381,14 @@ flowchart TD
     style WIN_RS fill:#e3f2fd,color:#000
 ```
 
-### 🏋️ Exercises
+### 🏋️ 演習問題
 
-#### 🟢 Exercise 1: Platform-Conditional Module
+#### 🟢 演習 1: プラットフォーム条件付きモジュール
 
-Create a module with `#[cfg(unix)]` and `#[cfg(windows)]` implementations of a `get_hostname()` function. Verify both compile with `cargo check` and `cargo check --target x86_64-pc-windows-msvc`.
+`get_hostname()` 関数の `#[cfg(unix)]` 実装と `#[cfg(windows)]` 実装を含むモジュールを作成してください。`cargo check` および `cargo check --target x86_64-pc-windows-msvc` の両方でコンパイルできることを確認します。
 
 <details>
-<summary>Solution</summary>
+<summary>解答例</summary>
 
 ```rust
 // src/hostname.rs
@@ -431,44 +420,43 @@ mod tests {
 ```
 
 ```bash
-# Verify Linux compilation
+# Linux 向けコンパイルの検証
 cargo check
 
-# Verify Windows compilation (cross-check)
+# Windows 向けコンパイルの検証 (クロスチェック)
 rustup target add x86_64-pc-windows-msvc
 cargo check --target x86_64-pc-windows-msvc
 ```
 </details>
 
-#### 🟡 Exercise 2: Cross-Compile for Windows with cargo-xwin
+#### 🟡 演習 2: cargo-xwin による Windows 向けクロスコンパイル
 
-Install `cargo-xwin` and build a simple binary for `x86_64-pc-windows-msvc` from Linux. Verify the output is a `.exe`.
+`cargo-xwin` をインストールし、Linux から `x86_64-pc-windows-msvc` 向けの単純なバイナリをビルドしてください。出力が `.exe` であることを確認します。
 
 <details>
-<summary>Solution</summary>
+<summary>解答例</summary>
 
 ```bash
 cargo install cargo-xwin
 rustup target add x86_64-pc-windows-msvc
 
 cargo xwin build --release --target x86_64-pc-windows-msvc
-# Downloads Windows SDK headers/libs automatically
+# Windows SDK ヘッダー/ライブラリを自動的にダウンロード
 
 file target/x86_64-pc-windows-msvc/release/my-binary.exe
-# Output: PE32+ executable (console) x86-64, for MS Windows
+# 出力: PE32+ executable (console) x86-64, for MS Windows
 
-# You can also test with Wine:
+# Wine を使用してテストすることも可能:
 wine target/x86_64-pc-windows-msvc/release/my-binary.exe
 ```
 </details>
 
-### Key Takeaways
+### 重要ポイント
 
-- Start with `#[cfg]` blocks in leaf functions; refactor to traits only when three or more platforms diverge
-- `windows-sys` is for raw FFI; the `windows` crate provides safe, idiomatic wrappers
-- `cargo-xwin` cross-compiles to Windows MSVC ABI from Linux — no Windows machine needed
-- Always check `--target x86_64-pc-windows-msvc` in CI even if you only ship on Linux
-- Combine `#[cfg]` with Cargo features for optional platform support (e.g., `feature = "windows"`)
+- まずは末端関数内の `#[cfg]` ブロックから始め、3 つ以上のプラットフォームに分岐する場合にのみトレイトへリファクタリングしてください。
+- `windows-sys` は生の FFI 用であり、`windows` クレートは安全で慣用的なラッパーを提供します。
+- `cargo-xwin` を使えば、Linux から Windows MSVC ABI 向けにクロスコンパイルできます — Windows 実機は不要です。
+- Linux 向けにのみリリースする場合でも、CI で `--target x86_64-pc-windows-msvc` を常にチェックしてください。
+- オプションのプラットフォームサポート（例: `feature = "windows"`）には、`#[cfg]` と Cargo フィーチャを組み合わせて使用します。
 
 ---
-

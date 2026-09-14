@@ -1,82 +1,82 @@
-# 7. Closures and Higher-Order Functions 🟢
+# 7. クロージャと高階関数 🟢
 
-> **What you'll learn:**
-> - The three closure traits (`Fn`, `FnMut`, `FnOnce`) and how capture works
-> - Passing closures as parameters and returning them from functions
-> - Combinator chains and iterator adapters for functional-style programming
-> - Designing your own higher-order APIs with the right trait bounds
+> **学習内容:**
+> - 3つのクロージャトレイト（`Fn`、`FnMut`、`FnOnce`）とキャプチャの仕組み
+> - クロージャを引数として渡す方法と関数から返す方法
+> - 関数型プログラミングのためのコンビネータチェーンとイテレータアダプタ
+> - 適切なトレイト境界を用いた独自の高階 API の設計
 
-## Fn, FnMut, FnOnce — The Closure Traits
+## Fn、FnMut、FnOnce — クロージャトレイト
 
-Every closure in Rust implements one or more of three traits, based on how it captures variables:
+Rust のすべてのクロージャは、変数をどのようにキャプチャするかに基づいて、3つのトレイトのうち1つ以上を実装します：
 
 ```rust
-// FnOnce — consumes captured values (can only be called once)
+// FnOnce — キャプチャした値を消費する（1回しか呼び出せない）
 let name = String::from("Alice");
 let greet = move || {
-    println!("Hello, {name}!"); // Takes ownership of `name`
-    drop(name); // name is consumed
+    println!("Hello, {name}!"); // `name` の所有権を取得
+    drop(name); // name は消費される
 };
-greet(); // ✅ First call
-// greet(); // ❌ Can't call again — `name` was consumed
+greet(); // ✅ 1回目の呼び出し
+// greet(); // ❌ 再度呼び出すことはできない — `name` はすでに消費されている
 
-// FnMut — mutably borrows captured values (can be called many times)
+// FnMut — キャプチャした値を可変借用する（何回でも呼び出せる）
 let mut count = 0;
 let mut increment = || {
-    count += 1; // Mutably borrows `count`
+    count += 1; // `count` を可変借用
 };
 increment(); // count == 1
 increment(); // count == 2
 
-// Fn — immutably borrows captured values (can be called many times, concurrently)
+// Fn — キャプチャした値を不変借用する（何回でも、並行しても呼び出せる）
 let prefix = "Result";
 let display = |x: i32| {
-    println!("{prefix}: {x}"); // Immutably borrows `prefix`
+    println!("{prefix}: {x}"); // `prefix` を不変借用
 };
 display(1);
 display(2);
 ```
 
-**The hierarchy**: `Fn` : `FnMut` : `FnOnce` — each is a subtrait of the next:
+**階層関係**: `Fn` : `FnMut` : `FnOnce` — それぞれが次のサブトレイト（部分トレイト）です：
 
 ```text
-FnOnce  ← everything can be called at least once
+FnOnce  ← すべてのクロージャは少なくとも1回呼び出せる
  ↑
-FnMut   ← can be called repeatedly (may mutate state)
+FnMut   ← 繰り返し呼び出せる（状態を変更する可能性がある）
  ↑
-Fn      ← can be called repeatedly and concurrently (no mutation)
+Fn      ← 繰り返し、かつ並行して呼び出せる（状態の変更なし）
 ```
 
-If a closure implements `Fn`, it also implements `FnMut` and `FnOnce`.
+クロージャが `Fn` を実装している場合、自動的に `FnMut` と `FnOnce` も実装します。
 
-### Closures as Parameters and Return Values
+### 引数および戻り値としてのクロージャ
 
 ```rust
-// --- Parameters ---
+// --- 引数 ---
 
-// Static dispatch (monomorphized — fastest)
+// 静的ディスパッチ（単相化 — 最速）
 fn apply_twice<F: Fn(i32) -> i32>(f: F, x: i32) -> i32 {
     f(f(x))
 }
 
-// Also written with impl Trait:
+// impl Trait を用いた記述も可能:
 fn apply_twice_v2(f: impl Fn(i32) -> i32, x: i32) -> i32 {
     f(f(x))
 }
 
-// Dynamic dispatch (trait object — flexible, slight overhead)
+// 動的ディスパッチ（トレイトオブジェクト — 柔軟だがわずかなオーバーヘッドあり）
 fn apply_dyn(f: &dyn Fn(i32) -> i32, x: i32) -> i32 {
     f(x)
 }
 
-// --- Return Values ---
+// --- 戻り値 ---
 
-// Can't return closures by value without boxing (they have anonymous types):
+// ボクシングなしではクロージャを値として返せない（無名型を持つため）:
 fn make_adder(n: i32) -> Box<dyn Fn(i32) -> i32> {
     Box::new(move |x| x + n)
 }
 
-// With impl Trait (simpler, monomorphized, but can't be dynamic):
+// impl Trait を使用する場合（よりシンプルで単相化されるが、動的にはできない）:
 fn make_adder_v2(n: i32) -> impl Fn(i32) -> i32 {
     move |x| x + n
 }
@@ -90,12 +90,12 @@ fn main() {
 }
 ```
 
-### Combinator Chains and Iterator Adapters
+### コンビネータチェーンとイテレータアダプタ
 
-Higher-order functions shine with iterators — this is idiomatic Rust:
+高階関数はイテレータで真価を発揮します — これが慣用的な Rust（idiomatic Rust）です：
 
 ```rust
-// C-style loop (imperative):
+// C 言語スタイルのループ（命令型）:
 let data = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 let mut result = Vec::new();
 for x in &data {
@@ -104,39 +104,39 @@ for x in &data {
     }
 }
 
-// Idiomatic Rust (functional combinator chain):
+// 慣用的な Rust（関数型コンビネータチェーン）:
 let result: Vec<i32> = data.iter()
     .filter(|&&x| x % 2 == 0)
     .map(|&x| x * x)
     .collect();
 
-// Same performance — iterators are lazy and optimized by LLVM
+// 同等のパフォーマンス — イテレータは遅延評価され、LLVM によって最適化される
 assert_eq!(result, vec![4, 16, 36, 64, 100]);
 ```
 
-**Common combinators cheat sheet**:
+**一般的なコンビネータのチートシート**:
 
-| Combinator | What It Does | Example |
+| コンビネータ | 機能 | 例 |
 |-----------|-------------|---------|
-| `.map(f)` | Transform each element | `.map(\|x\| x * 2)` |
-| `.filter(p)` | Keep elements where predicate is true | `.filter(\|x\| x > &5)` |
-| `.filter_map(f)` | Map + filter in one step (returns `Option`) | `.filter_map(\|x\| x.parse().ok())` |
-| `.flat_map(f)` | Map then flatten nested iterators | `.flat_map(\|s\| s.chars())` |
-| `.fold(init, f)` | Reduce to single value (like `Aggregate` in C#) | `.fold(0, \|acc, x\| acc + x)` |
-| `.any(p)` / `.all(p)` | Short-circuit boolean check | `.any(\|x\| x > 100)` |
-| `.enumerate()` | Add index | `.enumerate().map(\|(i, x)\| ...)` |
-| `.zip(other)` | Pair with another iterator | `.zip(labels.iter())` |
-| `.take(n)` / `.skip(n)` | First/skip N elements | `.take(10)` |
-| `.chain(other)` | Concatenate two iterators | `.chain(extra.iter())` |
-| `.peekable()` | Look ahead without consuming | `.peek()` |
-| `.collect()` | Gather into a collection | `.collect::<Vec<_>>()` |
+| `.map(f)` | 各要素を変換する | `.map(\|x\| x * 2)` |
+| `.filter(p)` | 述語が真である要素を残す | `.filter(\|x\| x > &5)` |
+| `.filter_map(f)` | マップとフィルタを1ステップで実行（`Option` を返す） | `.filter_map(\|x\| x.parse().ok())` |
+| `.flat_map(f)` | マップしてからネストしたイテレータをフラット化する | `.flat_map(\|s\| s.chars())` |
+| `.fold(init, f)` | 単一の値に畳み込む（C# の `Aggregate` に相当） | `.fold(0, \|acc, x\| acc + x)` |
+| `.any(p)` / `.all(p)` | ショートサーキットによる真偽値チェック | `.any(\|x\| x > 100)` |
+| `.enumerate()` | インデックスを付加する | `.enumerate().map(\|(i, x)\| ...)` |
+| `.zip(other)` | 別のイテレータとペアにする | `.zip(labels.iter())` |
+| `.take(n)` / `.skip(n)` | 先頭 N 個を取得 / スキップ | `.take(10)` |
+| `.chain(other)` | 2つのイテレータを連結する | `.chain(extra.iter())` |
+| `.peekable()` | 消費せずに先読みする | `.peek()` |
+| `.collect()` | コレクションに収集する | `.collect::<Vec<_>>()` |
 
-### Implementing Your Own Higher-Order APIs
+### 独自の高階 API の実装
 
-Design APIs that accept closures for customization:
+カスタマイズ用のクロージャを受け取る API を設計します：
 
 ```rust
-/// Retry an operation with a configurable strategy
+/// 設定可能な戦略を用いて操作をリトライする
 fn retry<T, E, F, S>(
     mut operation: F,
     mut should_retry: S,
@@ -144,7 +144,7 @@ fn retry<T, E, F, S>(
 ) -> Result<T, E>
 where
     F: FnMut() -> Result<T, E>,
-    S: FnMut(&E, usize) -> bool, // (error, attempt) → try again?
+    S: FnMut(&E, usize) -> bool, // (error, attempt) → 再試行するか？
 {
     for attempt in 1..=max_attempts {
         match operation() {
@@ -158,7 +158,7 @@ where
     unreachable!()
 }
 
-// Usage — caller controls retry logic:
+// 使い方 — 呼び出し元がリトライロジックを制御:
 ```
 
 ```rust
@@ -170,48 +170,41 @@ where
 let result = retry(
     || connect_to_database(),
     |err, attempt| {
-        eprintln!("Attempt {attempt} failed: {err}");
-        true // Always retry
+        eprintln!("試行 {attempt} が失敗しました: {err}");
+        true // 常にリトライ
     },
     3,
 );
 
-// Usage — retry only specific errors:
+// 使い方 — 特定のエラーのみリトライ:
 let result = retry(
     || http_get(url),
-    |err, _| err.is_transient(), // Only retry transient errors
+    |err, _| err.is_transient(), // 一時的なエラーのみリトライ
     5,
 );
 ```
 
-### The `with` Pattern — Bracketed Resource Access
+### `with` パターン — ブラケットされたリソースアクセス
 
-Sometimes you need to guarantee that a resource is in a specific state for the
-duration of an operation, and restored afterward — regardless of how the caller's
-code exits (early return, `?`, panic). Instead of exposing the resource directly
-and hoping callers remember to set up and tear down, **lend it through a closure**:
+呼び出し側のコードがどのように終了したか（早期リターン、`?`、パニック）に関わらず、操作の実行中だけリソースが特定のリソース状態にあることを保証し、終了後に確実に元の状態に復元する必要がある場合があります。リソースを直接公開して呼び出し元がセットアップと後片付け（ティアダウン）を忘れないように期待するのではなく、**クロージャを介してリソースを貸し出します**:
 
 ```text
-set up → call closure with resource → tear down
+セットアップ → リソースを渡してクロージャを実行 → 後片付け
 ```
 
-The caller never touches setup or teardown. They can't forget, can't get it wrong,
-and can't hold the resource beyond the closure's scope.
+呼び出し元はセットアップや後片付けに直接触れることはありません。忘れることも、間違えることも、クロージャのスコープ外へリソースを持ち出すこともできません。
 
-#### Example: GPIO Pin Direction
+#### 例: GPIO ピンの方向制御
 
-A GPIO controller manages pins that support bidirectional I/O. Some callers need
-the pin configured as input, others as output. Rather than exposing raw pin access
-and trusting callers to set direction correctly, the controller provides
-`with_pin_input` and `with_pin_output`:
+GPIO コントローラは、双方向 I/O をサポートするピンを管理します。一部の呼び出し元はピンを入力として構成する必要があり、他の呼び出し元は出力として構成する必要があります。生のピンアクセスを公開して呼び出し元が正しく方向を設定することに期待するのではなく、コントローラは `with_pin_input` と `with_pin_output` を提供します：
 
 ```rust
-/// GPIO pin direction — not public, callers never set this directly.
+/// GPIO ピンの方向 — 非公開であり、呼び出し元が直接設定することは決してない。
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Direction { In, Out }
 
-/// A GPIO pin handle lent to the closure. Cannot be stored or cloned —
-/// it exists only for the duration of the callback.
+/// クロージャに貸し出される GPIO ピンハンドル。保存やクローンは不可 —
+/// コールバックの実行中のみ存在する。
 pub struct GpioPin<'a> {
     pin_number: u8,
     _controller: &'a GpioController,
@@ -219,13 +212,13 @@ pub struct GpioPin<'a> {
 
 impl GpioPin<'_> {
     pub fn read(&self) -> bool {
-        // Read pin level from hardware register
+        // ハードウェアレジスタからピンのレベルを読み取る
         println!("  reading pin {}", self.pin_number);
-        true // stub
+        true // スタブ
     }
 
     pub fn write(&self, high: bool) {
-        // Drive pin level via hardware register
+        // ハードウェアレジスタを介してピンのレベルを出力する
         println!("  writing pin {} = {high}", self.pin_number);
     }
 }
@@ -241,8 +234,8 @@ impl GpioController {
         }
     }
 
-    /// Configure pin as input, run the closure, restore state.
-    /// The caller receives a `GpioPin` that lives only for the callback.
+    /// ピンを入力として構成し、クロージャを実行して、状態を復元する。
+    /// 呼び出し元はコールバックの間だけ有効な `GpioPin` を受け取る。
     pub fn with_pin_input<R>(
         &self,
         pin: u8,
@@ -252,14 +245,14 @@ impl GpioController {
         self.set_direction(pin, Direction::In);
         let handle = GpioPin { pin_number: pin, _controller: self };
         let result = f(&handle);
-        // Restore previous direction (or leave as-is — policy choice)
+        // 以前の方向を復元する（またはそのまま維持する — ポリシーの選択）
         if let Some(dir) = prev {
             self.set_direction(pin, dir);
         }
         result
     }
 
-    /// Configure pin as output, run the closure, restore state.
+    /// ピンを出力として構成し、クロージャを実行して、状態を復元する。
     pub fn with_pin_output<R>(
         &self,
         pin: u8,
@@ -284,95 +277,84 @@ impl GpioController {
 fn main() {
     let gpio = GpioController::new();
 
-    // Caller 1: needs input — doesn't know or care how direction is managed
+    // 呼び出し元 1: 入力が必要 — 方向がどのように管理されているかは知る必要がない
     let level = gpio.with_pin_input(4, |pin| {
         pin.read()
     });
-    println!("Pin 4 level: {level}");
+    println!("ピン 4 のレベル: {level}");
 
-    // Caller 2: needs output — same API shape, different guarantee
+    // 呼び出し元 2: 出力が必要 — 同じ API 形状で異なる保証
     gpio.with_pin_output(4, |pin| {
         pin.write(true);
-        // do more work...
+        // さらに作業を行う...
         pin.write(false);
     });
 
-    // Can't use the pin handle outside the closure:
+    // ピンハンドルをクロージャの外部で使用することはできない:
     // let escaped_pin = gpio.with_pin_input(4, |pin| pin);
     // ❌ ERROR: borrowed value does not live long enough
 }
 ```
 
-**What the `with` pattern guarantees:**
-- Direction is **always set before** the caller's code runs
-- Direction is **always restored after**, even if the closure returns early
-- The `GpioPin` handle **cannot escape** the closure — the borrow checker enforces
-  this via the lifetime tied to the controller reference
-- Callers never import `Direction`, never call `set_direction` — the API is
-  impossible to misuse
+**`with` パターンが保証すること:**
+- 呼び出し側のコードが実行される**前に必ず**方向が設定される
+- クロージャが早期リターンした場合でも、**事後に必ず**方向が復元される
+- `GpioPin` ハンドルはクロージャの外部へ**エスケープできない** — コントローラの参照に結び付けられたライフタイムを介して借用チェッカーがこれを強制する
+- 呼び出し元が `Direction` をインポートしたり、`set_direction` を呼び出すことはない — API の誤用が不可能な設計
 
-#### Where This Pattern Appears
+#### このパターンが登場する場面
 
-The `with` pattern shows up throughout Rust's standard library and ecosystem:
+`with` パターンは Rust の標準ライブラリやエコシステムのいたるところに現れます：
 
-| API | Setup | Callback | Teardown |
+| API | セットアップ | コールバック | 後片付け |
 |-----|-------|----------|----------|
-| `std::thread::scope` | Create scope | `\|s\| { s.spawn(...) }` | Join all threads |
-| `Mutex::lock` | Acquire lock | Use `MutexGuard` (RAII, not closure, but same idea) | Release on drop |
-| `tempfile::tempdir` | Create temp directory | Use path | Delete on drop |
-| `std::io::BufWriter::new` | Buffer writes | Write operations | Flush on drop |
-| GPIO `with_pin_*` (above) | Set direction | Use pin handle | Restore direction |
+| `std::thread::scope` | スコープの作成 | `\|s\| { s.spawn(...) }` | すべてのスレッドを join |
+| `Mutex::lock` | ロックの取得 | `MutexGuard` を使用（クロージャではなく RAII だが同じ思想） | ドロップ時に解放 |
+| `tempfile::tempdir` | 一時ディレクトリの作成 | パスを使用 | ドロップ時に削除 |
+| `std::io::BufWriter::new` | 書き込みのバッファリング | 書き込み操作 | ドロップ時にフラッシュ |
+| GPIO `with_pin_*` (上記) | ピン方向の設定 | ピンハンドルを使用 | ピン方向の復元 |
 
-The closure-based variant is strongest when:
-- **Setup and teardown are paired** and forgetting either is a bug
-- **The resource shouldn't outlive the operation** — the borrow checker enforces
-  this naturally
-- **Multiple configurations exist** (`with_pin_input` vs `with_pin_output`) — each
-  `with_*` method encapsulates a different setup without exposing the configuration
-  to the caller
+クロージャベースのバリアントが最も適しているのは次のような場合です：
+- **セットアップと後片付けがペアになっており**、どちらかを忘れるとバグになる場合
+- **リソースが操作の寿命を超えて生存してはならない場合** — 借用チェッカーがこれを自然に強制します
+- **複数の設定が存在する場合**（`with_pin_input` vs `with_pin_output`） — 各 `with_*` メソッドは設定を呼び出し元に公開することなく、異なるセットアップをカプセル化します
 
-> **`with` vs RAII (Drop):** Both guarantee cleanup. Use RAII / `Drop` when the
-> caller needs to hold the resource across multiple statements and function calls.
-> Use `with` when the operation is **bracketed** — one setup, one block of work,
-> one teardown — and you don't want the caller to be able to break the bracket.
+> **`with` vs RAII (Drop):** どちらもクリーンアップを保証します。複数の文や関数呼び出しにまたがって呼び出し元がリソースを保持し続ける必要がある場合は RAII / `Drop` を使用してください。操作が**ブラケット化（前後を挟み込む形）**されており（1つのセットアップ、1つの作業ブロック、1つの後片付け）、呼び出し元がその枠組みを壊せないようにしたい場合は `with` を使用してください。
 
-> **FnMut vs Fn in API design**: Use `FnMut` as the default bound — it's
-> the most flexible (callers can pass `Fn` or `FnMut` closures). Only
-> require `Fn` if you need to call the closure concurrently (e.g., from
-> multiple threads). Only require `FnOnce` if you call it exactly once.
+> **API 設計における FnMut vs Fn**: デフォルトの境界としては `FnMut` を使用してください — これが最も柔軟です（呼び出し元は `Fn` または `FnMut` のクロージャを渡せます）。クロージャを並行して呼び出す必要がある場合（複数のスレッドからなど）にのみ `Fn` を要求してください。厳密に1回だけ呼び出す場合にのみ `FnOnce` を要求してください。
 
-> **Key Takeaways — Closures**
-> - `Fn` borrows, `FnMut` borrows mutably, `FnOnce` consumes — accept the weakest bound your API needs
-> - `impl Fn` in parameters, `Box<dyn Fn>` for storage, `impl Fn` in return (or `Box<dyn Fn>` if dynamic)
-> - Combinator chains (`map`, `filter`, `and_then`) compose cleanly and inline to tight loops
-> - The `with` pattern (bracketed access via closure) guarantees setup/teardown and prevents resource escape — use it when the caller shouldn't manage configuration lifecycle
+> **重要なポイント — クロージャ**
+> - `Fn` は借用、`FnMut` は可変借用、`FnOnce` は消費 — API が必要とする最も弱い境界を受け入れる
+> - 引数には `impl Fn`、ストレージには `Box<dyn Fn>`、戻り値には `impl Fn`（動的な場合は `Box<dyn Fn>`）
+> - コンビネータチェーン（`map`、`filter`、`and_then`）は綺麗に合成され、インライン化されて緊密なループになる
+> - `with` パターン（クロージャを介したブラケットアクセス）はセットアップ/後片付けを保証し、リソースのエスケープを防ぐ — 呼び出し元が設定のライフサイクルを管理すべきでない場合に使用する
 
-> **See also:** [Ch 2 — Traits In Depth](ch02-traits-in-depth.md) for how `Fn`/`FnMut`/`FnOnce` relate to trait objects. [Ch 8 — Functional vs. Imperative](ch08-functional-vs-imperative-when-elegance-wins.md) for when to choose combinators over loops. [Ch 15 — API Design](ch15-crate-architecture-and-api-design.md) for ergonomic parameter patterns.
+> **関連項目:** `Fn`/`FnMut`/`FnOnce` とトレイトオブジェクトの関係については [第2章 — トレイトの詳細](ch02-traits-in-depth.md) を参照してください。ループよりもコンビネータを選択すべきタイミングについては [第8章 — 関数型 vs 命令型](ch08-functional-vs-imperative-when-elegance-wins.md) を参照してください。エルゴノミックな引数パターンについては [第15章 — API 設計](ch15-crate-architecture-and-api-design.md) を参照してください。
 
 ```mermaid
 graph TD
-    FnOnce["FnOnce<br>(can call once)"]
-    FnMut["FnMut<br>(can call many times,<br>may mutate captures)"]
-    Fn["Fn<br>(can call many times,<br>immutable captures)"]
+    FnOnce["FnOnce<br>（1回のみ呼び出し可能）"]
+    FnMut["FnMut<br>（複数回呼び出し可能、<br>キャプチャした状態を変更可能）"]
+    Fn["Fn<br>（複数回呼び出し可能、<br>不変のキャプチャ）"]
 
-    Fn -->|"implements"| FnMut
-    FnMut -->|"implements"| FnOnce
+    Fn -->|"実装する"| FnMut
+    FnMut -->|"実装する"| FnOnce
 
     style Fn fill:#d4efdf,stroke:#27ae60,color:#000
     style FnMut fill:#fef9e7,stroke:#f1c40f,color:#000
     style FnOnce fill:#fadbd8,stroke:#e74c3c,color:#000
 ```
 
-> Every `Fn` is also `FnMut`, and every `FnMut` is also `FnOnce`. Accept `FnMut` by default — it’s the most flexible bound for callers.
+> すべての `Fn` は `FnMut` でもあり、すべての `FnMut` は `FnOnce` でもあります。デフォルトでは `FnMut` を受け入れるようにしてください — これが呼び出し元にとって最も柔軟な境界です。
 
 ---
 
-### Exercise: Higher-Order Combinator Pipeline ★★ (~25 min)
+### 演習: 高階コンビネータパイプライン ★★（約25分）
 
-Create a `Pipeline` struct that chains transformations. It should support `.pipe(f)` to add a transformation and `.execute(input)` to run the full chain.
+変換処理をチェーンする `Pipeline` 構造体を作成してください。変換を追加する `.pipe(f)` と、チェーン全体を実行する `.execute(input)` をサポートする必要があります。
 
 <details>
-<summary>🔑 Solution</summary>
+<summary>🔑 解答例</summary>
 
 ```rust
 struct Pipeline<T> {
@@ -416,4 +398,3 @@ fn main() {
 </details>
 
 ***
-

@@ -1,119 +1,118 @@
-# Reference Card
+# リファレンスカード
 
-> **Quick-reference for all 14+ correct-by-construction patterns** with selection flowchart, pattern catalogue, composition rules, crate mapping, and types-as-guarantees cheat sheet.
+> **14以上の「構造的に正しくする（correct-by-construction）」パターンのクイックリファレンス**。選定フローチャート、パターンカタログ、組み合わせルール、クレートマッピング、そして保証としての型のチートシートを提供します。
 >
-> **Cross-references:** Every chapter — this is the lookup table for the entire book.
+> **相互参照:** すべての章 — 本書全体のルックアップテーブルです。
 
-## Quick Reference: Correct-by-Construction Patterns
+## クイックリファレンス: 構造的に正しくするパターン
 
-### Pattern Selection Guide
+### パターン選定ガイド
 
 ```text
-Is the bug catastrophic if missed?
-├── Yes → Can it be encoded in types?
-│         ├── Yes → USE CORRECT-BY-CONSTRUCTION
-│         └── No  → Runtime check + extensive testing
-└── No  → Runtime check is fine
+見落とした場合のバグは壊滅的か？
+├── はい → 型にエンコード可能か？
+│          ├── はい → 「構造的に正しくする（CORRECT-BY-CONSTRUCTION）」を採用
+│          └── いいえ → ランタイムチェック ＋ 入念なテスト
+└── いいえ → ランタイムチェックで十分
 ```
 
-### Pattern Catalogue
+### パターンカタログ
 
-| # | Pattern | Key Trait/Type | Prevents | Runtime Cost | Chapter |
+| # | パターン | 主要なトレイト/型 | 防止対象 | ランタイムコスト | 該当章 |
 |---|---------|---------------|----------|:------:|---------|
-| 1 | Typed Commands | `trait IpmiCmd { type Response; }` | Wrong response type | Zero | ch02 |
-| 2 | Single-Use Types | `struct Nonce` (not Clone/Copy) | Nonce/key reuse | Zero | ch03 |
-| 3 | Capability Tokens | `struct AdminToken { _private: () }` | Unauthorised access | Zero | ch04 |
-| 4 | Type-State | `Session<Active>` | Protocol violations | Zero | ch05 |
-| 5 | Dimensional Types | `struct Celsius(f64)` | Unit confusion | Zero | ch06 |
-| 6 | Validated Boundaries | `struct ValidFru` (via TryFrom) | Unvalidated data use | Parse once | ch07 |
-| 7 | Capability Mixins | `trait FanDiagMixin: HasSpi + HasI2c` | Missing bus access | Zero | ch08 |
-| 8 | Phantom Types | `Register<Width16>` | Width/direction mismatch | Zero | ch09 |
-| 9 | Sentinel → Option | `Option<u8>` (not `0xFF`) | Sentinel-as-value bugs | Zero | ch11 |
-| 10 | Sealed Traits | `trait Cmd: private::Sealed` | Unsound external impls | Zero | ch11 |
-| 11 | Non-Exhaustive Enums | `#[non_exhaustive] enum Sku` | Silent match fallthrough | Zero | ch11 |
-| 12 | Typestate Builder | `DerBuilder<Set, Missing>` | Incomplete construction | Zero | ch11 |
-| 13 | FromStr Validation | `impl FromStr for DiagLevel` | Unvalidated string input | Parse once | ch11 |
-| 14 | Const-Generic Size | `RegisterBank<const N: usize>` | Buffer size mismatch | Zero | ch11 |
-| 15 | Safe `unsafe` Wrapper | `MmioRegion::read_u32()` | Unchecked MMIO/FFI | Zero | ch11 |
-| 16 | Async Type-State | `AsyncSession<Active>` | Async protocol violations | Zero | ch11 |
-| 17 | Const Assertions | `SdrSensorId<const N: u8>` | Invalid compile-time IDs | Zero | ch11 |
-| 18 | Session Types | `Chan<SendRequest>` | Out-of-order channel ops | Zero | ch11 |
-| 19 | Pin Self-Referential | `Pin<Box<StreamParser>>` | Dangling intra-struct pointer | Zero | ch11 |
-| 20 | RAII / Drop | `impl Drop for Session` | Resource leak on any exit path | Zero | ch11 |
-| 21 | Error Type Hierarchy | `#[derive(Error)] enum DiagError` | Silent error swallowing | Zero | ch11 |
-| 22 | `#[must_use]` | `#[must_use] struct Token` | Silently dropped values | Zero | ch11 |
+| 1 | 型付きコマンド | `trait IpmiCmd { type Response; }` | 誤ったレスポンス型 | ゼロ | 第2章 |
+| 2 | 単一使用型 | `struct Nonce`（Clone/Copy なし） | ノンスや鍵の再利用 | ゼロ | 第3章 |
+| 3 | ケイパビリティトークン | `struct AdminToken { _private: () }` | 未認可のアクセス | ゼロ | 第4章 |
+| 4 | 型状態（タイプステート） | `Session<Active>` | プロトコル違反 | ゼロ | 第5章 |
+| 5 | 次元の型 | `struct Celsius(f64)` | 単位の混同 | ゼロ | 第6章 |
+| 6 | 境界でのバリデーション | `struct ValidFru`（TryFrom 経由） | 未検証データの使用 | パースの1回のみ | 第7章 |
+| 7 | ケイパビリティミックスイン | `trait FanDiagMixin: HasSpi + HasI2c` | 必要なバスアクセスの欠落 | ゼロ | 第8章 |
+| 8 | 幽霊型（Phantom Types） | `Register<Width16>` | レジスタ幅やアクセスの不一致 | ゼロ | 第9章 |
+| 9 | 番兵値 → Option | `Option<u8>`（`0xFF` ではない） | 番兵値を通常値として扱うバグ | ゼロ | 第11章 |
+| 10 | シールドトレイト | `trait Cmd: private::Sealed` | 健全でない外部実装 | ゼロ | 第11章 |
+| 11 | 非網羅的な列挙型 | `#[non_exhaustive] enum Sku` | match のサイレントなフォールスルー | ゼロ | 第11章 |
+| 12 | 型状態ビルダー | `DerBuilder<Set, Missing>` | 不完全なオブジェクト構築 | ゼロ | 第11章 |
+| 13 | FromStr によるバリデーション | `impl FromStr for DiagLevel` | 未検証の文字列入力 | パースの1回のみ | 第11章 |
+| 14 | const ジェネリクスサイズ | `RegisterBank<const N: usize>` | バッファサイズの不一致 | ゼロ | 第11章 |
+| 15 | 安全な unsafe ラッパー | `MmioRegion::read_u32()` | チェックされていない MMIO / FFI | ゼロ | 第11章 |
+| 16 | 非同期型状態 | `AsyncSession<Active>` | 非同期プロトコル違反 | ゼロ | 第11章 |
+| 17 | const アサーション | `SdrSensorId<const N: u8>` | 無効なコンパイル時 ID | ゼロ | 第11章 |
+| 18 | セッション型 | `Chan<SendRequest>` | 順序違いのチャネル操作 | ゼロ | 第11章 |
+| 19 | 自己参照用の Pin | `Pin<Box<StreamParser>>` | 構造体内部を指すダングリングポインタ | ゼロ | 第11章 |
+| 20 | RAII / Drop | `impl Drop for Session` | 任意の終了パスでのリソースリーク | ゼロ | 第11章 |
+| 21 | エラー型の階層構造 | `#[derive(Error)] enum DiagError` | サイレントなエラーの握りつぶし | ゼロ | 第11章 |
+| 22 | `#[must_use]` | `#[must_use] struct Token` | 値のサイレントなドロップ | ゼロ | 第11章 |
 
-### Composition Rules
+### 組み合わせルール
 
 ```text
-Capability Token + Type-State = Authorised state transitions
-Typed Command + Dimensional Type = Physically-typed responses
-Validated Boundary + Phantom Type = Typed register access on validated config
-Capability Mixin + Typed Command = Bus-aware typed operations
-Single-Use Type + Type-State = Consume-on-transition protocols
-Sealed Trait + Typed Command = Closed, sound command set
-Sentinel → Option + Validated Boundary = Clean parse-once pipeline
-Typestate Builder + Capability Token = Proof-of-complete construction
-FromStr + #[non_exhaustive] = Evolvable, fail-fast enum parsing
-Const-Generic Size + Validated Boundary = Sized, validated protocol buffers
-Safe unsafe Wrapper + Phantom Type = Typed, safe MMIO access
-Async Type-State + Capability Token = Authorised async transitions
-Session Types + Typed Command = Fully-typed request-response channels
-Pin + Type-State = Self-referential state machines that can't move
-RAII (Drop) + Type-State = State-dependent cleanup guarantees
-Error Hierarchy + Validated Boundary = Typed parse errors with exhaustive handling
-#[must_use] + Single-Use Type = Hard-to-ignore, hard-to-reuse tokens
+ケイパビリティトークン + 型状態 = 認可された状態遷移
+型付きコマンド + 次元の型 = 物理的に型付けされたレスポンス
+境界でのバリデーション + 幽霊型 = バリデーション済み設定に基づく型付きレジスタアクセス
+ケイパビリティミックスイン + 型付きコマンド = バスを意識した型付き操作
+単一使用型 + 型状態 = 遷移時に消費されるプロトコル
+シールドトレイト + 型付きコマンド = 閉じた健全なコマンドセット
+番兵値 → Option + 境界でのバリデーション = クリーンな1回パースパイプライン
+型状態ビルダー + ケイパビリティトークン = 完全な構築の証明
+FromStr + #[non_exhaustive] = 拡張可能でフェイルファストな列挙型パース
+const ジェネリクスサイズ + 境界でのバリデーション = サイズ保証され検証されたプロトコルバッファ
+安全な unsafe ラッパー + 幽霊型 = 型付けされた安全な MMIO アクセス
+非同期型状態 + ケイパビリティトークン = 認可された非同期遷移
+セッション型 + 型付きコマンド = 完全に型付けされたリクエスト・レスポンスチャネル
+Pin + 型状態 = ムーブ不能な自己参照状態機械
+RAII (Drop) + 型状態 = 状態に応じたクリーンアップ保証
+エラー階層 + 境界でのバリデーション = 網羅的な処理を伴う型付きパースエラー
+#[must_use] + 単一使用型 = 無視できず、再利用もできないトークン
 ```
 
-### Anti-Patterns to Avoid
+### 避けるべきアンチパターン
 
-| Anti-Pattern | Why It's Wrong | Correct Alternative |
+| アンチパターン | なぜ誤りなのか | 正しい代替案 |
 |-------------|---------------|-------------------|
-| `fn read_sensor() -> f64` | Unitless — could be °C, °F, or RPM | `fn read_sensor() -> Celsius` |
-| `fn encrypt(nonce: &[u8; 12])` | Nonce can be reused (borrow) | `fn encrypt(nonce: Nonce)` (move) |
-| `fn admin_op(is_admin: bool)` | Caller can lie (`true`) | `fn admin_op(_: &AdminToken)` |
-| `fn send(session: &Session)` | No state guarantee | `fn send(session: &Session<Active>)` |
-| `fn process(data: &[u8])` | Not validated | `fn process(data: &ValidFru)` |
-| `Clone` on ephemeral keys | Defeats single-use guarantee | Don't derive Clone |
-| `let vendor_id: u16 = 0xFFFF` | Sentinel carried internally | `let vendor_id: Option<u16> = None` |
-| `fn route(level: &str)` with fallback | Typos silently default | `let level: DiagLevel = s.parse()?` |
-| `Builder::new().finish()` without fields | Incomplete object constructed | Typestate builder: `finish()` gated on `Set` |
-| `let buf: Vec<u8>` for fixed-size HW buffer | Size only checked at runtime | `RegisterBank<4096>` (const generic) |
-| Raw `unsafe { ptr::read(...) }` scattered | UB risk, unauditable | `MmioRegion::read_u32()` safe wrapper |
-| `async fn transition(&mut self)` | Mutable borrows don't enforce state | `async fn transition(self) -> NextState` |
-| `fn cleanup()` called manually | Forgotten on early return / panic | `impl Drop` — compiler inserts call |
-| `fn op() -> Result<T, String>` | Opaque error, no variant matching | `fn op() -> Result<T, DiagError>` enum |
+| `fn read_sensor() -> f64` | 単位がない — °C、°F、RPM のどれか不明 | `fn read_sensor() -> Celsius` |
+| `fn encrypt(nonce: &[u8; 12])` | ノンスが再利用可能（借用） | `fn encrypt(nonce: Nonce)`（ムーブ） |
+| `fn admin_op(is_admin: bool)` | 呼び出し元が嘘をつける（`true`） | `fn admin_op(_: &AdminToken)` |
+| `fn send(session: &Session)` | 状態の保証がない | `fn send(session: &Session<Active>)` |
+| `fn process(data: &[u8])` | 検証されていない | `fn process(data: &ValidFru)` |
+| エフェメラル鍵に対する `Clone` | 単一使用の保証を破綻させる | Clone を derive しない |
+| `let vendor_id: u16 = 0xFFFF` | 番兵値が内部に持ち越される | `let vendor_id: Option<u16> = None` |
+| フォールバック付きの `fn route(level: &str)` | タイポがサイレントにデフォルト値になる | `let level: DiagLevel = s.parse()?` |
+| フィールド未設定の `Builder::new().finish()` | 不完全なオブジェクトが構築される | 型状態ビルダー: `finish()` を `Set` でゲート |
+| 固定長ハードウェアバッファに対する `let buf: Vec<u8>` | サイズが実行時にしかチェックされない | `RegisterBank<4096>`（const ジェネリクス） |
+| 散乱した生の `unsafe { ptr::read(...) }` | 未定義動作（UB）のリスク、監査不能 | `MmioRegion::read_u32()` 安全なラッパー |
+| `async fn transition(&mut self)` | 可変借用では状態を強制できない | `async fn transition(self) -> NextState` |
+| 手動で呼び出される `fn cleanup()` | 早期リターンやパニック時に呼び出しを忘れる | `impl Drop` — コンパイラが呼び出しを挿入 |
+| `fn op() -> Result<T, String>` | 不透明なエラー、バリアントのマッチが不可 | `fn op() -> Result<T, DiagError>` 列挙型 |
 
-### Mapping to a Diagnostics Codebase
+### 診断コードベースへのマッピング
 
-| Module | Applicable Pattern(s) |
+| モジュール | 適用可能なパターン |
 |---------------------|----------------------|
-| `protocol_lib` | Typed commands, type-state sessions |
-| `thermal_diag` | Capability mixins, dimensional types |
-| `accel_diag` | Validated boundaries, phantom registers |
-| `network_diag` | Type-state (link training), capability tokens |
-| `pci_topology` | Phantom types (register width), validated config, sentinel → Option |
-| `event_handler` | Single-use audit tokens, capability tokens, FromStr (Component) |
-| `event_log` | Validated boundaries (SEL record parsing) |
-| `compute_diag` | Dimensional types (temperature, frequency) |
-| `memory_diag` | Validated boundaries (SPD data), dimensional types |
-| `switch_diag` | Type-state (port enumeration), phantom types |
+| `protocol_lib` | 型付きコマンド、型状態セッション |
+| `thermal_diag` | ケイパビリティミックスイン、次元の型 |
+| `accel_diag` | 境界でのバリデーション、幽霊型レジスタ |
+| `network_diag` | 型状態（リンクトレーニング）、ケイパビリティトークン |
+| `pci_topology` | 幽霊型（レジスタ幅）、バリデーション済み設定、番兵値 → Option |
+| `event_handler` | 単一使用の監査トークン、ケイパビリティトークン、FromStr (Component) |
+| `event_log` | 境界でのバリデーション（SEL レコードパース） |
+| `compute_diag` | 次元の型（温度、周波数） |
+| `memory_diag` | 境界でのバリデーション（SPD データ）、次元の型 |
+| `switch_diag` | 型状態（ポート列挙）、幽霊型 |
 | `config_loader` | FromStr (DiagLevel, FaultStatus, DiagAction) |
-| `log_analyzer` | Validated boundaries (CompiledPatterns) |
-| `diag_framework` | Typestate builder (DerBuilder), session types (orchestrator↔worker) |
-| `topology_lib` | Const-generic register banks, safe MMIO wrappers |
+| `log_analyzer` | 境界でのバリデーション（CompiledPatterns） |
+| `diag_framework` | 型状態ビルダー (DerBuilder)、セッション型 (orchestrator↔worker) |
+| `topology_lib` | const ジェネリクスレジスタバンク、安全な MMIO ラッパー |
 
-### Types as Guarantees — Quick Mapping
+### 保証としての型 — クイックマッピング
 
-| Guarantee | Rust Equivalent | Example |
+| 保証内容 | Rustでの表現 | 例 |
 |-----------|----------------|---------|
-| "This proof exists" | A type | `AdminToken` |
-| "I have the proof" | A value of that type | `let tok = authenticate()?;` |
-| "A implies B" | Function `fn(A) -> B` | `fn activate(AdminToken) -> Session<Active>` |
-| "Both A and B" | Tuple `(A, B)` or multi-param | `fn op(a: &AdminToken, b: &LinkTrained)` |
-| "Either A or B" | `enum { A(A), B(B) }` or `Result<A, B>` | `Result<Session<Active>, Error>` |
-| "Always true" | `()` (unit type) | Always constructible |
-| "Impossible" | `!` (never type) or `enum Void {}` | Can never be constructed |
+| 「この証明が存在する」 | 型 | `AdminToken` |
+| 「私は証明を所持している」 | その型の値 | `let tok = authenticate()?;` |
+| 「A は B を含意する」 | 関数 `fn(A) -> B` | `fn activate(AdminToken) -> Session<Active>` |
+| 「A と B の両方」 | タプル `(A, B)` または複数パラメータ | `fn op(a: &AdminToken, b: &LinkTrained)` |
+| 「A または B のいずれか」 | `enum { A(A), B(B) }` または `Result<A, B>` | `Result<Session<Active>, Error>` |
+| 「常に真」 | `()`（ユニット型） | 常に構築可能 |
+| 「不可能」 | `!`（never型）または `enum Void {}` | 決して構築できない |
 
 ---
-

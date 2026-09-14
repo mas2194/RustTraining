@@ -1,33 +1,32 @@
-## Type Conversions in Rust
+## Rustにおける型変換
 
-> **What you'll learn:** `From`/`Into` traits vs C#'s implicit/explicit operators, `TryFrom`/`TryInto`
-> for fallible conversions, `FromStr` for parsing, and idiomatic string conversion patterns.
+> **学習内容:** C# の暗黙的/明示的演算子に対する `From`/`Into` トレイト、失敗する可能性のある変換のための `TryFrom`/`TryInto`、パースのための `FromStr`、および慣用的な文字列変換パターン。
 >
-> **Difficulty:** 🟡 Intermediate
+> **難易度:** 🟡 中級
 
-C# uses implicit/explicit conversions and casting operators. Rust uses the `From` and `Into` traits for safe, explicit conversions.
+C# では暗黙的/明示的な型変換とキャスト演算子を使用します。Rust では安全で明示的な型変換のために `From` および `Into` トレイトを使用します。
 
-### C# Conversion Patterns
+### C#の変換パターン
 ```csharp
-// C# implicit/explicit conversions
+// C# の暗黙的/明示的な型変換
 public class Temperature
 {
     public double Celsius { get; }
     
     public Temperature(double celsius) { Celsius = celsius; }
     
-    // Implicit conversion
+    // 暗黙的変換
     public static implicit operator double(Temperature t) => t.Celsius;
     
-    // Explicit conversion
+    // 明示的変換
     public static explicit operator Temperature(double d) => new Temperature(d);
 }
 
-double temp = new Temperature(100.0);  // implicit
-Temperature t = (Temperature)37.5;     // explicit
+double temp = new Temperature(100.0);  // 暗黙的
+Temperature t = (Temperature)37.5;     // 明示的
 ```
 
-### Rust From and Into
+### RustのFromとInto
 ```rust
 #[derive(Debug)]
 struct Temperature {
@@ -50,13 +49,13 @@ fn main() {
     // From
     let temp = Temperature::from(100.0);
     
-    // Into (automatically available when From is implemented)
+    // Into（From を実装すると自動的に利用可能になります）
     let temp2: Temperature = 37.5.into();
     
-    // Works in function arguments too
+    // 関数の引数でも機能します
     fn process_temp(temp: impl Into<Temperature>) {
         let t: Temperature = temp.into();
-        println!("Temperature: {:.1}°C", t.celsius);
+        println!("温度: {:.1}°C", t.celsius);
     }
     
     process_temp(98.6);
@@ -66,18 +65,18 @@ fn main() {
 
 ```mermaid
 graph LR
-    A["impl From&lt;f64&gt; for Temperature"] -->|"auto-generates"| B["impl Into&lt;Temperature&gt; for f64"]
-    C["Temperature::from(37.5)"] -->|"explicit"| D["Temperature"]
-    E["37.5.into()"] -->|"implicit via Into"| D
-    F["fn process(t: impl Into&lt;Temperature&gt;)"] -->|"accepts both"| D
+    A["impl From&lt;f64&gt; for Temperature"] -->|"自動生成"| B["impl Into&lt;Temperature&gt; for f64"]
+    C["Temperature::from(37.5)"] -->|"明示的"| D["Temperature"]
+    E["37.5.into()"] -->|"Into 経由で暗黙的"| D
+    F["fn process(t: impl Into&lt;Temperature&gt;)"] -->|"両方を受け入れ可能"| D
 
     style A fill:#c8e6c9,color:#000
     style B fill:#bbdefb,color:#000
 ```
 
-> **Rule of thumb**: Implement `From`, and you get `Into` for free. Callers can use whichever reads better.
+> **経験則（Rule of thumb）**: `From` を実装すれば、`Into` は自動的に付いてきます。呼び出し側はコードとして読みやすい方を自由に選択できます。
 
-### TryFrom for Fallible Conversions
+### 失敗する可能性のある変換のためのTryFrom
 ```rust
 use std::convert::TryFrom;
 
@@ -86,7 +85,7 @@ impl TryFrom<i32> for Temperature {
     
     fn try_from(value: i32) -> Result<Self, Self::Error> {
         if value < -273 {
-            Err(format!("Temperature {}°C is below absolute zero", value))
+            Err(format!("温度 {}°C は絶対零度を下回っています", value))
         } else {
             Ok(Temperature { celsius: value as f64 })
         }
@@ -95,25 +94,25 @@ impl TryFrom<i32> for Temperature {
 
 fn main() {
     match Temperature::try_from(-300) {
-        Ok(t) => println!("Valid: {:?}", t),
-        Err(e) => println!("Error: {}", e),
+        Ok(t) => println!("有効: {:?}", t),
+        Err(e) => println!("エラー: {}", e),
     }
 }
 ```
 
-### String Conversions
+### 文字列の変換
 ```rust
-// ToString via Display trait
+// Display トレイト経由の ToString
 impl std::fmt::Display for Temperature {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:.1}°C", self.celsius)
     }
 }
 
-// Now .to_string() works automatically
+// これで .to_string() が自動的に機能します
 let s = Temperature::from(100.0).to_string(); // "100.0°C"
 
-// FromStr for parsing
+// パース用の FromStr
 use std::str::FromStr;
 
 impl FromStr for Temperature {
@@ -121,7 +120,7 @@ impl FromStr for Temperature {
     
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let s = s.trim_end_matches("°C").trim();
-        let celsius: f64 = s.parse().map_err(|e| format!("Invalid temp: {}", e))?;
+        let celsius: f64 = s.parse().map_err(|e| format!("無効な温度です: {}", e))?;
         Ok(Temperature { celsius })
     }
 }
@@ -131,22 +130,22 @@ let t: Temperature = "100.0°C".parse().unwrap();
 
 ---
 
-## Exercises
+## 演習問題
 
 <details>
-<summary><strong>🏋️ Exercise: Currency Converter</strong> (click to expand)</summary>
+<summary><strong>🏋️ 演習問題: 通貨コンバータ</strong> (クリックして展開)</summary>
 
-Create a `Money` struct that demonstrates the full conversion ecosystem:
+変換エコシステム全体を実践する `Money` 構造体を作成してください:
 
-1. `Money { cents: i64 }` (stores value in cents to avoid floating-point issues)
-2. Implement `From<i64>` (treats input as whole dollars → `cents = dollars * 100`)
-3. Implement `TryFrom<f64>` — reject negative amounts, round to nearest cent
-4. Implement `Display` to show `"$1.50"` format
-5. Implement `FromStr` to parse `"$1.50"` or `"1.50"` back into `Money`
-6. Write a function `fn total(items: &[impl Into<Money> + Copy]) -> Money` that sums values
+1. `Money { cents: i64 }`（浮動小数点数の問題を回避するため、値をセント単位で保持します）
+2. `From<i64>` を実装する（入力をドル単位として扱い、`cents = dollars * 100` とする）
+3. `TryFrom<f64>` を実装する — 負の金額を拒否し、最も近いセントに四捨五入する
+4. `Display` を実装して `"$1.50"` の形式で表示する
+5. `FromStr` を実装して `"$1.50"` または `"1.50"` をパースして `Money` に戻す
+6. 値を合計する関数 `fn total(items: &[impl Into<Money> + Copy]) -> Money` を作成する
 
 <details>
-<summary>🔑 Solution</summary>
+<summary>🔑 解答例</summary>
 
 ```rust
 use std::fmt;
@@ -165,7 +164,7 @@ impl TryFrom<f64> for Money {
     type Error = String;
     fn try_from(value: f64) -> Result<Self, Self::Error> {
         if value < 0.0 {
-            Err(format!("negative amount: {value}"))
+            Err(format!("負の金額です: {value}"))
         } else {
             Ok(Money { cents: (value * 100.0).round() as i64 })
         }
@@ -199,5 +198,3 @@ fn main() {
 </details>
 
 ***
-
-

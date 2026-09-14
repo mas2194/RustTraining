@@ -1,130 +1,129 @@
-## Quick Reference Card
+## クイックリファレンスカード
 
-### Pattern Decision Guide
+### パターン決定ガイド
 
 ```text
-Need type safety for primitives?
-└── Newtype pattern (Ch3)
+プリミティブ型に型安全性が必要？
+└── ニュータイプ（Newtype）パターン（第3章）
 
-Need compile-time state enforcement?
-└── Type-state pattern (Ch3)
+コンパイル時に状態遷移を強制したい？
+└── 型状態（タイプステート）パターン（第3章）
 
-Need a "tag" with no runtime data?
-└── PhantomData (Ch4)
+実行時データを持たない「タグ」が必要？
+└── PhantomData（第4章）
 
-Need to break Rc/Arc reference cycles?
-└── Weak<T> / sync::Weak<T> (Ch8)
+Rc/Arc の循環参照を解消したい？
+└── Weak<T> / sync::Weak<T>（第8章）
 
-Need to wait for a condition without busy-looping?
-└── Condvar + Mutex (Ch6)
+ビジーループなしで条件を満たすまで待機したい？
+└── Condvar + Mutex（第6章）
 
-Need to handle "one of N types"?
-├── Known closed set → Enum
-├── Open set, hot path → Generics
-├── Open set, cold path → dyn Trait
-└── Completely unknown types → Any + TypeId (Ch2)
+「N 個の型のうちの 1 つ」を扱いたい？
+├── 既知の閉じたセット → Enum
+├── オープンなセット、ホットパス → ジェネリクス
+├── オープンなセット、コールドパス → dyn Trait
+└── 完全に未知の型 → Any + TypeId（第2章）
 
-Need shared state across threads?
-├── Simple counter/flag → Atomics
-├── Short critical section → Mutex
-├── Read-heavy → RwLock
-├── Lazy one-time init → OnceLock / LazyLock (Ch6)
-└── Complex state → Actor + Channels
+スレッド間で状態を共有したい？
+├── 単純なカウンタ / フラグ → アトミック（Atomics）
+├── 短いクリティカルセクション → Mutex
+├── 読み取り多頻度 → RwLock
+├── 遅延ワンタイム初期化 → OnceLock / LazyLock（第6章）
+└── 複雑な状態 → アクター + チャンネル
 
-Need to parallelize computation?
-├── Collection processing → rayon::par_iter
-├── Background task → thread::spawn
-└── Borrow local data → thread::scope
+計算を並列化したい？
+├── コレクションの処理 → rayon::par_iter
+├── バックグラウンドタスク → thread::spawn
+└── ローカルデータの借用 → thread::scope
 
-Need async I/O or concurrent networking?
-├── Basic → tokio + async/await (Ch15)
-└── Advanced (streams, middleware) → see Async Rust Training
+非同期 I/O や並行ネットワーク処理が必要？
+├── 基本 → tokio + async/await（第16章）
+└── 高度（ストリーム、ミドルウェア） → Async Rust Training を参照
 
-Need error handling?
-├── Library → thiserror (#[derive(Error)])
-└── Application → anyhow (Result<T>)
+エラー処理が必要？
+├── ライブラリ → thiserror (#[derive(Error)])
+└── アプリケーション → anyhow (Result<T>)
 
-Need to prevent a value from being moved?
-└── Pin<T> (Ch8) — required for Futures, self-referential types
+値がムーブされるのを防ぎたい？
+└── Pin<T>（第8章） — Future や自己参照型に必須
 ```
 
-### Trait Bounds Cheat Sheet
+### トレイト境界チートシート
 
-| Bound | Meaning |
+| 境界 | 意味 |
 |-------|---------|
-| `T: Clone` | Can be duplicated |
-| `T: Send` | Can be moved to another thread |
-| `T: Sync` | `&T` can be shared between threads |
-| `T: 'static` | Contains no non-static references |
-| `T: Sized` | Size known at compile time (default) |
-| `T: ?Sized` | Size may not be known (`[T]`, `dyn Trait`) |
-| `T: Unpin` | Safe to move after pinning |
-| `T: Default` | Has a default value |
-| `T: Into<U>` | Can be converted to `U` |
-| `T: AsRef<U>` | Can be borrowed as `&U` |
-| `T: Deref<Target = U>` | Auto-derefs to `&U` |
-| `F: Fn(A) -> B` | Callable, borrows state immutably |
-| `F: FnMut(A) -> B` | Callable, may mutate state |
-| `F: FnOnce(A) -> B` | Callable exactly once, may consume state |
+| `T: Clone` | 複製可能 |
+| `T: Send` | 別のスレッドにムーブ可能 |
+| `T: Sync` | `&T` をスレッド間で共有可能 |
+| `T: 'static` | 非 static な参照を含まない |
+| `T: Sized` | コンパイル時にサイズが既知（デフォルト） |
+| `T: ?Sized` | サイズが未確定の可能性がある（`[T]`, `dyn Trait`） |
+| `T: Unpin` | ピン留め後も安全にムーブ可能 |
+| `T: Default` | デフォルト値を持つ |
+| `T: Into<U>` | `U` に変換可能 |
+| `T: AsRef<U>` | `&U` として借用可能 |
+| `T: Deref<Target = U>` | `&U` へ自動参照外し（auto-deref）可能 |
+| `F: Fn(A) -> B` | 呼び出し可能、状態を不変借用する |
+| `F: FnMut(A) -> B` | 呼び出し可能、状態を可変化できる |
+| `F: FnOnce(A) -> B` | 1回のみ呼び出し可能、状態を消費（ムーブ）する可能性がある |
 
-### Lifetime Elision Rules
+### ライフタイム省略ルール
 
-The compiler inserts lifetimes automatically in three cases (so you don't have to):
+コンパイラは以下の3つのケースにおいて、ライフタイムを自動的に補完します（そのため手動で記述する必要がありません）:
 
 ```rust
-// Rule 1: Each reference parameter gets its own lifetime
+// ルール 1: 各参照パラメータはそれぞれ固有のライフタイムを持つ
 // fn foo(x: &str, y: &str)  →  fn foo<'a, 'b>(x: &'a str, y: &'b str)
 
-// Rule 2: If there's exactly ONE input lifetime, it's used for all outputs
+// ルール 2: 入力ライフタイムがちょうど 1 つだけ存在する場合、それがすべての出力に適用される
 // fn foo(x: &str) -> &str   →  fn foo<'a>(x: &'a str) -> &'a str
 
-// Rule 3: If one parameter is &self or &mut self, its lifetime is used
+// ルール 3: パラメータの 1 つが &self または &mut self である場合、そのライフタイムが出力に適用される
 // fn foo(&self, x: &str) -> &str  →  fn foo<'a>(&'a self, x: &str) -> &'a str
 ```
 
-**When you MUST write explicit lifetimes**:
-- Multiple input references and a reference output (compiler can't guess which input)
-- Struct fields that hold references: `struct Ref<'a> { data: &'a str }`
-- `'static` bounds when you need data without borrowed references
+**明示的なライフタイムの記述が必須となるケース**:
+- 複数の入力参照があり、かつ戻り値が参照である場合（どの入力のライフタイムを引き継ぐかをコンパイラが判断できない）
+- 参照を保持する構造体のフィールド: `struct Ref<'a> { data: &'a str }`
+- 借用参照を持たないデータを要求する際の `'static` 境界
 
-### Common Derive Traits
+### よく使われる Derive トレイト
 
 ```rust
 #[derive(
-    Debug,          // {:?} formatting
+    Debug,          // {:?} フォーマット出力
     Clone,          // .clone()
-    Copy,           // Implicit copy (only for simple types)
-    PartialEq, Eq,  // == comparison
-    PartialOrd, Ord, // < > comparison + sorting
-    Hash,           // HashMap/HashSet key
+    Copy,           // 暗黙のコピー（単純な型のみ）
+    PartialEq, Eq,  // == 比較
+    PartialOrd, Ord, // < > 比較 + ソート
+    Hash,           // HashMap/HashSet のキー
     Default,        // Type::default()
 )]
 struct MyType { /* ... */ }
 ```
 
-### Module Visibility Quick Reference
+### モジュール可視性クイックリファレンス
 
 ```text
-pub           → visible everywhere
-pub(crate)    → visible within the crate
-pub(super)    → visible to parent module
-pub(in path)  → visible within a specific path
-(nothing)     → private to current module + children
+pub           → すべての場所から可視
+pub(crate)    → クレート内でのみ可視
+pub(super)    → 親モジュールから可視
+pub(in path)  → 指定されたパス内から可視
+(なし)        → 現在のモジュールとその子モジュールにのみ非公開（private）
 ```
 
-### Further Reading
+### 参考資料・推薦図書
 
-| Resource | Why |
+| リソース | 推薦理由 |
 |----------|-----|
-| [Rust Design Patterns](https://rust-unofficial.github.io/patterns/) | Catalog of idiomatic patterns and anti-patterns |
-| [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/) | Official checklist for polished public APIs |
-| [Rust Atomics and Locks](https://marabos.nl/atomics/) | Mara Bos's deep dive into concurrency primitives |
-| [The Rustonomicon](https://doc.rust-lang.org/nomicon/) | Official guide to unsafe Rust and dark corners |
-| [Error Handling in Rust](https://blog.burntsushi.net/rust-error-handling/) | Andrew Gallant's comprehensive guide |
-| [Jon Gjengset — Crust of Rust series](https://www.youtube.com/playlist?list=PLqbS7AVVErFiWDOAVrPt7aYmnuuOLYvOa) | Deep dives into iterators, lifetimes, channels, etc. |
-| [Effective Rust](https://www.lurklurk.org/effective-rust/) | 35 specific ways to improve your Rust code |
+| [Rust Design Patterns](https://rust-unofficial.github.io/patterns/) | 慣用的なパターンとアンチパターンのカタログ |
+| [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/) | 洗練された公開 API のための公式チェックリスト |
+| [Rust Atomics and Locks](https://marabos.nl/atomics/) | Mara Bos 氏による並行性プリミティブの徹底解説 |
+| [The Rustonomicon](https://doc.rust-lang.org/nomicon/) | Unsafe Rust とダークサイドに関する公式ガイド |
+| [Error Handling in Rust](https://blog.burntsushi.net/rust-error-handling/) | Andrew Gallant 氏による包括的なエラー処理ガイド |
+| [Jon Gjengset — Crust of Rust series](https://www.youtube.com/playlist?list=PLqbS7AVVErFiWDOAVrPt7aYmnuuOLYvOa) | イテレータ、ライフタイム、チャンネルなどの深掘り動画シリーズ |
+| [Effective Rust](https://www.lurklurk.org/effective-rust/) | Rust コードを改善するための35の具体的な実践手法 |
 
 ***
 
-*End of Rust Patterns & Engineering How-Tos*
-
+*Rust パターン & エンジニアリング How-To 完*

@@ -1,89 +1,89 @@
-## Speaker Intro and General Approach
+## 講師紹介と全体的な進め方
 
-- Speaker intro
-    - Principal Firmware Architect in Microsoft SCHIE (Silicon and Cloud Hardware Infrastructure Engineering) team
-    - Industry veteran with expertise in security, systems programming (firmware, operating systems, hypervisors), CPU and platform architecture, and C++ systems
-    - Started programming in Rust in 2017 (@AWS EC2), and have been in love with the language ever since
-- This course is intended to be as interactive as possible
-    - Assumption: You know C# and .NET development
-    - Examples deliberately map C# concepts to Rust equivalents
-    - **Please feel free to ask clarifying questions at any point of time**
+- 講師紹介
+    - Microsoft SCHIE (Silicon and Cloud Hardware Infrastructure Engineering) チームのプリンシパルファームウェアアーキテクト
+    - セキュリティ、システムプログラミング（ファームウェア、OS、ハイパーバイザ）、CPU およびプラットフォームアーキテクチャ、C++ システムにおける長年の業界経験
+    - 2017年（AWS EC2 在籍時）に Rust でのプログラミングを始め、以来その魅力に惹かれ続けている
+- 本コースは可能な限りインタラクティブに進めることを目指しています
+    - 前提条件: C# および .NET 開発の知識があること
+    - 意図的に C# の概念を Rust の対応する概念にマッピングした具体例を提示します
+    - **疑問点があれば、いつでも遠慮なく質問してください**
 
 ---
 
-## The Case for Rust for C# Developers
+## C# 開発者にとっての Rust の価値
 
-> **What you'll learn:** Why Rust matters for C# developers — the performance gap between managed and native code,
-> how Rust eliminates null-reference exceptions and hidden control flow at compile time,
-> and the key scenarios where Rust complements or replaces C#.
+> **学習内容:** C# 開発者にとって Rust が重要である理由 — マネージドコードとネイティブコードの性能差、
+> Rust がコンパイル時に null 参照例外や隠れた制御フローを排除する仕組み、
+> そして Rust が C# を補完または代替する主要なユースケースについて学びます。
 >
-> **Difficulty:** 🟢 Beginner
+> **難易度:** 🟢 初級
 
-### Performance Without the Runtime Tax
+### ランタイムのオーバーヘッドを伴わないパフォーマンス
 ```csharp
-// C# - Great productivity, runtime overhead
+// C# - 高い生産性、ランタイムオーバーヘッド
 public class DataProcessor
 {
     private List<int> data = new List<int>();
     
     public void ProcessLargeDataset()
     {
-        // Allocations trigger GC
+        // 割り当てによりGCが発生
         for (int i = 0; i < 10_000_000; i++)
         {
-            data.Add(i * 2); // GC pressure
+            data.Add(i * 2); // GCへの負荷
         }
-        // Unpredictable GC pauses during processing
+        // 処理中に予期せぬGCの一時停止が発生する可能性
     }
 }
-// Runtime: Variable (50-200ms due to GC)
-// Memory: ~80MB (including GC overhead)
-// Predictability: Low (GC pauses)
+// 実行時間: 変動あり（GCにより50〜200ms）
+// メモリ: 約80MB（GCオーバーヘッドを含む）
+// 予測可能性: 低（GCの一時停止）
 ```
 
 ```rust
-// Rust - Same expressiveness, zero runtime overhead
+// Rust - 同等の表現力、ゼロランタイムオーバーヘッド
 struct DataProcessor {
     data: Vec<i32>,
 }
 
 impl DataProcessor {
     fn process_large_dataset(&mut self) {
-        // Zero-cost abstractions
+        // ゼロコスト抽象化
         for i in 0..10_000_000 {
-            self.data.push(i * 2); // No GC pressure
+            self.data.push(i * 2); // GCへの負荷なし
         }
-        // Deterministic performance
+        // 決定論的なパフォーマンス
     }
 }
-// Runtime: Consistent (~30ms)
-// Memory: ~40MB (exact allocation)
-// Predictability: High (no GC)
+// 実行時間: 一貫（約30ms）
+// メモリ: 約40MB（必要な分だけの正確な割り当て）
+// 予測可能性: 高（GCなし）
 ```
 
-### Memory Safety Without Runtime Checks
+### ランタイムチェックなしでのメモリ安全性
 ```csharp
-// C# - Runtime safety with overhead
+// C# - オーバーヘッドを伴うランタイム安全性
 public class RuntimeCheckedOperations
 {
     public string? ProcessArray(int[] array)
     {
-        // Runtime bounds checking on every access
+        // アクセスごとにランタイム境界チェック
         if (array.Length > 0)
         {
-            return array[0].ToString(); // Safe — int is a value type, never null
+            return array[0].ToString(); // 安全 — int は値型であり null にはならない
         }
-        return null; // Nullable return (string? with C# 8+ nullable reference types)
+        return null; // Null 許容の戻り値（C# 8+ の Null 許容参照型 string?）
     }
     
     public void ProcessConcurrently()
     {
         var list = new List<int>();
         
-        // Data races possible, requires careful locking
+        // データ競合が発生しうるため、慎重なロックが必要
         Parallel.For(0, 1000, i =>
         {
-            lock (list) // Runtime overhead
+            lock (list) // ランタイムオーバーヘッド
             {
                 list.Add(i);
             }
@@ -93,15 +93,15 @@ public class RuntimeCheckedOperations
 ```
 
 ```rust
-// Rust - Compile-time safety with zero runtime cost
+// Rust - ランタイムコストゼロのコンパイル時安全性
 struct SafeOperations;
 
 impl SafeOperations {
-    // Compile-time null safety, no runtime checks
+    // コンパイル時の Null 安全性、ランタイムチェックなし
     fn process_array(array: &[i32]) -> Option<String> {
         array.first().map(|x| x.to_string())
-        // No null references possible
-        // Bounds checking optimized away when provably safe
+        // Null 参照は発生不可能
+        // 安全性が証明可能な場合、境界チェックは最適化により除去される
     }
     
     fn process_concurrently() {
@@ -110,7 +110,7 @@ impl SafeOperations {
         
         let data = Arc::new(Mutex::new(Vec::new()));
         
-        // Data races prevented at compile time
+        // データ競合はコンパイル時に防止される
         let handles: Vec<_> = (0..1000).map(|i| {
             let data = Arc::clone(&data);
             thread::spawn(move || {
@@ -127,33 +127,33 @@ impl SafeOperations {
 
 ***
 
-## Common C# Pain Points That Rust Addresses
+## Rust が解決する C# の代表的な課題
 
-### 1. The Billion Dollar Mistake: Null References
+### 1. 「10億ドルの間違い」: Null 参照
 ```csharp
-// C# - Null reference exceptions are runtime bombs
+// C# - NullReferenceException は実行時の時限爆弾
 public class UserService
 {
     public string GetUserDisplayName(User user)
     {
-        // Any of these could throw NullReferenceException
+        // これらのどこからでも NullReferenceException がスローされる可能性がある
         return user.Profile.DisplayName.ToUpper();
         //     ^^^^^ ^^^^^^^ ^^^^^^^^^^^ ^^^^^^^
-        //     Could be null at runtime
+        //     実行時に null になる可能性がある
     }
     
-    // Nullable reference types (C# 8+) help, but nulls can still slip through
+    // Null 許容参照型（C# 8+）は有用だが、依然として null がすり抜けることがある
     public string GetDisplayName(User? user)
     {
         return user?.Profile?.DisplayName?.ToUpper() ?? "Unknown";
-        // This specific line is null-safe thanks to ?. and ??,
-        // but NRTs are advisory — the compiler can be overridden with `!`
+        // この行自体は ?. と ?? により Null 安全だが、
+        // NRT（Null許容参照型）は警告ベースであり、`!` 演算子でコンパイラを抑制できてしまう
     }
 }
 ```
 
 ```rust
-// Rust - Null safety guaranteed at compile time
+// Rust - コンパイル時に保証される Null 安全性
 struct UserService;
 
 impl UserService {
@@ -161,8 +161,8 @@ impl UserService {
         user.profile.as_ref()?
             .display_name.as_ref()
             .map(|name| name.to_uppercase())
-        // Compiler forces you to handle None case
-        // Impossible to have null pointer exceptions
+        // コンパイラにより None ケースの処理が強制される
+        // ヌルポインタ例外の発生は不可能
     }
     
     fn get_display_name_safe(user: Option<&User>) -> String {
@@ -170,28 +170,28 @@ impl UserService {
             .and_then(|p| p.display_name.as_ref())
             .map(|name| name.to_uppercase())
             .unwrap_or_else(|| "Unknown".to_string())
-        // Explicit handling, no surprises
+        // 明示的な処理、想定外の挙動なし
     }
 }
 ```
 
-### 2. Hidden Exceptions and Control Flow
+### 2. 隠れた例外と制御フロー
 ```csharp
-// C# - Exceptions can be thrown from anywhere
+// C# - 例外はどこからでもスローされうる
 public async Task<UserData> GetUserDataAsync(int userId)
 {
-    // Each of these might throw different exceptions
+    // これらはそれぞれ異なる例外をスローする可能性がある
     var user = await userRepository.GetAsync(userId);        // SqlException
     var permissions = await permissionService.GetAsync(user); // HttpRequestException  
     var preferences = await preferenceService.GetAsync(user); // TimeoutException
     
     return new UserData(user, permissions, preferences);
-    // Caller has no idea what exceptions to expect
+    // 呼び出し側にはどのような例外が飛んでくるか分からない
 }
 ```
 
 ```rust
-// Rust - All errors explicit in function signatures
+// Rust - すべてのエラーが関数シグネチャに明示される
 #[derive(Debug)]
 enum UserDataError {
     DatabaseError(String),
@@ -201,7 +201,7 @@ enum UserDataError {
 }
 
 async fn get_user_data(user_id: i32) -> Result<UserData, UserDataError> {
-    // All errors explicit and handled
+    // すべてのエラーが明示的かつ処理済み
     let user = user_repository.get(user_id).await
         .map_err(UserDataError::DatabaseError)?;
     
@@ -212,19 +212,19 @@ async fn get_user_data(user_id: i32) -> Result<UserData, UserDataError> {
         .map_err(|_| UserDataError::Timeout)?;
     
     Ok(UserData::new(user, permissions, preferences))
-    // Caller knows exactly what errors are possible
+    // 呼び出し側はどのようなエラーが発生しうるか正確に把握できる
 }
 ```
 
-### 3. Correctness: The Type System as a Proof Engine
+### 3. 正確性: 証明エンジンとしての型システム
 
-Rust's type system catches entire categories of logic bugs at compile time that C# can only catch at runtime — or not at all.
+Rust の型システムは、C# では実行時にしか検出できない（あるいはまったく検出できない）論理バグのカテゴリ全体を、コンパイル時に捕捉します。
 
-#### ADTs vs Sealed-Class Workarounds
+#### 代数的データ型（ADT）vs sealed クラスによる代替策
 ```csharp
-// C# — Discriminated unions require sealed-class boilerplate.
-// The compiler warns about missing cases (CS8524) ONLY when there's no _ catch-all.
-// In practice, most C# code uses _ as a default, which silences the warning.
+// C# — 判別共用体（Discriminated Union）を模倣するには sealed クラスのボイラープレートが必要
+// コンパイラが未処理ケースを警告（CS8524）するのは、`_` の包括パターン（catch-all）がない場合のみ
+// 実際の C# コードではデフォルトとして `_` が使われることが多く、警告がもみ消されてしまう
 public abstract record Shape;
 public sealed record Circle(double Radius)   : Shape;
 public sealed record Rectangle(double W, double H) : Shape;
@@ -234,15 +234,15 @@ public static double Area(Shape shape) => shape switch
 {
     Circle c    => Math.PI * c.Radius * c.Radius,
     Rectangle r => r.W * r.H,
-    // Forgot Triangle? The _ catch-all silences any compiler warning.
+    // Triangle を忘れていませんか？ `_` の包括パターンによりコンパイラ警告は抑制されてしまう
     _           => throw new ArgumentException("Unknown shape")
 };
-// Add a new variant six months later — the _ pattern hides the missing case.
-// No compiler warning tells you about the 47 switch expressions you need to update.
+// 半年後に新しいバリアントを追加しても、`_` パターンが未処理ケースを隠してしまう
+// 更新が必要な 47 箇所の switch 式をコンパイラ警告で教えてくれることはない
 ```
 
 ```rust
-// Rust — ADTs + exhaustive matching = compile-time proof
+// Rust — 代数的データ型（ADT）+ 網羅的マッチング = コンパイル時の証明
 enum Shape {
     Circle { radius: f64 },
     Rectangle { w: f64, h: f64 },
@@ -253,36 +253,36 @@ fn area(shape: &Shape) -> f64 {
     match shape {
         Shape::Circle { radius }    => std::f64::consts::PI * radius * radius,
         Shape::Rectangle { w, h }   => w * h,
-        // Forget Triangle? ERROR: non-exhaustive pattern
+        // Triangle を忘れた場合 → コンパイルエラー: non-exhaustive pattern（非網羅的パターン）
         Shape::Triangle { a, b, c } => {
             let s = (a + b + c) / 2.0;
             (s * (s - a) * (s - b) * (s - c)).sqrt()
         }
     }
 }
-// Add a new variant → compiler shows you EVERY match that needs updating.
+// 新しいバリアントを追加すると、コンパイラが更新が必要なすべての match を指摘してくれる
 ```
 
-#### Immutability by Default vs Opt-In Immutability
+#### デフォルトの不変性 vs オプトインの不変性
 ```csharp
-// C# — Everything is mutable by default
+// C# — デフォルトですべてが可変
 public class Config
 {
-    public string Host { get; set; }   // Mutable by default
+    public string Host { get; set; }   // デフォルトで可変
     public int Port { get; set; }
 }
 
-// "readonly" and "record" help, but don't prevent deep mutation:
+// "readonly" や "record" は役立つが、ディープな変更（参照先の変更）は防げない:
 public record ServerConfig(string Host, int Port, List<string> AllowedOrigins);
 
 var config = new ServerConfig("localhost", 8080, new List<string> { "*.example.com" });
-// Records are "immutable" but reference-type fields are NOT:
-config.AllowedOrigins.Add("*.evil.com"); // Compiles and mutates! ← bug
-// The compiler gives you no warning.
+// レコード自体は「不変」だが、参照型のフィールドの中身は不変ではない:
+config.AllowedOrigins.Add("*.evil.com"); // コンパイルが通り、変更できてしまう！ ← バグ
+// コンパイラは一切警告を出さない
 ```
 
 ```rust
-// Rust — Immutable by default, mutation is explicit and visible
+// Rust — デフォルトで不変、変更は明示的かつ可視化される
 struct Config {
     host: String,
     port: u16,
@@ -295,57 +295,57 @@ let config = Config {
     allowed_origins: vec!["*.example.com".into()],
 };
 
-// config.allowed_origins.push("*.evil.com".into()); // ERROR: cannot borrow as mutable
+// config.allowed_origins.push("*.evil.com".into()); // エラー: 可変として借用できない
 
-// Mutation requires explicit opt-in:
+// 変更には明示的なオプトイン（mut）が必要:
 let mut config = config;
-config.allowed_origins.push("*.safe.com".into()); // OK — visibly mutable
+config.allowed_origins.push("*.safe.com".into()); // OK — 明示的に可変
 
-// "mut" in the signature tells every reader: "this function modifies data"
+// シグネチャ内の "mut" は読む人すべてに「この関数はデータを変更する」と伝える
 fn add_origin(config: &mut Config, origin: String) {
     config.allowed_origins.push(origin);
 }
 ```
 
-#### Functional Programming: First-Class vs Afterthought
+#### 関数型プログラミング: 第一級市民 vs 後付けの機能
 ```csharp
-// C# — FP bolted on; LINQ is expressive but the language fights you
+// C# — 関数型機能は後付け。LINQ は表現力豊かだが言語自体の制約と戦うことになる
 public IEnumerable<Order> GetHighValueOrders(IEnumerable<Order> orders)
 {
     return orders
-        .Where(o => o.Total > 1000)   // Func<Order, bool> — heap-allocated delegate
-        .Select(o => new OrderSummary  // Anonymous type or extra class
+        .Where(o => o.Total > 1000)   // Func<Order, bool> — ヒープ割り当てされるデリゲート
+        .Select(o => new OrderSummary  // 匿名型または追加のクラス
         {
             Id = o.Id,
             Total = o.Total
         })
         .OrderByDescending(o => o.Total);
-    // No exhaustive matching on results
-    // Null can sneak in anywhere in the pipeline
-    // Can't enforce purity — any lambda might have side effects
+    // 結果に対する網羅的マッチングはできない
+    // パイプラインのどこにでも null が混入する可能性がある
+    // 純粋性を強制できない — 任意のラムダが副作用を持つ可能性がある
 }
 ```
 
 ```rust
-// Rust — FP is a first-class citizen
+// Rust — 関数型プログラミングは第一級市民
 fn get_high_value_orders(orders: &[Order]) -> Vec<OrderSummary> {
     orders.iter()
-        .filter(|o| o.total > 1000)      // Zero-cost closure, no heap allocation
-        .map(|o| OrderSummary {           // Type-checked struct
+        .filter(|o| o.total > 1000)      // ゼロコストクロージャ、ヒープ割り当てなし
+        .map(|o| OrderSummary {           // 型チェックされる構造体
             id: o.id,
             total: o.total,
         })
         .sorted_by(|a, b| b.total.cmp(&a.total)) // itertools
         .collect()
-    // No nulls anywhere in the pipeline
-    // Closures are monomorphized — zero overhead vs hand-written loops
-    // Purity enforced: &[Order] means the function CAN'T modify orders
+    // パイプラインのどこにも null は存在しない
+    // クロージャは単相化（モノモーフィズム）され、手書きループと同一のゼロオーバーヘッド
+    // 純粋性の強制: &[Order] はこの関数が orders を変更できないことを意味する
 }
 ```
 
-#### Inheritance: Elegant in Theory, Fragile in Practice
+#### 継承: 理論上はエレガント、実際には脆弱
 ```csharp
-// C# — The fragile base class problem
+// C# — 脆弱な基底クラス問題（Fragile Base Class Problem）
 public class Animal
 {
     public virtual string Speak() => "...";
@@ -359,20 +359,20 @@ public class Dog : Animal
 
 public class RobotDog : Dog
 {
-    // Which Speak() does Greet() call? What if Dog changes?
-    // Diamond problem with interfaces + default methods
-    // Tight coupling: changing Animal can break RobotDog silently
+    // Greet() はどちらの Speak() を呼ぶのか？ Dog が変更されたらどうなるのか？
+    // インターフェース + デフォルトメソッドによるダイヤモンド問題
+    // 密結合: Animal の変更により RobotDog が気付かぬうちに壊れる可能性
 }
 
-// Common C# anti-patterns:
-// - God base classes with 20 virtual methods
-// - Deep hierarchies (5+ levels) nobody can reason about
-// - "protected" fields creating hidden coupling
-// - Base class changes silently altering derived behavior
+// C# でよくあるアンチパターン:
+// - 20個もの仮想メソッドを持つ神基底クラス
+// - 誰も全貌を把握できない深い継承階層（5階層以上）
+// - 隠れた結合を生み出す "protected" フィールド
+// - 基底クラスの変更が派生クラスの挙動を意図せず変更してしまう問題
 ```
 
 ```rust
-// Rust — Composition over inheritance, enforced by the language
+// Rust — 継承よりコンポジション、言語によって強制される設計
 trait Speaker {
     fn speak(&self) -> &str;
 }
@@ -387,149 +387,146 @@ struct Dog;
 impl Speaker for Dog {
     fn speak(&self) -> &str { "Woof!" }
 }
-impl Greeter for Dog {} // Uses default greet()
+impl Greeter for Dog {} // デフォルトの greet() を使用
 
 struct RobotDog {
-    voice: String, // Composition: owns its own data
+    voice: String, // コンポジション: 自身のデータを所有
 }
 impl Speaker for RobotDog {
     fn speak(&self) -> &str { &self.voice }
 }
-impl Greeter for RobotDog {} // Clear, explicit behavior
+impl Greeter for RobotDog {} // 明確で明示的な挙動
 
-// No fragile base class problem — no base classes at all
-// No hidden coupling — traits are explicit contracts
-// No diamond problem — trait coherence rules prevent ambiguity
-// Adding a method to Speaker? Compiler tells you everywhere to implement it.
+// 脆弱な基底クラス問題は皆無 — そもそも基底クラスが存在しない
+// 隠れた結合なし — トレイトは明示的な規約（コントラクト）
+// ダイヤモンド問題なし — トレイトの一貫性（コヒーレンス）ルールがあいまいさを排除
+// Speaker にメソッドを追加した？ コンパイラが実装が必要な箇所をすべて教えてくれる
 ```
 
-> **Key insight**: In C#, correctness is a discipline — you hope developers
-> follow conventions, write tests, and catch edge cases in code review.
-> In Rust, correctness is a **property of the type system** — entire
-> categories of bugs (null derefs, forgotten variants, accidental mutation,
-> data races) are structurally impossible.
+> **重要な洞察**: C# では、正確性は「規律」に依存します — 開発者が慣例に従い、テストを書き、コードレビューでエッジケースを拾ってくれることを期待します。
+> 一方 Rust では、正確性は**型システムの特性**です — バグのカテゴリ全体（ヌルポインタ参照、考慮漏れのバリアント、意図しない変更、データ競合）が構造的に発生不可能な仕組みになっています。
 
 ***
 
-### 4. Unpredictable Performance Due to GC
+### 4. GC による予測不能なパフォーマンス
 ```csharp
-// C# - GC can pause at any time
+// C# - GC はいつでも一時停止を引き起こす可能性がある
 public class HighFrequencyTrader
 {
     private List<Trade> trades = new List<Trade>();
     
     public void ProcessMarketData(MarketTick tick)
     {
-        // Allocations can trigger GC at worst possible moment
+        // メモリ割り当てが最悪のタイミングで GC を誘発する可能性がある
         var analysis = new MarketAnalysis(tick);
         trades.Add(new Trade(analysis.Signal, tick.Price));
         
-        // GC might pause here during critical market moment
-        // Pause duration: 1-100ms depending on heap size
+        // 市場の決定的な瞬間にここで GC の一時停止が発生する可能性がある
+        // 一時停止時間: ヒープサイズに応じて 1〜100ms
     }
 }
 ```
 
 ```rust
-// Rust - Predictable, deterministic performance
+// Rust - 予測可能で決定論的なパフォーマンス
 struct HighFrequencyTrader {
     trades: Vec<Trade>,
 }
 
 impl HighFrequencyTrader {
     fn process_market_data(&mut self, tick: MarketTick) {
-        // Extract Copy field before moving `tick` into analysis
+        // `tick` を analysis にムーブする前に Copy フィールドを抽出
         let price = tick.price;
 
-        // Zero allocations, predictable performance
+        // メモリ割り当てなし、予測可能なパフォーマンス
         let analysis = MarketAnalysis::from(tick);
         self.trades.push(Trade::new(analysis.signal(), price));
         
-        // No GC pauses, consistent sub-microsecond latency
-        // Performance guaranteed by type system
+        // GC による停止なし、1マイクロ秒未満の一貫したレイテンシ
+        // 型システムによって保証されるパフォーマンス
     }
 }
 ```
 
 ***
 
-## When to Choose Rust Over C#
+## C# ではなく Rust を選ぶべき場面
 
-### ✅ Choose Rust When:
-- **Correctness matters**: State machines, protocol implementations, financial logic — where a missed case is a production incident, not a test failure
-- **Performance is critical**: Real-time systems, high-frequency trading, game engines
-- **Memory usage matters**: Embedded systems, cloud costs, mobile applications
-- **Predictability required**: Medical devices, automotive, financial systems
-- **Security is paramount**: Cryptography, network security, system-level code
-- **Long-running services**: Where GC pauses cause issues
-- **Resource-constrained environments**: IoT, edge computing
-- **System programming**: CLI tools, databases, web servers, operating systems
+### ✅ Rust を選ぶべき場面:
+- **正確性が極めて重要な場合**: ステートマシン、プロトコル実装、金融ロジック — ケースの考慮漏れがテストの失敗ではなく本番インシデントに直結する場面
+- **パフォーマンスが決定的な場合**: リアルタイムシステム、高頻度取引（HFT）、ゲームエンジン
+- **メモリ使用量が重要な場合**: 組込みシステム、クラウドコスト削減、モバイルアプリケーション
+- **予測可能性が求められる場合**: 医療機器、自動車、金融システム
+- **セキュリティが最重要の場合**: 暗号処理、ネットワークセキュリティ、システムレベルのコード
+- **長時間稼働するサービス**: GC の停止が問題となるサービス
+- **リソース制約のある環境**: IoT、エッジコンピューティング
+- **システムプログラミング**: CLI ツール、データベース、Web サーバー、オペレーティングシステム
 
-### ✅ Stay with C# When:
-- **Rapid application development**: Business applications, CRUD applications
-- **Large existing codebase**: When migration cost is prohibitive
-- **Team expertise**: When Rust learning curve doesn't justify benefits
-- **Enterprise integrations**: Heavy .NET Framework/Windows dependencies
-- **GUI applications**: WPF, WinUI, Blazor ecosystems
-- **Time to market**: When development speed trumps performance
+### ✅ C# を継続すべき場面:
+- **迅速なアプリケーション開発（RAD）**: ビジネスアプリケーション、CRUD アプリケーション
+- **大規模な既存コードベース**: 移行コストが見合わない場合
+- **チームのスキルセット**: Rust の学習コストがもたらす利益を上回る場合
+- **エンタープライズ統合**: .NET Framework や Windows への依存度が高い場合
+- **GUI アプリケーション**: WPF、WinUI、Blazor エコシステム
+- **Time to Market（市場投入速度）**: パフォーマンスよりも開発速度が優先される場合
 
-### 🔄 Consider Both (Hybrid Approach):
-- **Performance-critical components in Rust**: Called from C# via P/Invoke
-- **Business logic in C#**: Familiar, productive development
-- **Gradual migration**: Start with new services in Rust
-
-***
-
-## Real-World Impact: Why Companies Choose Rust
-
-### Dropbox: Storage Infrastructure
-- **Before (Python)**: High CPU usage, memory overhead
-- **After (Rust)**: 10x performance improvement, 50% memory reduction
-- **Result**: Millions saved in infrastructure costs
-
-### Discord: Voice/Video Backend  
-- **Before (Go)**: GC pauses causing audio drops
-- **After (Rust)**: Consistent low-latency performance
-- **Result**: Better user experience, reduced server costs
-
-### Microsoft: Windows Components
-- **Rust in Windows**: File system, networking stack components
-- **Benefit**: Memory safety without performance cost
-- **Impact**: Fewer security vulnerabilities, same performance
-
-### Why This Matters for C# Developers:
-1. **Complementary skills**: Rust and C# solve different problems
-2. **Career growth**: Systems programming expertise increasingly valuable
-3. **Performance understanding**: Learn zero-cost abstractions
-4. **Safety mindset**: Apply ownership thinking to any language
-5. **Cloud costs**: Performance directly impacts infrastructure spend
+### 🔄 両者の併用（ハイブリッドアプローチ）を検討すべき場面:
+- **パフォーマンスが重要なコンポーネントを Rust で実装**: P/Invoke 経由で C# から呼び出す
+- **ビジネスロジックは C# で記述**: 慣れ親しんだ高い生産性での開発
+- **段階的な移行**: 新規サービスから Rust を採用し始める
 
 ***
 
-## Language Philosophy Comparison
+## 実世界でのインパクト: 企業が Rust を選ぶ理由
 
-### C# Philosophy
-- **Productivity first**: Rich tooling, extensive framework, "pit of success"
-- **Managed runtime**: Garbage collection handles memory automatically
-- **Enterprise-focused**: Strong typing with reflection, extensive standard library
-- **Object-oriented**: Classes, inheritance, interfaces as primary abstractions
+### Dropbox: ストレージインフラ
+- **導入前 (Python)**: 高い CPU 使用率、メモリオーバーヘッド
+- **導入後 (Rust)**: パフォーマンスが10倍向上、メモリ使用量が50%削減
+- **成果**: 数百万ドル規模のインフラコスト削減
 
-### Rust Philosophy
-- **Performance without sacrifice**: Zero-cost abstractions, no runtime overhead
-- **Memory safety**: Compile-time guarantees prevent crashes and security vulnerabilities
-- **Systems programming**: Direct hardware access with high-level abstractions
-- **Functional + systems**: Immutability by default, ownership-based resource management
+### Discord: 音声/動画バックエンド  
+- **導入前 (Go)**: GC の一時停止による音声の途切れ
+- **導入後 (Rust)**: 一貫した低レイテンシパフォーマンス
+- **成果**: ユーザー体験の向上、サーバーコストの削減
+
+### Microsoft: Windows コンポーネント
+- **Windows における Rust**: ファイルシステム、ネットワークスタックの各コンポーネント
+- **メリット**: パフォーマンスを犠牲にしないメモリ安全性
+- **成果**: パフォーマンスを維持したまま、セキュリティ脆弱性を大幅に削減
+
+### C# 開発者にとってこれが重要である理由:
+1. **補完的なスキル**: Rust と C# はそれぞれ異なる課題を解決します
+2. **キャリアの成長**: システムプログラミングの専門知識の価値は高まり続けています
+3. **パフォーマンスへの深い理解**: ゼロコスト抽象化の仕組みを学べます
+4. **安全性へのマインドセット**: 所有権の考え方はあらゆる言語のコーディングに応用できます
+5. **クラウドコストの削減**: パフォーマンスはインフラ費用に直結します
+
+***
+
+## 言語設計哲学の比較
+
+### C# の設計哲学
+- **生産性最優先**: 充実したツール群、広範なフレームワーク、「成功への落とし穴（Pit of Success）」
+- **マネージドランタイム**: ガベージコレクションがメモリを自動管理
+- **エンタープライズ重視**: リフレクションを備えた強い型付け、広範な標準ライブラリ
+- **オブジェクト指向**: クラス、継承、インターフェースを主要な抽象化として採用
+
+### Rust の設計哲学
+- **妥協なきパフォーマンス**: ゼロコスト抽象化、ランタイムオーバーヘッドなし
+- **メモリ安全性**: コンパイル時の保証によりクラッシュやセキュリティ脆弱性を防止
+- **システムプログラミング**: 高水準な抽象化を保ちつつハードウェアへ直接アクセス
+- **関数型 ＋ システム指向**: デフォルトで不変、所有権に基づくリソース管理
 
 ```mermaid
 graph TD
-    subgraph "C# Development Model"
-        CS_CODE["C# Source Code<br/>Classes, Methods, Properties"]
-        CS_COMPILE["C# Compiler<br/>(csc.exe)"]
-        CS_IL["Intermediate Language<br/>(IL bytecode)"]
-        CS_RUNTIME[".NET Runtime<br/>(CLR)"]
-        CS_JIT["Just-In-Time Compiler"]
-        CS_NATIVE["Native Machine Code"]
-        CS_GC["Garbage Collector<br/>(Memory management)"]
+    subgraph "C# 開発モデル"
+        CS_CODE["C# ソースコード<br/>クラス、メソッド、プロパティ"]
+        CS_COMPILE["C# コンパイラ<br/>(csc.exe)"]
+        CS_IL["中間言語<br/>(IL バイトコード)"]
+        CS_RUNTIME[".NET ランタイム<br/>(CLR)"]
+        CS_JIT["JIT（Just-In-Time）コンパイラ"]
+        CS_NATIVE["ネイティブ機械語コード"]
+        CS_GC["ガベージコレクタ<br/>(メモリ管理)"]
         
         CS_CODE --> CS_COMPILE
         CS_COMPILE --> CS_IL
@@ -538,20 +535,20 @@ graph TD
         CS_JIT --> CS_NATIVE
         CS_RUNTIME --> CS_GC
         
-        CS_BENEFITS["[OK] Fast development<br/>[OK] Rich ecosystem<br/>[OK] Automatic memory management<br/>[ERROR] Runtime overhead<br/>[ERROR] GC pauses<br/>[ERROR] Platform dependency"]
+        CS_BENEFITS["[OK] 高速な開発速度<br/>[OK] 豊富なエコシステム<br/>[OK] 自動メモリ管理<br/>[ERROR] ランタイムオーバーヘッド<br/>[ERROR] GC の一時停止<br/>[ERROR] プラットフォーム依存性"]
     end
     
-    subgraph "Rust Development Model"
-        RUST_CODE["Rust Source Code<br/>Structs, Enums, Functions"]
-        RUST_COMPILE["Rust Compiler<br/>(rustc)"]
-        RUST_NATIVE["Native Machine Code<br/>(Direct compilation)"]
-        RUST_ZERO["Zero Runtime<br/>(No VM, No GC)"]
+    subgraph "Rust 開発モデル"
+        RUST_CODE["Rust ソースコード<br/>構造体、列挙型、関数"]
+        RUST_COMPILE["Rust コンパイラ<br/>(rustc)"]
+        RUST_NATIVE["ネイティブ機械語コード<br/>(直接コンパイル)"]
+        RUST_ZERO["ランタイムなし<br/>(VMなし、GCなし)"]
         
         RUST_CODE --> RUST_COMPILE
         RUST_COMPILE --> RUST_NATIVE
         RUST_NATIVE --> RUST_ZERO
         
-        RUST_BENEFITS["[OK] Maximum performance<br/>[OK] Memory safety<br/>[OK] No runtime dependencies<br/>[ERROR] Steeper learning curve<br/>[ERROR] Longer compile times<br/>[ERROR] More explicit code"]
+        RUST_BENEFITS["[OK] 最大限のパフォーマンス<br/>[OK] メモリ安全性<br/>[OK] ランタイム依存なし<br/>[ERROR] 急峻な学習曲線<br/>[ERROR] 長いコンパイル時間<br/>[ERROR] より明示的なコード記述"]
     end
     
     style CS_BENEFITS fill:#e3f2fd,color:#000
@@ -562,22 +559,20 @@ graph TD
 
 ***
 
-## Quick Reference: Rust vs C#
+## クイックリファレンス: Rust vs C#
 
-| **Concept** | **C#** | **Rust** | **Key Difference** |
+| **概念** | **C#** | **Rust** | **主な相違点** |
 |-------------|--------|----------|-------------------|
-| Memory management | Garbage collector | Ownership system | Zero-cost, deterministic cleanup |
-| Null references | `null` everywhere | `Option<T>` | Compile-time null safety |
-| Error handling | Exceptions | `Result<T, E>` | Explicit, no hidden control flow |
-| Mutability | Mutable by default | Immutable by default | Opt-in to mutation |
-| Type system | Reference/value types | Ownership types | Move semantics, borrowing |
-| Assemblies | GAC, app domains (.NET Framework); side-by-side (.NET 5+) | Crates | Static linking, no runtime |
-| Namespaces | `using System.IO` | `use std::fs` | Module system |
-| Interfaces | `interface IFoo` | `trait Foo` | Default implementations |
-| Generics | `List<T>` (optional constraints via `where`) | `Vec<T>` (trait bounds like `T: Clone`) | Zero-cost abstractions |
-| Threading | locks, async/await | Ownership + Send/Sync | Data race prevention |
-| Performance | JIT compilation | AOT compilation | Predictable, no GC pauses |
+| メモリ管理 | ガベージコレクタ | 所有権システム | ゼロコスト、決定論的な解放 |
+| Null 参照 | あらゆる箇所に `null` | `Option<T>` | コンパイル時の Null 安全性 |
+| エラーハンドリング | 例外 | `Result<T, E>` | 明示的、隠れた制御フローなし |
+| 可変性 | デフォルトで可変 | デフォルトで不変 | 変更には明示的なオプトインが必要 |
+| 型システム | 参照型 / 値型 | 所有権型 | ムーブセマンティクス、借用 |
+| アセンブリ | GAC、AppDomain（.NET Framework）; side-by-side（.NET 5+） | クレート | 静的リンク、ランタイム不要 |
+| 名前空間 | `using System.IO` | `use std::fs` | モジュールシステム |
+| インターフェース | `interface IFoo` | `trait Foo` | デフォルト実装の提供 |
+| ジェネリクス | `List<T>`（`where` による任意制約） | `Vec<T>`（`T: Clone` などのトレイト境界） | ゼロコスト抽象化 |
+| スレッド | lock、async/await | 所有権 + Send/Sync | データ競合の防止 |
+| パフォーマンス | JIT コンパイル | AOT コンパイル | 予測可能、GC の一時停止なし |
 
 ***
-
-

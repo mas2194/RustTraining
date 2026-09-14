@@ -1,13 +1,12 @@
-## Exhaustive Pattern Matching: Compiler Guarantees vs Runtime Errors
+## 網羅的パターンマッチング：コンパイラの保証 vs ランタイムエラー
 
-> **What you'll learn:** Why C# `switch` expressions silently miss cases while Rust's `match` catches them at compile time,
-> `Option<T>` vs `Nullable<T>` for null safety, and custom error types with `Result<T, E>`.
+> **学習内容:** C# の `switch` 式がケースを見落とすことがあるのに対し、Rust の `match` はコンパイル時にそれを検出する理由、null安全のための `Option<T>` と `Nullable<T>` の比較、そして `Result<T, E>` を使ったカスタムエラー型について学びます。
 >
-> **Difficulty:** 🟡 Intermediate
+> **難易度:** 🟡 中級
 
-### C# Switch Expressions - Still Incomplete
+### C# の Switch 式 - まだ不完全
 ```csharp
-// C# switch expressions look exhaustive but aren't guaranteed
+// C# の switch 式は網羅的に見えますが、保証されていません
 public enum HttpStatus { Ok, NotFound, ServerError, Unauthorized }
 
 public string HandleResponse(HttpStatus status) => status switch
@@ -15,11 +14,11 @@ public string HandleResponse(HttpStatus status) => status switch
     HttpStatus.Ok => "Success",
     HttpStatus.NotFound => "Resource not found",
     HttpStatus.ServerError => "Internal error",
-    // Missing Unauthorized case — compiles with warning CS8524, but NOT an error!
-    // Runtime: SwitchExpressionException if status is Unauthorized
+    // Unauthorized のケースが不足 — 警告 CS8524 が出ますが、エラーにはなりません！
+    // 実行時: status が Unauthorized の場合は SwitchExpressionException がスローされます
 };
 
-// Even with nullable warnings, this compiles:
+// null 許容警告があっても、これはコンパイルが通ってしまいます:
 public class User 
 {
     public string Name { get; set; }
@@ -30,24 +29,24 @@ public string ProcessUser(User? user) => user switch
 {
     { IsActive: true } => $"Active: {user.Name}",
     { IsActive: false } => $"Inactive: {user.Name}",
-    // Missing null case — compiler warning CS8655, but NOT an error!
-    // Runtime: SwitchExpressionException when user is null
+    // null のケースが不足 — コンパイラ警告 CS8655 が出ますが、エラーにはなりません！
+    // 実行時: user が null の場合に SwitchExpressionException がスローされます
 };
 ```
 
 ```csharp
-// Adding an enum variant later doesn't break compilation of existing switches
+// 後から enum のバリアントを追加しても、既存の switch のコンパイルは壊れません
 public enum HttpStatus 
 { 
     Ok, 
     NotFound, 
     ServerError, 
     Unauthorized,
-    Forbidden  // Adding this produces another CS8524 warning but doesn't break compilation!
+    Forbidden  // これを追加すると別の CS8524 警告が出ますが、コンパイルは成功してしまいます！
 }
 ```
 
-### Rust Pattern Matching - True Exhaustiveness
+### Rust のパターンマッチング - 真の網羅性
 ```rust
 #[derive(Debug)]
 enum HttpStatus {
@@ -63,41 +62,41 @@ fn handle_response(status: HttpStatus) -> &'static str {
         HttpStatus::NotFound => "Resource not found", 
         HttpStatus::ServerError => "Internal error",
         HttpStatus::Unauthorized => "Authentication required",
-        // Compiler ERROR if any case is missing!
-        // This literally will not compile
+        // いずれかのケースが不足しているとコンパイルエラー！
+        // これは文字通りコンパイルすら通りません
     }
 }
 
-// Adding a new variant breaks compilation everywhere it's used
+// 新しいバリアントを追加すると、それが使われているすべての箇所でコンパイルが失敗します
 #[derive(Debug)]
 enum HttpStatus {
     Ok,
     NotFound,
     ServerError, 
     Unauthorized,
-    Forbidden,  // Adding this breaks compilation in handle_response()
+    Forbidden,  // これを追加すると handle_response() のコンパイルが失敗します
 }
-// The compiler forces you to handle ALL cases
+// コンパイラはすべてのケースを処理することを強制します
 
-// Option<T> pattern matching is also exhaustive
+// Option<T> のパターンマッチングも網羅的です
 fn process_optional_value(value: Option<i32>) -> String {
     match value {
         Some(n) => format!("Got value: {}", n),
         None => "No value".to_string(),
-        // Forgetting either case = compilation error
+        // いずれかのケースを忘れるとコンパイルエラーになります
     }
 }
 ```
 
 ```mermaid
 graph TD
-    subgraph "C# Pattern Matching Limitations"
-        CS_SWITCH["switch expression"]
-        CS_WARNING["⚠️ Compiler warnings only"]
-        CS_COMPILE["✅ Compiles successfully"]
-        CS_RUNTIME["💥 Runtime exceptions"]
-        CS_DEPLOY["❌ Bugs reach production"]
-        CS_SILENT["😰 Silent failures on enum changes"]
+    subgraph "C# のパターンマッチングの限界"
+        CS_SWITCH["switch 式"]
+        CS_WARNING["⚠️ コンパイラ警告のみ"]
+        CS_COMPILE["✅ コンパイルは成功"]
+        CS_RUNTIME["💥 ランタイム例外"]
+        CS_DEPLOY["❌ 本番環境にバグが混入"]
+        CS_SILENT["😰 enum変更時のサイレントな障害"]
         
         CS_SWITCH --> CS_WARNING
         CS_WARNING --> CS_COMPILE
@@ -106,13 +105,13 @@ graph TD
         CS_SWITCH --> CS_SILENT
     end
     
-    subgraph "Rust Exhaustive Matching"
-        RUST_MATCH["match expression"]
-        RUST_ERROR["🛑 Compilation fails"]
-        RUST_FIX["✅ Must handle all cases"]
-        RUST_SAFE["✅ Zero runtime surprises"]
-        RUST_EVOLUTION["🔄 Enum changes break compilation"]
-        RUST_REFACTOR["🛠️ Forced refactoring"]
+    subgraph "Rust の網羅的マッチング"
+        RUST_MATCH["match 式"]
+        RUST_ERROR["🛑 コンパイル失敗"]
+        RUST_FIX["✅ すべてのケースの処理が必須"]
+        RUST_SAFE["✅ 実行時の予期せぬ挙動はゼロ"]
+        RUST_EVOLUTION["🔄 enum変更時にコンパイルエラー発生"]
+        RUST_REFACTOR["🛠️ 強制的なリファクタリング"]
         
         RUST_MATCH --> RUST_ERROR
         RUST_ERROR --> RUST_FIX
@@ -130,20 +129,20 @@ graph TD
 
 ***
 
-## Null Safety: `Nullable<T>` vs `Option<T>`
+## Null安全性：`Nullable<T>` vs `Option<T>`
 
-### C# Null Handling Evolution
+### C# における Null 処理の進化
 ```csharp
-// C# - Traditional null handling (error-prone)
+// C# - 従来の null 処理（エラーが発生しやすい）
 public class User
 {
-    public string Name { get; set; }  // Can be null!
-    public string Email { get; set; } // Can be null!
+    public string Name { get; set; }  // null になり得る！
+    public string Email { get; set; } // null になり得る！
 }
 
 public string GetUserDisplayName(User user)
 {
-    if (user?.Name != null)  // Null conditional operator
+    if (user?.Name != null)  // null 条件演算子
     {
         return user.Name;
     }
@@ -152,14 +151,14 @@ public string GetUserDisplayName(User user)
 ```
 
 ```csharp
-// C# 8+ Nullable Reference Types
+// C# 8以降の Null 許容参照型
 public class User
 {
-    public string Name { get; set; }    // Non-nullable
-    public string? Email { get; set; }  // Explicitly nullable
+    public string Name { get; set; }    // 非 null 許容
+    public string? Email { get; set; }  // 明示的に null 許容
 }
 
-// C# Nullable<T> for value types
+// 値型に対する C# の Nullable<T>
 int? maybeNumber = GetNumber();
 if (maybeNumber.HasValue)
 {
@@ -167,18 +166,18 @@ if (maybeNumber.HasValue)
 }
 ```
 
-### Rust `Option<T>` System
+### Rust の `Option<T>` システム
 ```rust
-// Rust - Explicit null handling with Option<T>
+// Rust - Option<T> による明示的な null 処理
 #[derive(Debug)]
 pub struct User {
-    name: String,           // Never null
-    email: Option<String>,  // Explicitly optional
+    name: String,           // 決して null にならない
+    email: Option<String>,  // 明示的にオプショナル
 }
 
 impl User {
     pub fn get_display_name(&self) -> &str {
-        &self.name  // No null check needed - guaranteed to exist
+        &self.name  // null チェックは不要 - 存在することが保証されている
     }
     
     pub fn get_email_or_default(&self) -> String {
@@ -189,41 +188,41 @@ impl User {
     }
 }
 
-// Pattern matching forces handling of None case
+// パターンマッチングにより None ケースの処理が強制される
 fn handle_optional_user(user: Option<User>) {
     match user {
         Some(u) => println!("User: {}", u.get_display_name()),
         None => println!("No user found"),
-        // Compiler error if None case is not handled!
+        // None ケースが処理されていない場合はコンパイルエラー！
     }
 }
 ```
 
 ```mermaid
 graph TD
-    subgraph "C# Null Handling Evolution"
-        CS_NULL["Traditional: string name<br/>[ERROR] Can be null"]
-        CS_NULLABLE["Nullable<T>: int? value<br/>[OK] Explicit for value types"]
-        CS_NRT["Nullable Reference Types<br/>string? name<br/>[WARNING] Compile-time warnings only"]
+    subgraph "C# における Null 処理の進化"
+        CS_NULL["従来: string name<br/>[エラー] null になり得る"]
+        CS_NULLABLE["Nullable<T>: int? value<br/>[OK] 値型に対して明示的"]
+        CS_NRT["Null許容参照型<br/>string? name<br/>[警告] コンパイル時警告のみ"]
         
-        CS_RUNTIME["Runtime NullReferenceException<br/>[ERROR] Can still crash"]
+        CS_RUNTIME["実行時の NullReferenceException<br/>[エラー] クラッシュの可能性が残る"]
         CS_NULL --> CS_RUNTIME
         CS_NRT -.-> CS_RUNTIME
         
-        CS_CHECKS["Manual null checks<br/>if (obj?.Property != null)"]
+        CS_CHECKS["手動の null チェック<br/>if (obj?.Property != null)"]
     end
     
-    subgraph "Rust Option<T> System"
+    subgraph "Rust の Option<T> システム"
         RUST_OPTION["Option<T><br/>Some(value) | None"]
-        RUST_FORCE["Compiler forces handling<br/>[OK] Cannot ignore None"]
-        RUST_MATCH["Pattern matching<br/>match option { ... }"]
-        RUST_METHODS["Rich API<br/>.map(), .unwrap_or(), .and_then()"]
+        RUST_FORCE["コンパイラが処理を強制<br/>[OK] None を無視できない"]
+        RUST_MATCH["パターンマッチング<br/>match option { ... }"]
+        RUST_METHODS["豊富な API<br/>.map(), .unwrap_or(), .and_then()"]
         
         RUST_OPTION --> RUST_FORCE
         RUST_FORCE --> RUST_MATCH
         RUST_FORCE --> RUST_METHODS
         
-        RUST_SAFE["Compile-time null safety<br/>[OK] No null pointer exceptions"]
+        RUST_SAFE["コンパイル時の null 安全性<br/>[OK] ヌルポインタ例外は発生しない"]
         RUST_MATCH --> RUST_SAFE
         RUST_METHODS --> RUST_SAFE
     end
@@ -254,9 +253,9 @@ fn describe_point(point: Point) -> String {
 }
 ```
 
-### Option and Result Types
+### Option 型と Result 型
 ```csharp
-// C# nullable reference types (C# 8+)
+// C# の null 許容参照型 (C# 8+)
 public class PersonService
 {
     private Dictionary<int, string> people = new();
@@ -271,7 +270,7 @@ public class PersonService
         return FindPerson(id) ?? "Unknown";
     }
     
-    // Exception-based error handling
+    // 例外ベースのエラーハンドリング
     public void SavePerson(int id, string name)
     {
         if (string.IsNullOrEmpty(name))
@@ -285,7 +284,7 @@ public class PersonService
 ```rust
 use std::collections::HashMap;
 
-// Rust uses Option<T> instead of null
+// Rust では null の代わりに Option<T> を使用
 struct PersonService {
     people: HashMap<i32, String>,
 }
@@ -297,12 +296,12 @@ impl PersonService {
         }
     }
     
-    // Returns Option<T> - no null!
+    // Option<T> を返す - null は存在しない！
     fn find_person(&self, id: i32) -> Option<&String> {
         self.people.get(&id)
     }
     
-    // Pattern matching on Option
+    // Option に対するパターンマッチング
     fn get_person_or_default(&self, id: i32) -> String {
         match self.find_person(id) {
             Some(name) => name.clone(),
@@ -310,14 +309,14 @@ impl PersonService {
         }
     }
     
-    // Using Option methods (more functional style)
+    // Option のメソッドを使用（より関数型のスタイル）
     fn get_person_or_default_functional(&self, id: i32) -> String {
         self.find_person(id)
             .map(|name| name.clone())
             .unwrap_or_else(|| "Unknown".to_string())
     }
     
-    // Result<T, E> for error handling
+    // エラーハンドリングのための Result<T, E>
     fn save_person(&mut self, id: i32, name: String) -> Result<(), String> {
         if name.is_empty() {
             return Err("Name cannot be empty".to_string());
@@ -327,7 +326,7 @@ impl PersonService {
         Ok(())
     }
     
-    // Chaining operations
+    // 操作のチェーン
     fn get_person_length(&self, id: i32) -> Option<usize> {
         self.find_person(id).map(|name| name.len())
     }
@@ -336,27 +335,27 @@ impl PersonService {
 fn main() {
     let mut service = PersonService::new();
     
-    // Handle Result
+    // Result を処理
     match service.save_person(1, "Alice".to_string()) {
         Ok(()) => println!("Person saved successfully"),
         Err(error) => println!("Error: {}", error),
     }
     
-    // Handle Option
+    // Option を処理
     match service.find_person(1) {
         Some(name) => println!("Found: {}", name),
         None => println!("Person not found"),
     }
     
-    // Functional style with Option
+    // Option を使った関数型スタイル
     let name_length = service.get_person_length(1)
         .unwrap_or(0);
     println!("Name length: {}", name_length);
     
-    // Question mark operator for early returns
+    // 早期リターンのための ? 演算子
     fn try_operation(service: &mut PersonService) -> Result<String, String> {
-        service.save_person(2, "Bob".to_string())?; // Early return if error
-        let name = service.find_person(2).ok_or("Person not found")?; // Convert Option to Result
+        service.save_person(2, "Bob".to_string())?; // エラーの場合は早期リターン
+        let name = service.find_person(2).ok_or("Person not found")?; // Option を Result に変換
         Ok(format!("Hello, {}", name))
     }
     
@@ -367,9 +366,9 @@ fn main() {
 }
 ```
 
-### Custom Error Types
+### カスタムエラー型
 ```rust
-// Define custom error enum
+// カスタムエラー enum の定義
 #[derive(Debug)]
 enum PersonError {
     NotFound(i32),
@@ -389,14 +388,14 @@ impl std::fmt::Display for PersonError {
 
 impl std::error::Error for PersonError {}
 
-// Enhanced PersonService with custom errors
+// カスタムエラーを備えた強化版 PersonService
 impl PersonService {
     fn save_person_enhanced(&mut self, id: i32, name: String) -> Result<(), PersonError> {
         if name.is_empty() || name.len() > 50 {
             return Err(PersonError::InvalidName(name));
         }
         
-        // Simulate database operation that might fail
+        // 失敗する可能性のあるデータベース操作のシミュレーション
         if id < 0 {
             return Err(PersonError::DatabaseError("Negative IDs not allowed".to_string()));
         }
@@ -413,7 +412,7 @@ impl PersonService {
 fn demo_error_handling() {
     let mut service = PersonService::new();
     
-    // Handle different error types
+    // さまざまなエラー型を処理
     match service.save_person_enhanced(-1, "Invalid".to_string()) {
         Ok(()) => println!("Success"),
         Err(PersonError::NotFound(id)) => println!("Not found: {}", id),
@@ -425,12 +424,12 @@ fn demo_error_handling() {
 
 ---
 
-## Exercises
+## 演習
 
 <details>
-<summary><strong>🏋️ Exercise: Option Combinators</strong> (click to expand)</summary>
+<summary><strong>🏋️ 演習: Option コンビネータ</strong> (クリックして展開)</summary>
 
-Rewrite this deeply nested C# null-checking code using Rust `Option` combinators (`and_then`, `map`, `unwrap_or`):
+`Option` コンビネータ（`and_then`、`map`、`unwrap_or`）を使って、深くネストされた以下の C# の null チェックコードを Rust で書き換えてください：
 
 ```csharp
 string GetCityName(User? user)
@@ -443,16 +442,16 @@ string GetCityName(User? user)
 }
 ```
 
-Use these Rust types:
+次の Rust 型を使用してください：
 ```rust
 struct User { address: Option<Address> }
 struct Address { city: Option<String> }
 ```
 
-Write it as a **single expression** with no `if let` or `match`.
+`if let` や `match` を使わず、**単一の式**として記述してください。
 
 <details>
-<summary>🔑 Solution</summary>
+<summary>🔑 解答例</summary>
 
 ```rust
 struct User { address: Option<Address> }
@@ -477,11 +476,9 @@ fn main() {
 }
 ```
 
-**Key insight**: `and_then` is Rust's `?.` operator for `Option`. Each step returns `Option`, and the chain short-circuits on `None` — exactly like C#'s null-conditional operator `?.`, but explicit and type-safe.
+**重要なポイント**: `and_then` は `Option` に対する Rust の `?.` 演算子に相当します。各ステップで `Option` を返し、`None` の時点でチェーンが短絡（ショートサーキット）します。これは C# の null 条件演算子 `?.` と全く同様に動作しますが、明示的かつ型安全です。
 
 </details>
 </details>
 
 ***
-
-

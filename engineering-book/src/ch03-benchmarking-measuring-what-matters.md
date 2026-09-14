@@ -1,58 +1,48 @@
-# Benchmarking — Measuring What Matters 🟡
+# ベンチマーク — 本質的な性能を測る 🟡
 
-> **What you'll learn:**
-> - Why naive timing with `Instant::now()` produces unreliable results
-> - Statistical benchmarking with Criterion.rs and the lighter Divan alternative
-> - Profiling hot spots with `perf`, flamegraphs, and PGO
-> - Setting up continuous benchmarking in CI to catch regressions automatically
->
-> **Cross-references:** [Release Profiles](ch07-release-profiles-and-binary-size.md) — once you find the hot spot, optimize the binary · [CI/CD Pipeline](ch11-putting-it-all-together-a-production-cic.md) — benchmark job in the pipeline · [Code Coverage](ch04-code-coverage-seeing-what-tests-miss.md) — coverage tells you what's tested, benchmarks tell you what's fast
+> **学ぶこと:**
+> - なぜ `Instant::now()` による素朴な計測が信頼性の低い結果を生むのか
+> - Criterion.rs を用いた統計的ベンチマークと、より軽量な代替手段である Divan
+> - `perf`、フレームグラフ（flamegraphs）、PGO（プロファイル誘導最適化）によるホットスポットのプロファイリング
+> - 性能低下（リグレッション）を自動検出するための CI での継続的ベンチマークの設定
 
-"We should forget about small efficiencies, say about 97% of the time: premature
-optimization is the root of all evil. Yet we should not pass up our opportunities
-in that critical 3%." — Donald Knuth
+> **相互参照:** [リリースプロファイル](ch07-release-profiles-and-binary-size.md) — ホットスポットを特定した後のバイナリ最適化 · [CI/CD パイプライン](ch11-putting-it-all-together-a-production-cic.md) — パイプライン内でのベンチマークジョブの実行 · [コードカバレッジ](ch04-code-coverage-seeing-what-tests-miss.md) — カバレッジは「何がテストされたか」を示し、ベンチマークは「どれほど速いか」を示す
 
-The hard part isn't *writing* benchmarks — it's writing benchmarks that produce
-**meaningful, reproducible, actionable** numbers. This chapter covers the tools
-and techniques that get you from "it seems fast" to "we have statistical evidence
-that PR #347 regressed parsing throughput by 4.2%."
+「97%前後の些細な効率化については忘れるべきである。早すぎる最適化は諸悪の根源だ。しかし、極めて重要な残り3%の好機を見逃してはならない。」 — ドナルド・クヌース (Donald Knuth)
 
-### Why Not `std::time::Instant`?
+難しいのはベンチマークコードを「書く」ことではありません。**意味があり、再現可能で、アクションにつながる**数値を算出するベンチマークを作成することです。本章では、「なんとなく速くなった気がする」という状態から、「PR #347 によってパースのスループットが 4.2% 低下したという統計的証拠が得られた」と言える状態へとステップアップするためのツールと技術を解説します。
 
-The temptation:
+### なぜ `std::time::Instant` では不十分なのか？
+
+よくある誘惑：
 
 ```rust
-// ❌ Naive benchmarking — unreliable results
+// ❌ 素朴なベンチマーク — 信頼性の低い結果
 use std::time::Instant;
 
 fn main() {
     let start = Instant::now();
     let result = parse_device_query_output(&sample_data);
     let elapsed = start.elapsed();
-    println!("Parsing took {:?}", elapsed);
-    // Problem 1: Compiler may optimize away `result` (dead code elimination)
-    // Problem 2: Single sample — no statistical significance
-    // Problem 3: CPU frequency scaling, thermal throttling, other processes
-    // Problem 4: Cold cache vs warm cache not controlled
+    println!("パース所要時間: {:?}", elapsed);
+    // 問題点 1: コンパイラが `result` を最適化で消去する可能性がある (デッドコード削除)
+    // 問題点 2: 測定回数が1回のみ — 統計的有意性がない
+    // 問題点 3: CPU 周波数スケーリング、サーマルスロットリング、他プロセスの干渉
+    // 問題点 4: コールドキャッシュとウォームキャッシュが制御されていない
 }
 ```
 
-Problems with manual timing:
-1. **Dead code elimination** — the compiler may skip the computation entirely if
-   the result isn't used.
-2. **No warm-up** — the first run includes cache misses, JIT effects (irrelevant
-   in Rust, but OS page faults apply), and lazy initialization.
-3. **No statistical analysis** — a single measurement tells you nothing about
-   variance, outliers, or confidence intervals.
-4. **No regression detection** — you can't compare against previous runs.
+手動計測の問題点：
+1. **デッドコード削除 (Dead code elimination)** — 結果が後続の処理で使われない場合、コンパイラが計算そのものを完全にスキップすることがあります。
+2. **ウォームアップの欠如** — 初回実行時にはキャッシュミス、OS のページフォルト、遅延初期化などの影響が含まれます。
+3. **統計的分析の欠如** — 単一の測定値からは、分散、外れ値、信頼区間について何も分かりません。
+4. **リグレッション検知の不在** — 過去の実行結果との自動比較ができません。
 
-### Criterion.rs — Statistical Benchmarking
+### Criterion.rs — 統計的ベンチマーク
 
-[Criterion.rs](https://bheisler.github.io/criterion.rs/book/) is the de facto
-standard for Rust micro-benchmarks. It uses statistical methods to produce
-reliable measurements and detects performance regressions automatically.
+[Criterion.rs](https://bheisler.github.io/criterion.rs/book/) は、Rust のマイクロベンチマークにおける事実上の標準ライブラリです。統計的手法を用いて信頼性の高い測定を行い、性能のリグレッション（劣化）を自動的に検出します。
 
-**Setup:**
+**セットアップ:**
 
 ```toml
 # Cargo.toml
@@ -61,16 +51,16 @@ criterion = { version = "0.5", features = ["html_reports", "cargo_bench_support"
 
 [[bench]]
 name = "parsing_bench"
-harness = false  # Use Criterion's harness, not the built-in test harness
+harness = false  # 組み込みのテストハーネスではなく Criterion のハーネスを使用
 ```
 
-**A complete benchmark:**
+**完全なベンチマークの例:**
 
 ```rust
 // benches/parsing_bench.rs
 use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
 
-/// Data type for parsed GPU information
+/// パースされた GPU 情報を保持するデータ型
 #[derive(Debug, Clone)]
 struct GpuInfo {
     index: u32,
@@ -79,7 +69,7 @@ struct GpuInfo {
     power_w: f64,
 }
 
-/// The function under test — simulate parsing device-query CSV output
+/// テスト対象の関数 — デバイスクエリの CSV 出力パースをシミュレート
 fn parse_gpu_csv(input: &str) -> Vec<GpuInfo> {
     input
         .lines()
@@ -101,7 +91,7 @@ fn parse_gpu_csv(input: &str) -> Vec<GpuInfo> {
 }
 
 fn bench_parse_gpu_csv(c: &mut Criterion) {
-    // Representative test data
+    // 代表的なテストデータ
     let small_input = "0, Acme Accel-V1-80GB, 32, 65.5\n\
                        1, Acme Accel-V1-80GB, 34, 67.2\n";
 
@@ -122,33 +112,31 @@ criterion_group!(benches, bench_parse_gpu_csv);
 criterion_main!(benches);
 ```
 
-**Running and reading results:**
+**実行と結果の読み方:**
 
 ```bash
-# Run all benchmarks
+# すべてのベンチマークを実行
 cargo bench
 
-# Run a specific benchmark by name
+# 特定のベンチマークのみを実行
 cargo bench -- parse_64
 
-# Output:
+# 出力例:
 # parse_2_gpus        time:   [1.2345 µs  1.2456 µs  1.2578 µs]
 #                      ▲            ▲           ▲
-#                      │       confidence interval
-#                   lower 95%    median    upper 95%
+#                      │          信頼区間
+#                   下限 95%      中央値      上限 95%
 #
 # parse_64_gpus       time:   [38.123 µs  38.456 µs  38.812 µs]
 #                     change: [-1.2345% -0.5678% +0.1234%] (p = 0.12 > 0.05)
-#                     No change in performance detected.
+#                     No change in performance detected. (パフォーマンスの有意な変化は検出されませんでした)
 ```
 
-**What `black_box()` does**: It's a compiler hint that prevents dead-code
-elimination and over-aggressive constant folding. The compiler cannot see
-through `black_box`, so it must actually compute the result.
+**`black_box()` の役割**: コンパイラに対してデッドコード削除や過度な定数畳み込みを防ぐヒントを与えます。コンパイラは `black_box` の内部を見通せないため、実際に値を計算せざるを得なくなります。
 
-### Parameterized Benchmarks and Benchmark Groups
+### パラメータ化ベンチマークとベンチマークグループ
 
-Compare multiple implementations or input sizes:
+複数の実装や異なる入力サイズを比較します：
 
 ```rust
 // benches/comparison_bench.rs
@@ -157,11 +145,11 @@ use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId, Through
 fn bench_parsing_strategies(c: &mut Criterion) {
     let mut group = c.benchmark_group("csv_parsing");
 
-    // Test across different input sizes
+    // 異なる入力サイズでテスト
     for num_gpus in [1, 8, 32, 64, 128] {
         let input = generate_gpu_csv(num_gpus);
 
-        // Set throughput for bytes-per-second reporting
+        // スループット (バイト/秒) を報告するための設定
         group.throughput(Throughput::Bytes(input.len() as u64));
 
         group.bench_with_input(
@@ -189,13 +177,11 @@ criterion_group!(benches, bench_parsing_strategies);
 criterion_main!(benches);
 ```
 
-**Output**: Criterion generates an HTML report at `target/criterion/report/index.html`
-with violin plots, comparison charts, and regression analysis — open in a browser.
+**HTML レポート**: Criterion は `target/criterion/report/index.html` にバイオリンプロット、比較チャート、リグレッション分析を含む詳細なレポートを生成します。ブラウザで開いて確認できます。
 
-### Divan — A Lighter Alternative
+### Divan — より軽量な選択肢
 
-[Divan](https://github.com/nvzqz/divan) is a newer benchmarking framework that
-uses attribute macros instead of Criterion's macro DSL:
+[Divan](https://github.com/nvzqz/divan) は、Criterion のようなマクロ DSL ではなく、属性マクロ（attribute macros）を利用する新しいベンチマークフレームワークです：
 
 ```toml
 # Cargo.toml
@@ -235,136 +221,133 @@ fn parse_n_gpus(n: usize) -> Vec<GpuInfo> {
     parse_gpu_csv(black_box(&input))
 }
 
-// Divan output is a clean table:
+// Divan の出力はすっきりとしたテーブル形式です:
 // ╰─ parse_2_gpus   fastest  │ slowest  │ median   │ mean     │ samples │ iters
 //                   1.234 µs │ 1.567 µs │ 1.345 µs │ 1.350 µs │ 100     │ 1600
 ```
 
-**When to choose Divan over Criterion:**
-- Simpler API (attribute macros, less boilerplate)
-- Faster compilation (fewer dependencies)
-- Good for quick perf checks during development
+**Divan を選ぶ理由:**
+- シンプルな API（属性マクロで記述でき、ボイラープレートが少ない）
+- 高速なコンパイル（依存関係が少ない）
+- 開発中の素早いパフォーマンス確認に最適
 
-**When to choose Criterion:**
-- Statistical regression detection across runs
-- HTML reports with charts
-- Established ecosystem, more CI integrations
+**Criterion を選ぶ理由:**
+- 過去の実行結果との統計的リグレッション検知
+- グラフを含むリッチな HTML レポート
+- 確立されたエコシステムと豊富な CI 連携実績
 
-### Profiling with `perf` and Flamegraphs
+### `perf` とフレームグラフによるプロファイリング
 
-Benchmarks tell you *how fast* — profiling tells you *where the time goes*.
+ベンチマークは「どれほど速いか」を示し、プロファイリングは「どこで時間が消費されているか」を示します。
 
 ```bash
-# Step 1: Build with debug info (release speed, debug symbols)
+# ステップ 1: デバッグ情報付きでビルド (リリース相当の速度でデバッグシンボルを残す)
 cargo build --release
-# Ensure debug info is available:
+# デバッグ情報が含まれていることを確認:
 # [profile.release]
-# debug = true          # Add this temporarily for profiling
+# debug = true          # プロファイリング用に一時的に有効化
 
-# Step 2: Record with perf
+# ステップ 2: perf で記録
 perf record --call-graph=dwarf ./target/release/diag_tool --run-diagnostics
 
-# Step 3: Generate a flamegraph
-# Install: cargo install flamegraph
-# Install: cargo install addr2line --features=bin (optional, speedup cargo-flamegraph)
+# ステップ 3: フレームグラフを生成
+# インストール: cargo install flamegraph
+# インストール: cargo install addr2line --features=bin (任意、cargo-flamegraph を高速化)
 cargo flamegraph --root -- --run-diagnostics
-# Opens an interactive SVG flamegraph
+# インタラクティブな SVG フレームグラフが開きます
 
-# Alternative: use perf + inferno
+# 代替手段: perf + inferno を使用
 perf script | inferno-collapse-perf | inferno-flamegraph > flamegraph.svg
 ```
 
-**Reading a flamegraph:**
-- **Width** = time spent in that function (wider = slower)
-- **Height** = call stack depth (taller ≠ slower, just deeper)
-- **Bottom** = entry point, **Top** = leaf functions doing actual work
-- Look for wide plateaus at the top — those are your hot spots
+**フレームグラフの読み方:**
+- **横幅 (Width)** = その関数内で消費された時間の割合（広いほど時間がかかっている）
+- **高さ (Height)** = コールスタックの深さ（高いからといって遅いわけではなく、呼び出し階層が深いことを示す）
+- **最下部 (Bottom)** = エントリポイント、**最上部 (Top)** = 実際に処理を行っている末端（リーフ）関数
+- 最上部で幅の広い「平原（プラトー）」を探してください — そこが主要なホットスポットです。
 
-### Profile-Guided Optimization (PGO)
+### プロファイル誘導最適化 (PGO: Profile-Guided Optimization)
 
-Profile-Guided Optimization (PGO) is a compiler optimization technique for improving performance of CPU-intensive applications. The basic concept of PGO is to collect data about the typical execution of a program (e.g. which branches it is likely to take) and then use this data to inform optimizations such as inlining, machine-code layout, register allocation, etc.
+プロファイル誘導最適化（PGO: Profile-Guided Optimization）は、CPU バウンドなアプリケーションのパフォーマンスを向上させるコンパイラ最適化技術です。PGO の基本概念は、プログラムの典型的な実行データ（例: どの分岐が頻繁に通るかなど）を収集し、そのデータをもとに関数のインライン化、機械語コードの配置、レジスタ割り当てなどの最適化を行うことです。
 
-There are different ways of collecting data about a program’s execution. One is to run the program inside a profiler (such as `perf`) and another is to create an instrumented binary, that is, a binary that has data collection built into it, and run that. The latter usually provides more accurate data and it is also what is supported by Rustc.
+実行データの収集方法にはいくつかあります。1つは `perf` などのプロファイラ内部でプログラムを実行する方法、もう1つはデータ収集コードが組み込まれたインストルメント済みバイナリを作成して実行する方法です。後者のほうが通常より正確なデータが得られ、`rustc` でもサポートされています。
 
-Below there is an example of instrumentation-based PGO:
+以下は、インストルメンテーションに基づく PGO の例です：
 
 ```bash
-# Step 1: Build with instrumentation
+# ステップ 1: インストルメンテーション付きでビルド
 RUSTFLAGS="-Cprofile-generate=/tmp/pgo-data" cargo build --release
 
-# Step 2: Run representative workloads
-./target/release/diag_tool --run-full   # generates profiling data
+# ステップ 2: 代表的なワークロードを実行
+./target/release/diag_tool --run-full   # プロファイリングデータを生成
 
-# Step 3: Merge profiling data
-# Use the llvm-profdata that matches rustc's LLVM version:
+# ステップ 3: プロファイリングデータをマージ
+# rustc の LLVM バージョンに一致する llvm-profdata を使用:
 # $(rustc --print sysroot)/lib/rustlib/x86_64-unknown-linux-gnu/bin/llvm-profdata
-# Or if llvm-tools is installed: rustup component add llvm-tools
+# または llvm-tools がインストールされている場合: rustup component add llvm-tools
 llvm-profdata merge -o /tmp/pgo-data/merged.profdata /tmp/pgo-data/
 
-# Step 4: Rebuild with profiling feedback
+# ステップ 4: プロファイルフィードバックを用いて再ビルド
 RUSTFLAGS="-Cprofile-use=/tmp/pgo-data/merged.profdata" cargo build --release
-# Typical improvement: 5-20% for compute-bound code (parsing, crypto, codegen).
-# I/O-bound or syscall-heavy code (like a large project) will see much less benefit
-# because the CPU is mostly waiting, not executing hot loops.
+# 計算負荷の高いコード (パース、暗号処理、コード生成など) では通常 5〜20% の向上が得られます。
+# 一方、I/O バウンドやシステムコール主体のコードでは、CPU がビジーループではなく
+# 待機している時間が大半を占めるため、改善効果は限定的です。
 ```
 
-As an alternative to directly using the compiler for PGO, you may choose to go with [cargo-pgo](https://github.com/kobzol/cargo-pgo), which has an intuitive command-line API and saves you the trouble of doing all the manual work.
+コンパイラを直接操作する代わりに、直感的な CLI を持ち手動の手間を省いてくれる [cargo-pgo](https://github.com/kobzol/cargo-pgo) を利用することも可能です。
 
-With `cargo-pgo`, the optimization workflow from above can look like that:
+`cargo-pgo` を使用したワークフローは以下のようになります：
 
 ```bash
-# Step 1: Build with instrumentation
+# ステップ 1: インストルメンテーション付きでビルド
 cargo pgo build
 
-# Step 2: Run representative workloads
+# ステップ 2: 代表的なワークロードを実行
 cargo pgo run -- --run-full
 
-# Step 3: Rebuild with profiling feedback
+# ステップ 3: プロファイルフィードバックを用いて再ビルド
 cargo pgo optimize
 ```
 
-Sampling PGO or SPGO is a more complicated way to perform PGO in a price of reduced runtime overhead compared to instrumentation-based PGO. For now, the best place to read about it is the Clang PGO [manual](https://clang.llvm.org/docs/UsersManual.html#using-sampling-profilers).
+サンプリング PGO（SPGO）は、インストルメンテーション型に比べて実行時オーバーヘッドを抑えられる、より発展的なアプローチです。詳細については Clang PGO [マニュアル](https://clang.llvm.org/docs/UsersManual.html#using-sampling-profilers) を参照してください。
 
-> **Tip**: Before spending time on PGO, ensure your [release profile](ch07-release-profiles-and-binary-size.md)
-> already has LTO enabled — it typically delivers a bigger win for less effort.
+> **Tips**: PGO に時間をかける前に、まず [リリースプロファイル](ch07-release-profiles-and-binary-size.md) で LTO が有効になっていることを確認してください。通常、LTO のほうがはるかに少ない労力で大きな効果が得られます。
 
-Further reading:
+参考資料：
+* PGO に関する公式 Rustc [ガイド](https://doc.rust-lang.org/rustc/profile-guided-optimization.html)
+* [Awesome PGO](https://github.com/zamazan4ik/awesome-pgo) — 実アプリケーションでの PGO ベンチマーク集および各コンパイラのガイド（サンプリング PGO 含む）
+* [LLVM BOLT](https://github.com/llvm/llvm-project/blob/main/bolt/README.md) — ポストリンク最適化（PLO: Post-Link Optimization）技術。PGO 適用後にさらなる最適化を施してパフォーマンスを高めることができます。`cargo-pgo` は `llvm-bolt` もサポートしています。
 
-* Official Rustc [guide](https://doc.rust-lang.org/rustc/profile-guided-optimization.html) about PGO.
-* [Awesome PGO](https://github.com/zamazan4ik/awesome-pgo) - a collection of PGO benchmarks for real applications, including PGO guides for different compilers (including Sampling PGO)
-* [LLVM BOLT](https://github.com/llvm/llvm-project/blob/main/bolt/README.md) - Post-Link Optimization (PLO) optimization technique. PLO can be used for performing additional optimizations even after applying PGO for getting better performance. `cargo-pgo` supports `llvm-bolt` too.
+### `hyperfine` — クイックなエンドツーエンドの計測
 
-### `hyperfine` — Quick End-to-End Timing
-
-[`hyperfine`](https://github.com/sharkdp/hyperfine) benchmarks entire commands,
-not individual functions. It's perfect for measuring overall binary performance:
+[`hyperfine`](https://github.com/sharkdp/hyperfine) は個別の関数ではなく、コマンド全体の実行時間をベンチマークします。バイナリ全体のパフォーマンスを測定するのに最適です：
 
 ```bash
-# Install
+# インストール
 cargo install hyperfine
-# Or: sudo apt install hyperfine  (Ubuntu 23.04+)
+# または: sudo apt install hyperfine  (Ubuntu 23.04+)
 
-# Basic benchmark
+# 基本的なベンチマーク
 hyperfine './target/release/diag_tool --run-diagnostics'
 
-# Compare two implementations
+# 2つの実装を比較
 hyperfine './target/release/diag_tool_v1 --run-diagnostics' \
           './target/release/diag_tool_v2 --run-diagnostics'
 
-# Warm-up runs + minimum iterations
+# ウォームアップ実行 + 最小実行回数の指定
 hyperfine --warmup 3 --min-runs 10 './target/release/diag_tool --run-all'
 
-# Export results as JSON for CI comparison
+# CI での比較用に結果を JSON 出力
 hyperfine --export-json bench.json './target/release/diag_tool --run-all'
 ```
 
-**When to use `hyperfine` vs Criterion:**
-- `hyperfine`: whole-binary timing, comparing before/after a refactor, I/O-bound workloads
-- Criterion: micro-benchmarks of individual functions, statistical regression detection
+**`hyperfine` と Criterion の使い分け:**
+- `hyperfine`: バイナリ全体の所要時間測定、リファクタリング前後の比較、I/O 主体の処理
+- Criterion: 個別関数のマイクロベンチマーク、統計的な性能リグレッション検出
 
-### Continuous Benchmarking in CI
+### CI での継続的ベンチマーク
 
-Detect performance regressions before they ship:
+性能リグレッションがリリースされる前に自動検知します：
 
 ```yaml
 # .github/workflows/bench.yml
@@ -382,46 +365,44 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Run benchmarks
-        # Requires criterion = { features = ["cargo_bench_support"] } for --output-format
+      - name: ベンチマーク実行
+        # --output-format を使用するには criterion = { features = ["cargo_bench_support"] } が必要
         run: cargo bench -- --output-format bencher | tee bench_output.txt
 
-      - name: Store benchmark result
+      - name: ベンチマーク結果の保存・比較
         uses: benchmark-action/github-action-benchmark@v1
         with:
           tool: 'cargo'
           output-file-path: bench_output.txt
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
-          alert-threshold: '120%'    # Alert if 20% slower
+          alert-threshold: '120%'    # 20% 悪化した場合にアラート
           comment-on-alert: true
-          fail-on-alert: true        # Block PR if regression detected
+          fail-on-alert: true        # リグレッション検出時に PR をブロック
 ```
 
-**Key CI considerations:**
-- Use **dedicated benchmark runners** (not shared CI) for consistent results
-- Pin the runner to a specific machine type if using cloud CI
-- Store historical data to detect gradual regressions
-- Set thresholds based on your workload's tolerance (5% for hot paths, 20% for cold)
+**CI における重要な考慮事項:**
+- 一貫した測定結果を得るため、（共有 CI ランナーではなく）**専用のベンチマークランナー**を使用する
+- クラウド CI を利用する場合は、特定のインスタンスタイプにランナーを固定する
+- 段階的な性能劣化を検出できるよう、履歴データを永続化する
+- ワークロードの許容度に応じてしきい値を設定する（ホットパスなら 5%、重要度の低い処理なら 20% など）
 
-### Application: Parsing Performance
+### 実践応用：パース処理のパフォーマンス
 
-The project has several performance-sensitive parsing paths that
-would benefit from benchmarks:
+ハードウェア診断ツールには、ベンチマークを行う価値が高いパース処理が複数存在します：
 
-| Parsing Hot Spot | Crate | Why It Matters |
+| パースのホットスポット | クレート | 重要である理由 |
 |------------------|-------|----------------|
-| accelerator-query CSV/XML output | `device_diag` | Called per-GPU, up to 8× per run |
-| Sensor event parsing | `event_log` | Thousands of records on busy servers |
-| PCIe topology JSON | `topology_lib` | Complex nested structures, golden-file validated |
-| Report JSON serialization | `diag_framework` | Final report output, size-sensitive |
-| Config JSON loading | `config_loader` | Startup latency |
+| アクセラレータクエリの CSV/XML 出力 | `device_diag` | GPU ごとに呼び出され、1回の実行で最大8回以上実行される |
+| センサーイベントのパース | `event_log` | 高負荷サーバーでは数千件のレコードが発生する |
+| PCIe トポロジー JSON | `topology_lib` | 複雑なネスト構造を持ち、ゴールデンファイルで検証される |
+| レポート JSON のシリアライズ | `diag_framework` | 最終レポートの出力であり、サイズと速度が重要 |
+| 設定 JSON の読み込み | `config_loader` | 起動時のレイテンシに直結する |
 
-**Recommended first benchmark** — the topology parser, which already has golden-file
-test data:
+**推奨される最初のベンチマーク** — すでにゴールデンファイル（テスト用正解データ）が揃っているトポロジーパーサー：
 
 ```rust
-// topology_lib/benches/parse_bench.rs (proposed)
+// topology_lib/benches/parse_bench.rs (提案)
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 use std::fs;
 
@@ -430,7 +411,7 @@ fn bench_topology_parse(c: &mut Criterion) {
 
     for golden_file in ["S2001", "S1015", "S1035", "S1080"] {
         let path = format!("tests/test_data/{golden_file}.json");
-        let data = fs::read_to_string(&path).expect("golden file not found");
+        let data = fs::read_to_string(&path).expect("ゴールデンファイルが見つかりません");
         group.throughput(Throughput::Bytes(data.len() as u64));
 
         group.bench_function(golden_file, |b| {
@@ -448,34 +429,25 @@ criterion_group!(benches, bench_topology_parse);
 criterion_main!(benches);
 ```
 
-### Try It Yourself
+### 自分で試してみよう
 
-1. **Write a Criterion benchmark**: Pick any parsing function in your codebase.
-   Create a `benches/` directory, set up a Criterion benchmark that measures
-   throughput in bytes/second. Run `cargo bench` and examine the HTML report.
+1. **Criterion ベンチマークの作成**: 自身のコードベースから任意のパース関数を選択してください。`benches/` ディレクトリを作成し、スループット（バイト/秒）を測定する Criterion ベンチマークを設定します。`cargo bench` を実行し、生成された HTML レポートを確認してください。
+2. **フレームグラフの生成**: `[profile.release]` に `debug = true` を設定してプロジェクトをビルドし、`cargo flamegraph -- <引数>` を実行します。フレームグラフの最上部にある幅の広いスタックを3つ特定してください — それらが主要なホットスポットです。
+3. **`hyperfine` による比較**: `hyperfine` をインストールし、異なるフラグを指定したバイナリの全体実行時間を計測します。Criterion で測定した関数単位の時間と比較してください。Criterion では見えない時間はどこに費やされているでしょうか？（答え: I/O、システムコール、プロセス起動オーバーヘッドなど）
 
-2. **Generate a flamegraph**: Build your project with `debug = true` in
-   `[profile.release]`, then run `cargo flamegraph -- <your-args>`. Identify
-   the three widest stacks at the top of the flamegraph — those are your hot spots.
-
-3. **Compare with `hyperfine`**: Install `hyperfine` and benchmark the overall
-   execution time of your binary with different flags. Compare it to the
-   per-function times from Criterion. Where does the time go that Criterion
-   doesn't see? (Answer: I/O, syscalls, process startup.)
-
-### Benchmark Tool Selection
+### ベンチマークツールの選定
 
 ```mermaid
 flowchart TD
-    START["Want to measure performance?"] --> WHAT{"What level?"}
+    START["性能を計測したい？"] --> WHAT{"どの粒度で？"}
 
-    WHAT -->|"Single function"| CRITERION["Criterion.rs<br/>Statistical, regression detection"]
-    WHAT -->|"Quick function check"| DIVAN["Divan<br/>Lighter, attribute macros"]
-    WHAT -->|"Whole binary"| HYPERFINE["hyperfine<br/>End-to-end, wall-clock"]
-    WHAT -->|"Find hot spots"| PERF["perf + flamegraph<br/>CPU sampling profiler"]
+    WHAT -->|"単一の関数"| CRITERION["Criterion.rs<br/>統計的分析、リグレッション検知"]
+    WHAT -->|"手軽に関数をチェック"| DIVAN["Divan<br/>軽量、属性マクロ"]
+    WHAT -->|"バイナリ全体"| HYPERFINE["hyperfine<br/>エンドツーエンド、実時間計測"]
+    WHAT -->|"ホットスポットの特定"| PERF["perf + flamegraph<br/>CPUサンプリングプロファイラ"]
 
-    CRITERION --> CI_BENCH["Continuous benchmarking<br/>in GitHub Actions"]
-    PERF --> OPTIMIZE["Profile-Guided<br/>Optimization (PGO)"]
+    CRITERION --> CI_BENCH["GitHub Actions での<br/>継続的ベンチマーク"]
+    PERF --> OPTIMIZE["プロファイル誘導<br/>最適化 (PGO)"]
 
     style CRITERION fill:#91e5a3,color:#000
     style DIVAN fill:#91e5a3,color:#000
@@ -485,14 +457,14 @@ flowchart TD
     style OPTIMIZE fill:#ffd43b,color:#000
 ```
 
-### 🏋️ Exercises
+### 🏋️ 演習問題
 
-#### 🟢 Exercise 1: First Criterion Benchmark
+#### 🟢 演習 1: はじめての Criterion ベンチマーク
 
-Create a crate with a function that sorts a `Vec<u64>` of 10,000 random elements. Write a Criterion benchmark for it, then switch to `.sort_unstable()` and observe the performance difference in the HTML report.
+10,000 個のランダムな要素を持つ `Vec<u64>` をソートする関数を含むクレートを作成してください。その関数の Criterion ベンチマークを記述し、次にソート処理を `.sort_unstable()` に切り替えて、HTML レポートでパフォーマンスの差を観察してください。
 
 <details>
-<summary>Solution</summary>
+<summary>解答例</summary>
 
 ```toml
 # Cargo.toml
@@ -547,33 +519,33 @@ open target/criterion/sort-10k/report/index.html
 ```
 </details>
 
-#### 🟡 Exercise 2: Flamegraph Hot Spot
+#### 🟡 演習 2: フレームグラフによるホットスポット特定
 
-Build a project with `debug = true` in `[profile.release]`, then generate a flamegraph. Identify the top 3 widest stacks.
+`[profile.release]` に `debug = true` を設定してプロジェクトをビルドし、フレームグラフを生成してください。最も幅の広い上位3つのコールスタックを特定します。
 
 <details>
-<summary>Solution</summary>
+<summary>解答例</summary>
 
 ```toml
 # Cargo.toml
 [profile.release]
-debug = true  # Keep symbols for flamegraph
+debug = true  # フレームグラフ用にシンボル情報を残す
 ```
 
 ```bash
 cargo install flamegraph
-cargo flamegraph --release -- <your-args>
-# Opens flamegraph.svg in browser
-# The widest stacks at the top are your hot spots
+cargo flamegraph --release -- <引数>
+# ブラウザで flamegraph.svg が開きます
+# 最上部の最も幅の広いスタックがホットスポットです
 ```
 </details>
 
-### Key Takeaways
+### 重要なまとめ
 
-- Never benchmark with `Instant::now()` — use Criterion.rs for statistical rigor and regression detection
-- `black_box()` prevents the compiler from optimizing away your benchmark target
-- `hyperfine` measures wall-clock time for the whole binary; Criterion measures individual functions — use both
-- Flamegraphs show *where* time is spent; benchmarks show *how much* time is spent
-- Continuous benchmarking in CI catches performance regressions before they ship
+- `Instant::now()` による素朴なベンチマークは避けてください — 統計的厳密性とリグレッション検知のために Criterion.rs を使用します。
+- `black_box()` はコンパイラによるベンチマーク対象コードの最適化消去を防ぎます。
+- `hyperfine` はバイナリ全体の実時間を計測し、Criterion は個別関数を計測します — 双方を目的に応じて併用してください。
+- フレームグラフは時間が「どこで」使われたかを示し、ベンチマークは「どれほどの」時間がかかったかを示します。
+- CI で継続的ベンチマークを実施することで、性能劣化が本番に混入するのを未然に防止できます。
 
 ---

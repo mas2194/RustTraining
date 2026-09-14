@@ -1,50 +1,49 @@
-## Crate-Level Error Types and Result Aliases
+## クレートレベルのエラー型と Result エイリアス
 
-> **What you'll learn:** The production pattern of defining a per-crate error enum with `thiserror`,
-> creating a `Result<T>` type alias, and when to choose `thiserror` (libraries) vs `anyhow` (applications).
+> **学べること:** `thiserror` を用いてクレートごとのエラー列挙型（enum）を定義する実践的なパターン、`Result<T>` 型エイリアスの作成、そして `thiserror`（ライブラリ向け）と `anyhow`（アプリケーション向け）の使い分け。
 >
-> **Difficulty:** 🟡 Intermediate
+> **難易度:** 🟡 中級
 
-A critical pattern for production Rust: define a per-crate error enum and a `Result` type alias to eliminate boilerplate.
+本番環境の Rust における極めて重要なパターン：クレートごとのエラー列挙型（enum）と `Result` 型エイリアスを定義することで、ボイラープレートを排除します。
 
-### The Pattern
+### このパターン
 ```rust
 // src/error.rs
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum AppError {
-    #[error("Database error: {0}")]
+    #[error("データベースエラー: {0}")]
     Database(#[from] sqlx::Error),
 
-    #[error("HTTP error: {0}")]
+    #[error("HTTP エラー: {0}")]
     Http(#[from] reqwest::Error),
 
-    #[error("Serialization error: {0}")]
+    #[error("シリアライズエラー: {0}")]
     Serialization(#[from] serde_json::Error),
 
-    #[error("Validation error: {message}")]
+    #[error("バリデーションエラー: {message}")]
     Validation { message: String },
 
-    #[error("Not found: {entity} with id {id}")]
+    #[error("見つかりません: {entity} (id: {id})")]
     NotFound { entity: String, id: String },
 }
 
-/// Crate-wide Result alias — every function returns this
+/// クレート全体で共通の Result エイリアス — すべての関数がこれを返します
 pub type Result<T> = std::result::Result<T, AppError>;
 ```
 
-### Usage Throughout Your Crate
+### クレート全体での使用法
 ```rust
 use crate::error::{AppError, Result};
 
-// Assumes a database pool is available, e.g.:
+// データベース接続プールが利用可能であることを想定（例）:
 // async fn get_user(pool: &PgPool, id: Uuid) -> Result<User>
-// Here we show the pattern with `pool` as shorthand.
+// ここでは簡略化のため `pool` をそのまま使用するパターンを示しています。
 pub async fn get_user(id: Uuid) -> Result<User> {
     let user = sqlx::query_as!(User, "SELECT * FROM users WHERE id = $1", id)
         .fetch_optional(&pool)
-        .await?;  // sqlx::Error → AppError::Database via #[from]
+        .await?;  // #[from] により sqlx::Error → AppError::Database に自動変換
 
     user.ok_or_else(|| AppError::NotFound {
         entity: "User".into(),
@@ -55,16 +54,16 @@ pub async fn get_user(id: Uuid) -> Result<User> {
 pub async fn create_user(req: CreateUserRequest) -> Result<User> {
     if req.name.trim().is_empty() {
         return Err(AppError::Validation {
-            message: "Name cannot be empty".into(),
+            message: "名前を空にすることはできません".into(),
         });
     }
     // ...
 }
 ```
 
-### C# Comparison
+### C# との比較
 ```csharp
-// C# equivalent pattern
+// C# における同等のパターン
 public class AppException : Exception
 {
     public string ErrorCode { get; }
@@ -74,39 +73,39 @@ public class AppException : Exception
     }
 }
 
-// But in C#, callers don't know what exceptions to expect!
-// In Rust, the error type is in the function signature.
+// しかし C# では、呼び出し側はどんな例外が発生するかコードを見るまで分かりません！
+// Rust では、エラー型が関数のシグネチャに明示されます。
 ```
 
-### Why This Matters
-- **`thiserror`** generates `Display` and `Error` impls automatically
-- **`#[from]`** enables the `?` operator to convert library errors automatically
-- The `Result<T>` alias means every function signature is clean: `fn foo() -> Result<Bar>`
-- **Unlike C# exceptions**, callers see all possible error variants in the type
+### なぜこれが重要なのか
+- **`thiserror`** は `Display` および `Error` の実装を自動生成します
+- **`#[from]`** により、`?` 演算子でライブラリのエラーを自動変換できます
+- `Result<T>` エイリアスにより、すべての関数シグネチャを `fn foo() -> Result<Bar>` のように簡潔に保てます
+- **C# の例外とは異なり**、呼び出し側は型を通じて発生しうるすべてのエラーバリアントを把握できます
 
 
-### thiserror vs anyhow: When to Use Which
+### thiserror vs anyhow：使い分けの指針
 
-Two crates dominate Rust error handling. Choosing between them is the first decision you'll make:
+Rust のエラーハンドリングでは主に 2 つのクレートが使われます。どちらを選択するかが最初の設計判断となります：
 
 | | `thiserror` | `anyhow` |
 |---|---|---|
-| **Purpose** | Define structured error types for **libraries** | Quick error handling for **applications** |
-| **Output** | Custom enum you control | Opaque `anyhow::Error` wrapper |
-| **Caller sees** | All error variants in the type | Just `anyhow::Error` — opaque |
-| **Best for** | Library crates, APIs, any code with consumers | Binaries, scripts, prototypes, CLI tools |
-| **Downcasting** | `match` on variants directly | `error.downcast_ref::<MyError>()` |
+| **用途** | **ライブラリ**向けに構造化されたエラー型を定義 | **アプリケーション**向けの手軽なエラーハンドリング |
+| **出力** | 開発者が制御する独自の列挙型（enum） | 内部が隠蔽された `anyhow::Error` ラッパー |
+| **呼び出し側に見える情報** | 型内のすべてのエラーバリアント | 単に `anyhow::Error` のみ（不透明） |
+| **最適な適用先** | ライブラリクレート、API、利用者が存在する任意のコード | バイナリ、スクリプト、プロトタイプ、CLI ツール |
+| **ダウンキャスト** | バリアントに対する直接の `match` | `error.downcast_ref::<MyError>()` |
 
 ```rust
-// thiserror — for LIBRARIES (callers need to match on error variants)
+// thiserror — ライブラリ向け（呼び出し側がエラーバリアントを match 分岐する必要がある場合）
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum StorageError {
-    #[error("File not found: {path}")]
+    #[error("ファイルが見つかりません: {path}")]
     NotFound { path: String },
 
-    #[error("Permission denied: {0}")]
+    #[error("アクセスが拒否されました: {0}")]
     PermissionDenied(String),
 
     #[error(transparent)]
@@ -123,44 +122,44 @@ pub fn read_config(path: &str) -> Result<String, StorageError> {
 ```
 
 ```rust
-// anyhow — for APPLICATIONS (just propagate errors, don't define types)
+// anyhow — アプリケーション向け（エラー型を定義せず、単に伝播させるだけの場合）
 use anyhow::{Context, Result};
 
 fn main() -> Result<()> {
     let config = std::fs::read_to_string("config.toml")
-        .context("Failed to read config file")?;
+        .context("設定ファイルの読み込みに失敗しました")?;
 
     let port: u16 = config.parse()
-        .context("Failed to parse port number")?;
+        .context("ポート番号のパースに失敗しました")?;
 
-    println!("Listening on port {port}");
+    println!("ポート {port} でリッスン中");
     Ok(())
 }
 // anyhow::Result<T> = Result<T, anyhow::Error>
-// .context() adds human-readable context to any error
+// .context() は任意のエラーに人間が読めるコンテキストを追加します
 ```
 
 ```csharp
-// C# comparison:
-// thiserror ≈ defining custom exception classes with specific properties
-// anyhow ≈ catching Exception and wrapping with message:
+// C# との比較:
+// thiserror ≈ 特定のプロパティを持つカスタム例外クラスを定義することに相当
+// anyhow ≈ Exception をキャッチしてメッセージでラップすることに相当:
 //   throw new InvalidOperationException("Failed to read config", ex);
 ```
 
-**Guideline**: If your code is a **library** (other code calls it), use `thiserror`. If your code is an **application** (the final binary), use `anyhow`. Many projects use both — `thiserror` for the library crate's public API, `anyhow` in the `main()` binary.
+**指針**: 作成しているコードが**ライブラリ**（他のコードから呼び出されるもの）である場合は `thiserror` を使用します。**アプリケーション**（最終的なバイナリ）である場合は `anyhow` を使用します。多くのプロジェクトでは、ライブラリクレートの公開 API には `thiserror` を使い、`main()` バイナリでは `anyhow` を使うというように両方を併用しています。
 
-### Error Recovery Patterns
+### エラー回復のパターン
 
-C# developers are used to `try/catch` blocks that recover from specific exceptions. Rust uses combinators on `Result` for the same purpose:
+C# 開発者は特定の例外から回復するために `try/catch` ブロックをよく利用します。Rust では同様の目的のために `Result` のコンビネータを使用します：
 
 ```rust
 use std::fs;
 
-// Pattern 1: Recover with a fallback value
+// パターン 1: フォールバック値で回復する
 let config = fs::read_to_string("config.toml")
-    .unwrap_or_else(|_| String::from("port = 8080"));  // default if missing
+    .unwrap_or_else(|_| String::from("port = 8080"));  // ファイルが存在しない場合のデフォルト値
 
-// Pattern 2: Recover from specific errors, propagate others
+// パターン 2: 特定のエラーから回復し、それ以外は伝播する
 fn read_or_create(path: &str) -> Result<String, std::io::Error> {
     match fs::read_to_string(path) {
         Ok(content) => Ok(content),
@@ -169,76 +168,76 @@ fn read_or_create(path: &str) -> Result<String, std::io::Error> {
             fs::write(path, &default)?;
             Ok(default)
         }
-        Err(e) => Err(e),  // propagate permission errors, etc.
+        Err(e) => Err(e),  // 権限エラーなどは伝播する
     }
 }
 
-// Pattern 3: Add context before propagating
+// パターン 3: 伝播する前にコンテキストを追加する
 use anyhow::Context;
 
 fn load_config() -> anyhow::Result<Config> {
     let text = fs::read_to_string("config.toml")
-        .context("Failed to read config.toml")?;
+        .context("config.toml の読み込みに失敗しました")?;
     let config: Config = toml::from_str(&text)
-        .context("Failed to parse config.toml")?;
+        .context("config.toml のパースに失敗しました")?;
     Ok(config)
 }
 
-// Pattern 4: Map errors to your domain type
+// パターン 4: ドメインのエラー型にマッピングする
 fn parse_port(s: &str) -> Result<u16, AppError> {
     s.parse::<u16>()
         .map_err(|_| AppError::Validation {
-            message: format!("Invalid port: {s}"),
+            message: format!("無効なポート番号: {s}"),
         })
 }
 ```
 
 ```csharp
-// C# equivalents:
+// C# における同等の表現:
 try { config = File.ReadAllText("config.toml"); }
-catch (FileNotFoundException) { config = "port = 8080"; }  // Pattern 1
+catch (FileNotFoundException) { config = "port = 8080"; }  // パターン 1
 
 try { /* ... */ }
-catch (FileNotFoundException) { /* create file */ }        // Pattern 2
-catch { throw; }                                            // re-throw others
+catch (FileNotFoundException) { /* ファイルを作成 */ }        // パターン 2
+catch { throw; }                                            // それ以外は再スロー
 ```
 
-**When to recover vs propagate:**
-- **Recover** when the error has a sensible default or retry strategy
-- **Propagate with `?`** when the *caller* should decide what to do
-- **Add context** (`.context()`) at module boundaries to build an error trail
+**回復するか伝播するかの判断基準:**
+- 適切なデフォルト値やリトライ戦略が存在する場合は**回復**する
+- 呼び出し側が対処を決定すべきである場合は **`?` で伝播**する
+- エラーの追跡履歴を構築するために、モジュールの境界で**コンテキストを追加**（`.context()`）する
 
 ---
 
-## Exercises
+## 演習
 
 <details>
-<summary><strong>🏋️ Exercise: Design a Crate Error Type</strong> (click to expand)</summary>
+<summary><strong>🏋️ 演習：クレートエラー型の設計</strong>（クリックして展開）</summary>
 
-You're building a user registration service. Design the error type using `thiserror`:
+ユーザー登録サービスを構築していると仮定します。`thiserror` を使ってエラー型を設計してください：
 
-1. Define `RegistrationError` with variants: `DuplicateEmail(String)`, `WeakPassword(String)`, `DatabaseError(#[from] sqlx::Error)`, `RateLimited { retry_after_secs: u64 }`
-2. Create a `type Result<T> = std::result::Result<T, RegistrationError>;` alias
-3. Write a `register_user(email: &str, password: &str) -> Result<()>` that demonstrates `?` propagation and explicit error construction
+1. バリアント `DuplicateEmail(String)`, `WeakPassword(String)`, `DatabaseError(#[from] sqlx::Error)`, `RateLimited { retry_after_secs: u64 }` を持つ `RegistrationError` を定義する
+2. `type Result<T> = std::result::Result<T, RegistrationError>;` エイリアスを作成する
+3. `?` によるエラー伝播と明示的なエラー構築を示す `register_user(email: &str, password: &str) -> Result<()>` を実装する
 
 <details>
-<summary>🔑 Solution</summary>
+<summary>🔑 解答例</summary>
 
 ```rust
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum RegistrationError {
-    #[error("Email already registered: {0}")]
+    #[error("このメールアドレスは既に登録されています: {0}")]
     DuplicateEmail(String),
 
-    #[error("Password too weak: {0}")]
+    #[error("パスワードが脆弱です: {0}")]
     WeakPassword(String),
 
-    #[error("Database error")]
+    #[error("データベースエラー")]
     Database(#[from] sqlx::Error),
 
-    #[error("Rate limited — retry after {retry_after_secs}s")]
+    #[error("レート制限中 — {retry_after_secs}秒後に再試行してください")]
     RateLimited { retry_after_secs: u64 },
 }
 
@@ -247,14 +246,14 @@ pub type Result<T> = std::result::Result<T, RegistrationError>;
 pub fn register_user(email: &str, password: &str) -> Result<()> {
     if password.len() < 8 {
         return Err(RegistrationError::WeakPassword(
-            "must be at least 8 characters".into(),
+            "8文字以上である必要があります".into(),
         ));
     }
 
-    // This ? converts sqlx::Error → RegistrationError::Database automatically
+    // この ? により sqlx::Error → RegistrationError::Database へ自動変換されます
     // db.check_email_unique(email).await?;
 
-    // This is explicit construction for domain logic
+    // これはドメインロジックのための明示的なエラー構築です
     if email.contains("+spam") {
         return Err(RegistrationError::DuplicateEmail(email.to_string()));
     }
@@ -263,11 +262,9 @@ pub fn register_user(email: &str, password: &str) -> Result<()> {
 }
 ```
 
-**Key pattern**: `#[from]` enables `?` for library errors; explicit `Err(...)` for domain logic. The Result alias keeps every signature clean.
+**重要パターン**: `#[from]` はライブラリのエラーに対して `?` を有効にし、ドメインロジックには明示的な `Err(...)` を使用します。Result エイリアスによってすべての関数シグネチャが簡潔に保たれます。
 
 </details>
 </details>
 
 ***
-
-

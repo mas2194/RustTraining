@@ -1,14 +1,14 @@
-# 1. Generics — The Full Picture 🟢
+# 1. ジェネリクスの全貌 🟢
 
-> **What you'll learn:**
-> - How monomorphization gives zero-cost generics — and when it causes code bloat
-> - The decision framework: generics vs enums vs trait objects
-> - Const generics for compile-time array sizes and `const fn` for compile-time evaluation
-> - When to trade static dispatch for dynamic dispatch on cold paths
+> **学べること:**
+> - 単相化（Monomorphization）がゼロコストのジェネリクスを実現する仕組み — そしてそれがコード膨張（code bloat）を引き起こすケース
+> - 意思決定フレームワーク: ジェネリクス vs 列挙型（Enum） vs トレイトオブジェクト
+> - コンパイル時の配列長を指定するconstジェネリクスと、コンパイル時評価のための `const fn`
+> - コールドパスにおいて静的ディスパッチを動的ディスパッチに切り替える判断基準
 
-## Monomorphization and Zero Cost
+## 単相化とゼロコスト
 
-Generics in Rust are **monomorphized** — the compiler generates a specialized copy of each generic function for every concrete type it's used with. This is the opposite of Java/C# where generics are erased at runtime.
+Rustのジェネリクスは**単相化（monomorphized）**されます。コンパイラは、ジェネリック関数が使用されている具象型ごとに、特殊化されたコピーを生成します。これは、実行時にジェネリクスが型消去（erase）されるJavaやC#とは対照的です。
 
 ```rust
 fn max_of<T: PartialOrd>(a: T, b: T) -> T {
@@ -16,101 +16,98 @@ fn max_of<T: PartialOrd>(a: T, b: T) -> T {
 }
 
 fn main() {
-    max_of(3_i32, 5_i32);     // Compiler generates max_of_i32
-    max_of(2.0_f64, 7.0_f64); // Compiler generates max_of_f64
-    max_of("a", "z");         // Compiler generates max_of_str
+    max_of(3_i32, 5_i32);     // コンパイラが max_of_i32 を生成
+    max_of(2.0_f64, 7.0_f64); // コンパイラが max_of_f64 を生成
+    max_of("a", "z");         // コンパイラが max_of_str を生成
 }
 ```
 
-**What the compiler actually produces** (conceptually):
+**コンパイラが実際に生成するもの**（概念的イメージ）:
 
 ```rust
-// Three separate functions — no runtime dispatch, no vtable:
+// 3つの独立した関数 — 実行時ディスパッチもvtableもありません:
 fn max_of_i32(a: i32, b: i32) -> i32 { if a >= b { a } else { b } }
 fn max_of_f64(a: f64, b: f64) -> f64 { if a >= b { a } else { b } }
 fn max_of_str<'a>(a: &'a str, b: &'a str) -> &'a str { if a >= b { a } else { b } }
 ```
 
-> **Why does `max_of_str` need `<'a>` but `max_of_i32` doesn't?**  `i32` and `f64`
-> are `Copy` types — the function returns an owned value. But `&str` is a reference,
-> so the compiler must know the returned reference's lifetime. The `<'a>` annotation
-> says "the returned `&str` lives at least as long as both inputs."
+> **なぜ `max_of_str` には `<'a>` が必要で、`max_of_i32` には不要なのか？**  
+> `i32` や `f64` は `Copy` 型であり、関数は所有された値を返します。しかし `&str` は参照であるため、コンパイラは返される参照のライフタイムを知る必要があります。`<'a>` という注釈は、「返される `&str` は両方の入力と同じかそれ以上の長さで生存する」ことを示します。
 
-**Advantages**: Zero runtime cost — identical to hand-written specialized code. The optimizer can inline, vectorize, and specialize each copy independently.
+**利点**: 実行時オーバーヘッドはゼロであり、手作業で書いた特殊化コードと完全に同等です。オプティマイザは、生成された各コピーを個別にインライン化、ベクトル化、最適化できます。
 
-**Comparison with C++**: Rust generics work like C++ templates but with one crucial difference — **bounds checking happens at definition, not instantiation**. In C++, a template compiles only when used with a specific type, leading to cryptic error messages deep in library code. In Rust, `T: PartialOrd` is checked when you define the function, so errors are caught early and messages are clear.
+**C++との比較**: RustのジェネリクスはC++のテンプレートに似ていますが、決定的な違いが1つあります。それは、**境界のチェックがインスタンス化時ではなく、定義時に行われる**点です。C++ではテンプレートが特定の型とともに使われて初めてコンパイルエラーが発生するため、ライブラリコードの奥深くで難解なエラーメッセージが出がちです。一方Rustでは、関数を定義した時点で `T: PartialOrd` が検証されるため、エラーを早期に検知でき、メッセージも明確です。
 
 ```rust,compile_fail
-// Rust: error at definition site — "T doesn't implement Display"
+// Rust: 定義側でエラーが発生 — "T doesn't implement Display"
 fn broken<T>(val: T) {
-    println!("{val}"); // ❌ Error: T doesn't implement Display
+    println!("{val}"); // ❌ エラー: T が Display を実装していません
 }
 ```
 
 ```rust
-// Fix: add the bound
+// 修正後: トレイト境界を追加
 fn fixed<T: std::fmt::Display>(val: T) {
     println!("{val}"); // ✅
 }
 ```
 
-### When Generics Hurt: Code Bloat
+### ジェネリクスの弊害: コード膨張（Code Bloat）
 
-Monomorphization has a cost — binary size. Each unique instantiation duplicates the function body:
+単相化にはコストが伴います。それはバイナリサイズです。ユニークな具象型で呼び出されるたびに、関数本体が複製されます：
 
 ```rust,ignore
-// This innocent function...
+// この一見無害な関数が...
 fn serialize<T: serde::Serialize>(value: &T) -> Vec<u8> {
     serde_json::to_vec(value).unwrap()
 }
 
-// ...used with 50 different types → 50 copies in the binary.
+// ...50種類の型で使われると → バイナリ内に50個のコピーが生成されます。
 ```
 
-**Mitigation strategies**:
+**緩和策**:
 
 ```rust,ignore
-// 1. Extract the non-generic core ("outline" pattern)
+// 1. 非ジェネリックなコア部分を切り出す（"outline" パターン）
 fn serialize<T: serde::Serialize>(value: &T) -> Result<Vec<u8>, serde_json::Error> {
-    // Generic part: only the serialization call
+    // ジェネリックな部分: シリアライズの呼び出しのみ
     let json_value = serde_json::to_value(value)?;
-    // Non-generic part: extracted into a separate function
+    // 非ジェネリックな部分: 別関数へ抽出
     serialize_value(json_value)
 }
 
 fn serialize_value(value: serde_json::Value) -> Result<Vec<u8>, serde_json::Error> {
-    // This function exists only ONCE in the binary
+    // この関数はバイナリ内に1つだけ存在します
     serde_json::to_vec(&value)
 }
 
-// 2. Use trait objects (dynamic dispatch) when inlining isn't critical
+// 2. インライン化が重要でない場合はトレイトオブジェクト（動的ディスパッチ）を使う
 fn log_item(item: &dyn std::fmt::Display) {
-    // One copy — uses vtable for dispatch
+    // 1つのコピー — ディスパッチにはvtableを使用
     println!("[LOG] {item}");
 }
 ```
 
-> **Rule of thumb**: Use generics for hot paths where inlining matters.
-> Use `dyn Trait` for cold paths (error handling, logging, configuration)
-> where a vtable call is negligible.
+> **経験則（Rule of thumb）**: インライン化が効いてくるホットパスにはジェネリクスを使用します。
+> vtable呼び出しのオーバーヘッドが無視できるコールドパス（エラーハンドリング、ロギング、設定読み込みなど）には `dyn Trait` を使用します。
 
-### Generics vs Enums vs Trait Objects — Decision Guide
+### ジェネリクス vs 列挙型 vs トレイトオブジェクト — 意思決定ガイド
 
-Three ways to handle "different types, same interface" in Rust:
+Rustで「異なる型、同じインターフェース」を扱う方法は3つあります：
 
-| Approach | Dispatch | Known at | Extensible? | Overhead |
-|----------|----------|----------|-------------|----------|
-| **Generics** (`impl Trait` / `<T: Trait>`) | Static (monomorphized) | Compile time | ✅ (open set) | Zero — inlined |
-| **Enum** | Match arm | Compile time | ❌ (closed set) | Zero — no vtable |
-| **Trait object** (`dyn Trait`) | Dynamic (vtable) | Runtime | ✅ (open set) | Vtable pointer + indirect call |
+| アプローチ | ディスパッチ | 解決タイミング | 拡張性 | オーバーヘッド |
+|------------|--------------|----------------|--------|----------------|
+| **ジェネリクス** (`impl Trait` / `<T: Trait>`) | 静的（単相化） | コンパイル時 | ✅（オープンな集合） | ゼロ — インライン化可能 |
+| **列挙型（Enum）** | matchアーム | コンパイル時 | ❌（クローズドな集合） | ゼロ — vtableなし |
+| **トレイトオブジェクト** (`dyn Trait`) | 動的（vtable） | 実行時 | ✅（オープンな集合） | vtableポインタ + 間接呼び出し |
 
 ```rust,ignore
-// --- GENERICS: Open set, zero cost, compile-time ---
+// --- ジェネリクス: オープンな集合、ゼロコスト、コンパイル時 ---
 fn process<H: Handler>(handler: H, request: Request) -> Response {
-    handler.handle(request) // Monomorphized — one copy per H
+    handler.handle(request) // 単相化 — H ごとに1つのコピー
 }
 
-// --- ENUM: Closed set, zero cost, exhaustive matching ---
+// --- 列挙型（Enum）: クローズドな集合、ゼロコスト、網羅的マッチング ---
 enum Shape {
     Circle(f64),
     Rect(f64, f64),
@@ -129,33 +126,33 @@ impl Shape {
         }
     }
 }
-// Adding a new variant forces updating ALL match arms — the compiler
-// enforces exhaustiveness. Great for "I control all the variants."
+// 新しいバリアントを追加すると、すべての match アームの更新が強制されます —
+// コンパイラが網羅性を検証してくれます。「すべてのバリアントを自分で把握・管理できる」場合に最適です。
 
-// --- TRAIT OBJECT: Open set, runtime cost, extensible ---
+// --- トレイトオブジェクト: オープンな集合、実行時コスト、高い拡張性 ---
 fn log_all(items: &[Box<dyn std::fmt::Display>]) {
     for item in items {
-        println!("{item}"); // vtable dispatch
+        println!("{item}"); // vtableディスパッチ
     }
 }
 ```
 
-**Decision flowchart**:
+**意思決定フローチャート**:
 
 ```mermaid
 flowchart TD
-    A["Do you know ALL<br>possible types at<br>compile time?"]
-    A -->|"Yes, small<br>closed set"| B["Enum"]
-    A -->|"Yes, but set<br>is open"| C["Generics<br>(monomorphized)"]
-    A -->|"No — types<br>determined at runtime"| D["dyn Trait"]
+    A["コンパイル時にすべての<br>候補型が判明しているか？"]
+    A -->|"はい、少数の<br>閉じた集合"| B["Enum（列挙型）"]
+    A -->|"はい、ただし集合は<br>オープン（拡張可能）"| C["ジェネリクス<br>（単相化）"]
+    A -->|"いいえ — 実行時に<br>型が決定される"| D["dyn Trait"]
 
-    C --> E{"Hot path?<br>(millions of calls)"}
-    E -->|Yes| F["Generics<br>(inlineable)"]
-    E -->|No| G["dyn Trait<br>is fine"]
+    C --> E{"ホットパスか？<br>（数百万回呼び出される）"}
+    E -->|はい| F["ジェネリクス<br>（インライン化可能）"]
+    E -->|いいえ| G["dyn Trait<br>で十分"]
 
-    D --> H{"Need mixed types<br>in one collection?"}
-    H -->|Yes| I["Vec&lt;Box&lt;dyn Trait&gt;&gt;"]
-    H -->|No| C
+    D --> H{"単一のコレクションに<br>複数の型を混在させるか？"}
+    H -->|はい| I["Vec&lt;Box&lt;dyn Trait&gt;&gt;"]
+    H -->|いいえ| C
 
     style A fill:#e8f4f8,stroke:#2980b9,color:#000
     style B fill:#d4efdf,stroke:#27ae60,color:#000
@@ -168,12 +165,12 @@ flowchart TD
     style H fill:#fef9e7,stroke:#f1c40f,color:#000
 ```
 
-### Const Generics
+### Constジェネリクス
 
-Since Rust 1.51, you can parameterize types and functions over *constant values*, not just types:
+Rust 1.51以降、型だけでなく「定数値」によって型や関数をパラメータ化できるようになりました：
 
 ```rust
-// Array wrapper parameterized over size
+// 配列のサイズによってパラメータ化されたラッパー構造体
 struct Matrix<const ROWS: usize, const COLS: usize> {
     data: [[f64; COLS]; ROWS],
 }
@@ -194,10 +191,10 @@ impl<const ROWS: usize, const COLS: usize> Matrix<ROWS, COLS> {
     }
 }
 
-// The compiler enforces dimensional correctness:
+// コンパイラが行列の次元の整合性を強制します:
 fn multiply<const M: usize, const N: usize, const P: usize>(
     a: &Matrix<M, N>,
-    b: &Matrix<N, P>, // N must match!
+    b: &Matrix<N, P>, // N が一致していなければならない！
 ) -> Matrix<M, P> {
     let mut result = Matrix::<M, P>::new();
     for i in 0..M {
@@ -210,33 +207,31 @@ fn multiply<const M: usize, const N: usize, const P: usize>(
     result
 }
 
-// Usage:
+// 使用例:
 let a = Matrix::<2, 3>::new(); // 2×3
 let b = Matrix::<3, 4>::new(); // 3×4
 let c = multiply(&a, &b);      // 2×4 ✅
 
 // let d = Matrix::<5, 5>::new();
-// multiply(&a, &d); // ❌ Compile error: expected Matrix<3, _>, got Matrix<5, 5>
+// multiply(&a, &d); // ❌ コンパイルエラー: Matrix<3, _> が期待されていますが、Matrix<5, 5> が渡されました
 ```
 
-> **C++ comparison**: This is similar to `template<int N>` in C++, but Rust
-> const generics are type-checked eagerly and don't suffer from SFINAE complexity.
+> **C++との比較**: これはC++の `template<int N>` に似ていますが、Rustのconstジェネリクスは先行して厳格に型チェックされ、SFINAEのような複雑さもありません。
 
-### Const Functions (const fn)
+### Const関数（const fn）
 
-`const fn` marks a function as evaluable at compile time — Rust's equivalent
-of C++ `constexpr`. The result can be used in `const` and `static` contexts:
+`const fn` は、コンパイル時に評価可能な関数であることを示します（C++の `constexpr` に相当）。その戻り値は `const` や `static` のコンテキストで使用できます：
 
 ```rust
-// Basic const fn — evaluated at compile time when used in const context
+// 基本的な const fn — const コンテキストで使用された場合はコンパイル時に評価される
 const fn celsius_to_fahrenheit(c: f64) -> f64 {
     c * 9.0 / 5.0 + 32.0
 }
 
-const BOILING_F: f64 = celsius_to_fahrenheit(100.0); // Computed at compile time
+const BOILING_F: f64 = celsius_to_fahrenheit(100.0); // コンパイル時に計算
 const FREEZING_F: f64 = celsius_to_fahrenheit(0.0);  // 32.0
 
-// Const constructors — create statics without lazy_static!
+// Const コンストラクタ — lazy_static! なしで static な値を生成
 struct BitMask(u32);
 
 impl BitMask {
@@ -253,83 +248,76 @@ impl BitMask {
     }
 }
 
-// Static lookup table — no runtime cost, no lazy initialization
+// 静的なルックアップテーブル — 実行時コストなし、遅延初期化も不要
 const GPIO_INPUT:  BitMask = BitMask::new(0);
 const GPIO_OUTPUT: BitMask = BitMask::new(1);
 const GPIO_IRQ:    BitMask = BitMask::new(2);
 const GPIO_IO:     BitMask = GPIO_INPUT.or(GPIO_OUTPUT);
 
-// Register maps as const arrays:
+// const 配列としてのレジスタマップ:
 const SENSOR_THRESHOLDS: [u16; 4] = {
     let mut table = [0u16; 4];
-    table[0] = 50;   // Warning
-    table[1] = 70;   // High
-    table[2] = 85;   // Critical
-    table[3] = 100;  // Shutdown
+    table[0] = 50;   // 警告
+    table[1] = 70;   // 高温
+    table[2] = 85;   // 危険
+    table[3] = 100;  // シャットダウン
     table
 };
-// The entire table exists in the binary — no heap, no runtime init.
+// テーブル全体がバイナリ内に直接埋め込まれます — ヒープ割り当てや実行時初期化は不要です。
 ```
 
-**What you CAN do in `const fn`** (as of Rust 1.79+):
-- Arithmetic, bit operations, comparisons
-- `if`/`else`, `match`, `loop`, `while` (control flow)
-- Creating and modifying local variables (`let mut`)
-- Calling other `const fn`s
-- References (`&`, `&mut` — within the const context)
-- `panic!()` (becomes a compile error if reached at compile time)
-- Basic floating-point arithmetic (`+`, `-`, `*`, `/`; complex ops like `sqrt`/`sin` are not const-eligible)
+**`const fn` 内で可能なこと**（Rust 1.79+ 時点）:
+- 算術演算、ビット演算、比較演算
+- `if`/`else`、`match`、`loop`、`while`（制御フロー）
+- ローカル変数の作成と変更（`let mut`）
+- 他の `const fn` の呼び出し
+- 参照（`&`、`&mut` — const コンテキスト内において）
+- `panic!()`（コンパイル時評価中に到達した場合はコンパイルエラーになる）
+- 基本的な浮動小数点演算（`+`、`-`、`*`、`/`。`sqrt` や `sin` などの複雑な演算はまだconst対象外）
 
-**What you CANNOT do** (yet):
-- Heap allocation (`Box`, `Vec`, `String`)
-- Trait method calls (only inherent methods)
-- I/O or side effects
+**現時点で不可能なこと**:
+- ヒープ割り当て（`Box`、`Vec`、`String`）
+- トレイトメソッドの呼び出し（固有メソッドのみ可能）
+- I/O操作や副作用
 
 ```rust
-// const fn with panic — becomes a compile-time error:
+// panic を含む const fn — コンパイル時エラーになる:
 const fn checked_div(a: u32, b: u32) -> u32 {
     if b == 0 {
-        panic!("division by zero"); // Compile error if b is 0 at const time
+        panic!("ゼロ除算が発生しました"); // const 評価時に b が 0 の場合、コンパイルエラー
     }
     a / b
 }
 
 const RESULT: u32 = checked_div(100, 4);  // ✅ 25
-// const BAD: u32 = checked_div(100, 0);  // ❌ Compile error: "division by zero"
+// const BAD: u32 = checked_div(100, 0);  // ❌ コンパイルエラー: "ゼロ除算が発生しました"
 ```
 
-> **C++ comparison**: `const fn` is Rust's `constexpr`. The key difference:
-> Rust's version is opt-in and the compiler rigorously verifies that only
-> const-compatible operations are used. In C++, `constexpr` functions can
-> silently fall back to runtime evaluation — in Rust, a `const` context
-> *requires* compile-time evaluation or it's a hard error.
+> **C++との比較**: `const fn` はRustにおける `constexpr` です。決定的な違いは、Rustのバージョンはオプトインであり、コンパイラがconst互換の操作のみが使用されているかを厳密に検証する点です。C++では `constexpr` 関数が暗黙のうちに実行時評価へとフォールバックすることがありますが、Rustの `const` コンテキストでは**必ず**コンパイル時に評価できなければならず、評価できなければハードエラーになります。
 
-> **Practical advice**: Make constructors and simple utility functions `const fn`
-> whenever possible — it costs nothing and enables callers to use them in const
-> contexts. For hardware diagnostic code, `const fn` is ideal for register
-> definitions, bitmask construction, and threshold tables.
+> **実践的アドバイス**: コンストラクタや単純なユーティリティ関数は、可能な限り `const fn` にしてください。コストはかからず、呼び出し側がそれをconstコンテキストで活用できるようになります。ハードウェア診断コードでは、レジスタ定義、ビットマスクの構築、閾値テーブルなどに `const fn` が最適です。
 
-> **Key Takeaways — Generics**
-> - Monomorphization gives zero-cost abstractions but can cause code bloat — use `dyn Trait` for cold paths
-> - Const generics (`[T; N]`) replace C++ template tricks with compile-time–checked array sizes
-> - `const fn` eliminates `lazy_static!` for compile-time–computable values
+> **重要ポイント — ジェネリクス**
+> - 単相化によってゼロコスト抽象化が得られますが、コード膨張を招く可能性があります — コールドパスには `dyn Trait` を検討しましょう
+> - Constジェネリクス（`[T; N]`）は、C++のテンプレートテクニックを置き換え、コンパイル時にチェックされる配列長を提供します
+> - `const fn` を使えば、コンパイル時に計算可能な値に対して `lazy_static!` を使う必要がなくなります
 
-> **See also:** [Ch 2 — Traits In Depth](ch02-traits-in-depth.md) for trait bounds, associated types, and trait objects. [Ch 4 — PhantomData](ch04-phantomdata-types-that-carry-no-data.md) for zero-sized generic markers.
+> **参照:** トレイト境界、関連型、トレイトオブジェクトについては [第2章 — トレイトを極める](ch02-traits-in-depth.md) を参照してください。ゼロサイズ型のジェネリックマーカーについては [第4章 — PhantomData](ch04-phantomdata-types-that-carry-no-data.md) を参照してください。
 
 ---
 
-### Exercise: Generic Cache with Eviction ★★ (~30 min)
+### 演習問題: 退去機能付きジェネリックキャッシュ ★★（目安: 約30分）
 
-Build a generic `Cache<K, V>` struct that stores key-value pairs with a configurable maximum capacity. When full, the oldest entry is evicted (FIFO). Requirements:
+設定可能な最大容量を持つキー・バリューペアを保存するジェネリック構造体 `Cache<K, V>` を作成してください。容量がいっぱいになった場合、最も古いエントリが破棄（FIFO: 先入れ先出し）されます。要件：
 
 - `fn new(capacity: usize) -> Self`
-- `fn insert(&mut self, key: K, value: V)` — evicts the oldest if at capacity
+- `fn insert(&mut self, key: K, value: V)` — 容量上限に達している場合は最古のエントリを退去
 - `fn get(&self, key: &K) -> Option<&V>`
 - `fn len(&self) -> usize`
-- Constrain `K: Eq + Hash + Clone`
+- `K: Eq + Hash + Clone` のトレイト境界を設定
 
 <details>
-<summary>🔑 Solution</summary>
+<summary>🔑 解答例</summary>
 
 ```rust
 use std::collections::{HashMap, VecDeque};
@@ -352,7 +340,7 @@ impl<K: Eq + Hash + Clone, V> Cache<K, V> {
 
     fn insert(&mut self, key: K, value: V) {
         if self.capacity == 0 {
-            // no capacity!
+            // 容量が 0 の場合は何もしない
             return;
         }
         if self.map.contains_key(&key) {
@@ -378,29 +366,28 @@ impl<K: Eq + Hash + Clone, V> Cache<K, V> {
 }
 
 fn main() {
-    // Test of a basic cache
+    // 基本的なキャッシュのテスト
     let mut cache = Cache::new(3);
     cache.insert("a", 1);
     cache.insert("b", 2);
     cache.insert("c", 3);
     assert_eq!(cache.len(), 3);
 
-    cache.insert("d", 4); // Evicts "a"
+    cache.insert("d", 4); // "a" が退去される
     assert_eq!(cache.get(&"a"), None);
     assert_eq!(cache.get(&"d"), Some(&4));
 
-    // Left to the reader: what type should `capacity` attribute be,
-    // to ensure that such a useless cache cannot be defined?
+    // 読者への課題: このような役に立たない空キャッシュを定義できないようにするには、
+    // `capacity` 属性をどのような型にするべきでしょうか？
     let mut empty_cache = Cache::new(0);
     empty_cache.insert("0", 0);
     assert_eq!(empty_cache.get(&"0"), None);
     assert_eq!(empty_cache.len(), 0);
 
-    println!("Cache works! len = {}", cache.len());
+    println!("キャッシュは正常に動作しています！ len = {}", cache.len());
 }
 ```
 
 </details>
 
 ***
-

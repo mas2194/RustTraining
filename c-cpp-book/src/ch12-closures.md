@@ -1,39 +1,39 @@
-## Rust closures
+## Rust のクロージャ
 
-> **What you'll learn:** Closures as anonymous functions, the three capture traits (`Fn`, `FnMut`, `FnOnce`), `move` closures, and how Rust closures compare to C++ lambdas — with automatic capture analysis instead of manual `[&]`/`[=]` specifications.
+> **学べること:** 無名関数としてのクロージャ、3 つのキャプチャトレイト（`Fn`、`FnMut`、`FnOnce`）、`move` クロージャ、そして C++ ラムダとの比較（手動での `[&]` や `[=]` の指定ではなく、自動的なキャプチャ解析が行われます）。
 
-- Closures are anonymous functions that can capture their environment
-    - C++ equivalent: lambdas (`[&](int x) { return x + 1; }`)
-    - Key difference: Rust closures have **three** capture traits (`Fn`, `FnMut`, `FnOnce`) that the compiler selects automatically
-    - C++ capture modes (`[=]`, `[&]`, `[this]`) are manual and error-prone (dangling `[&]`!)
-    - Rust's borrow checker prevents dangling captures at compile time
-- Closures can be identified by the `||` symbol. The parameters for the types are enclosed within the `||` and can use type inference
-- Closures are frequently used in conjunction with iterators (next topic)
+- クロージャは、周囲の環境をキャプチャできる無名関数です
+    - C++ における対応物: ラムダ式（`[&](int x) { return x + 1; }`）
+    - 主な違い: Rust のクロージャには **3 つ** のキャプチャトレイト（`Fn`、`FnMut`、`FnOnce`）があり、コンパイラが自動的に選択します
+    - C++ のキャプチャモード（`[=]`, `[&]`, `[this]`）は手動で指定するため、エラーが発生しやすいです（ダングリング `[&]` など！）
+    - Rust の借用チェッカーは、ダングリングキャプチャをコンパイル時に防ぎます
+- クロージャは `||` 記号によって識別されます。引数の型は `||` の中に囲まれ、型推論を利用できます
+- クロージャはイテレータ（次のトピック）と組み合わせて頻繁に使用されます
 ```rust
 fn add_one(x: u32) -> u32 {
     x + 1
 }
 fn main() {
-    let add_one_v1 = |x : u32| {x + 1}; // Explicitly specified type
-    let add_one_v2 = |x| {x + 1};   // Type is inferred from call site
-    let add_one_v3 = |x| x+1;   // Permitted for single line functions
+    let add_one_v1 = |x : u32| {x + 1}; // 明示的に型を指定
+    let add_one_v2 = |x| {x + 1};   // 呼び出し元から型が推論される
+    let add_one_v3 = |x| x+1;   // 1 行の関数の場合に許可される記法
     println!("{} {} {} {}", add_one(42), add_one_v1(42), add_one_v2(42), add_one_v3(42) );
 }
 ```
 
 
-# Exercise: Closures and capturing
+# 演習: クロージャとキャプチャ
 
-🟡 **Intermediate**
+🟡 **中級**
 
-- Create a closure that captures a `String` from the enclosing scope and appends to it (hint: use `move`)
-- Create a vector of closures: `Vec<Box<dyn Fn(i32) -> i32>>` containing closures that add 1, multiply by 2, and square the input. Iterate over the vector and apply each closure to the number 5
+- 外側のスコープから `String` をキャプチャし、そこに文字列を追加するクロージャを作成してください（ヒント: `move` を使用）
+- クロージャのベクタ `Vec<Box<dyn Fn(i32) -> i32>>` を作成してください。これには、1 を加算する、2 を掛ける、入力を 2 乗するクロージャを含めます。ベクタをイテレートし、数値 5 に対して各クロージャを適用してください
 
-<details><summary>Solution (click to expand)</summary>
+<details><summary>解答（クリックして展開）</summary>
 
 ```rust
 fn main() {
-    // Part 1: Closure that captures and appends to a String
+    // パート 1: String をキャプチャして追加するクロージャ
     let mut greeting = String::from("Hello");
     let mut append = |suffix: &str| {
         greeting.push_str(suffix);
@@ -42,11 +42,11 @@ fn main() {
     append("!");
     println!("{greeting}");  // "Hello, world!"
 
-    // Part 2: Vector of closures
+    // パート 2: クロージャのベクタ
     let operations: Vec<Box<dyn Fn(i32) -> i32>> = vec![
-        Box::new(|x| x + 1),      // add 1
-        Box::new(|x| x * 2),      // multiply by 2
-        Box::new(|x| x * x),      // square
+        Box::new(|x| x + 1),      // 1 を加算
+        Box::new(|x| x * 2),      // 2 を乗算
+        Box::new(|x| x * x),      // 2 乗
     ];
 
     let input = 5;
@@ -54,7 +54,7 @@ fn main() {
         println!("Operation {i} on {input}: {}", op(input));
     }
 }
-// Output:
+// 出力:
 // Hello, world!
 // Operation 0 on 5: 6
 // Operation 1 on 5: 10
@@ -63,9 +63,9 @@ fn main() {
 
 </details>
 
-# Rust iterators
-- Iterators are one of the most powerful features of Rust. They enable very elegant methods for performing operations on collections, including filtering (```filter()```), transformation (```map()```), filter and map (```filter_map()```), searching (```find()```) and much more
-- In the example below, the ```|&x| *x >= 42``` is a closure that performs the same comparison. The ```|x| println!("{x}")``` is another closure
+# Rust のイテレータ
+- イテレータは Rust の最も強力な機能の 1 つです。フィルタリング（`filter()`）、変換（`map()`）、フィルタリングと変換の同時実行（`filter_map()`）、検索（`find()`）など、コレクションに対する操作を行うための非常にエレガントなメソッドを提供します
+- 以下の例において、`|&x| *x >= 42` は同じ比較を実行するクロージャです。`|x| println!("{x}")` も別のクロージャです
 ```rust
 fn main() {
     let a = [0, 1, 2, 3, 42, 43];
@@ -74,29 +74,29 @@ fn main() {
             println!("{x}");
         }
     }
-    // Same as above
+    // 上記と同じ処理
     a.iter().filter(|&x| *x >= 42).for_each(|x| println!("{x}"))
 }
 ```
 
-# Rust iterators
-- A key feature of iterators is that most of them are ```lazy```, i.e., they do not do anything until they are evaluated. For example, ```a.iter().filter(|&x| *x >= 42);``` wouldn't have done *anything* without the ```for_each```. The Rust compiler emits an explicit warning when it detects such a situation
+# Rust のイテレータ
+- イテレータの重要な特徴は、そのほとんどが `遅延評価 (lazy)` されることです。つまり、評価されるまで何も実行しません。例えば、`a.iter().filter(|&x| *x >= 42);` は `for_each` がなければ *何も* 行いません。Rust コンパイラはこのような状況を検出すると明示的な警告を発します
 ```rust
 fn main() {
     let a = [0, 1, 2, 3, 42, 43];
-    // Add one to each element and print it
+    // 各要素に 1 を足して出力
     let _ = a.iter().map(|x|x + 1).for_each(|x|println!("{x}"));
     let found = a.iter().find(|&x|*x == 42);
     println!("{found:?}");
-    // Count elements
+    // 要素数をカウント
     let count = a.iter().count();
     println!("{count}");
 }
 ```
 
-# Rust iterators
-- The ```collect()``` method can be used to gather the results into a separate collection
-    - In the below the ```_``` in ```Vec<_>``` is the equivalent of a wildcard character for the type returned by the ```map```. For example, we can even return a ```String``` from ```map``` 
+# Rust のイテレータ
+- `collect()` メソッドを使用すると、結果を別のコレクションに集約できます
+    - 以下において、`Vec<_>` 内の `_` は `map` から返される型のワイルドカードに相当します。例えば、`map` から `String` を返すことも可能です
 ```rust
 fn main() {
     let a = [0, 1, 2, 3, 42, 43];
@@ -105,26 +105,26 @@ fn main() {
         println!("{x}");
     }
     let squared_a_strings : Vec<_> = a.iter().map(|x|(x*x).to_string()).collect();
-    // These are actually string representations
+    // これらは実際には文字列表現です
     for x in &squared_a_strings {
         println!("{x}");
     }
 }
 ```
 
-# Exercise: Rust iterators
+# 演習: Rust のイテレータ
 
-🟢 **Starter**
-- Create an integer array composed of odd and even elements. Iterate over the array and split it into two different vectors with even and odd elements in each
-- Can this be done in a single pass (hint: use ```partition()```)?
+🟢 **初級 (Starter)**
+- 奇数と偶数の要素で構成される整数の配列を作成してください。配列をイテレートし、それぞれ偶数と奇数の要素を含む 2 つの異なるベクタに分割してください
+- これは 1 回の走査（ワンパス）で実行できますか？（ヒント: `partition()` を使用）
 
-<details><summary>Solution (click to expand)</summary>
+<details><summary>解答（クリックして展開）</summary>
 
 ```rust
 fn main() {
     let numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
-    // Approach 1: Manual iteration
+    // アプローチ 1: 手動でのイテレーション
     let mut evens = Vec::new();
     let mut odds = Vec::new();
     for n in numbers {
@@ -137,14 +137,14 @@ fn main() {
     println!("Evens: {evens:?}");
     println!("Odds:  {odds:?}");
 
-    // Approach 2: Single pass with partition()
+    // アプローチ 2: partition() による 1 パスでの処理
     let (evens, odds): (Vec<i32>, Vec<i32>) = numbers
         .into_iter()
         .partition(|n| *n % 2 == 0);
     println!("Evens (partition): {evens:?}");
     println!("Odds  (partition): {odds:?}");
 }
-// Output:
+// 出力:
 // Evens: [2, 4, 6, 8, 10]
 // Odds:  [1, 3, 5, 7, 9]
 // Evens (partition): [2, 4, 6, 8, 10]
@@ -153,15 +153,13 @@ fn main() {
 
 </details>
 
-> **Production patterns**: See [Collapsing assignment pyramids with closures](ch17-3-collapsing-assignment-pyramids.md#collapsing-assignment-pyramids-with-closures) for real iterator chains (`.map().collect()`, `.filter().collect()`, `.find_map()`) from production Rust code.
+> **本番でのパターン**: 本番の Rust コードで使用される実際のイテレータチェーン（`.map().collect()`, `.filter().collect()`, `.find_map()`）については、[クロージャによる代入ピラミッドの解消](ch17-3-collapsing-assignment-pyramids.md#collapsing-assignment-pyramids-with-closures) を参照してください。
 
-### Iterator power tools: the methods that replace C++ loops
+### イテレータの強力なツール群: C++ のループを置き換えるメソッド
 
-The following iterator adapters are used *extensively* in production Rust code. C++ has
-`<algorithm>` and C++20 ranges, but Rust's iterator chains are more composable
-and more commonly used.
+以下のイテレータアダプタは、本番の Rust コードで *非常によく* 使われます。C++ には `<algorithm>` や C++20 の ranges がありますが、Rust のイテレータチェーンはより合成可能（コンポーザブル）であり、より日常的に使われています。
 
-#### `enumerate` — index + value (replaces `for (int i = 0; ...)`)
+#### `enumerate` — インデックス + 値（`for (int i = 0; ...)` の置き換え）
 
 ```rust
 let sensors = vec!["temp0", "temp1", "temp2"];
@@ -173,9 +171,9 @@ for (idx, name) in sensors.iter().enumerate() {
 // Sensor 2: temp2
 ```
 
-C++ equivalent: `for (size_t i = 0; i < sensors.size(); ++i) { auto& name = sensors[i]; ... }`
+C++ の同等の処理: `for (size_t i = 0; i < sensors.size(); ++i) { auto& name = sensors[i]; ... }`
 
-#### `zip` — pair elements from two iterators (replaces parallel index loops)
+#### `zip` — 2 つのイテレータの要素をペアにする（並列インデックスループの置き換え）
 
 ```rust
 let names = ["gpu0", "gpu1", "gpu2"];
@@ -188,15 +186,15 @@ let report: Vec<String> = names.iter()
 println!("{report:?}");
 // ["gpu0: 72.5°C", "gpu1: 68.0°C", "gpu2: 75.3°C"]
 
-// Stops at the shorter iterator — no out-of-bounds risk
+// 短い方のイテレータで停止 — 境界外アクセスのリスクなし
 ```
 
-C++ equivalent: `for (size_t i = 0; i < std::min(names.size(), temps.size()); ++i) { ... }`
+C++ の同等の処理: `for (size_t i = 0; i < std::min(names.size(), temps.size()); ++i) { ... }`
 
-#### `flat_map` — map + flatten nested collections
+#### `flat_map` — map + ネストしたコレクションの平坦化
 
 ```rust
-// Each GPU has multiple PCIe BDFs; collect all BDFs across all GPUs
+// 各 GPU は複数の PCIe BDF を持つ。すべての GPU にわたるすべての BDF を収集
 let gpu_bdfs = vec![
     vec!["0000:01:00.0", "0000:02:00.0"],
     vec!["0000:41:00.0"],
@@ -210,43 +208,43 @@ println!("{all_bdfs:?}");
 // ["0000:01:00.0", "0000:02:00.0", "0000:41:00.0", "0000:81:00.0", "0000:82:00.0"]
 ```
 
-C++ equivalent: nested `for` loop pushing into a single vector.
+C++ の同等の処理: 単一の vector に push するネストした `for` ループ。
 
-#### `chain` — concatenate two iterators
+#### `chain` — 2 つのイテレータの連結
 
 ```rust
 let critical_gpus = vec!["gpu0", "gpu3"];
 let warning_gpus = vec!["gpu1", "gpu5"];
 
-// Process all flagged GPUs, critical first
+// フラグが立てられたすべての GPU を処理（クリティカルなものを優先）
 for gpu in critical_gpus.iter().chain(warning_gpus.iter()) {
     println!("Flagged: {gpu}");
 }
 ```
 
-#### `windows` and `chunks` — sliding/fixed-size views over slices
+#### `windows` と `chunks` — スライスに対するスライディング / 固定サイズのビュー
 
 ```rust
 let temps = [70, 72, 75, 73, 71, 68, 65];
 
-// windows(3): sliding window of size 3 — detect trends
+// windows(3): サイズ 3 のスライディングウィンドウ — トレンドを検出
 let rising = temps.windows(3)
     .any(|w| w[0] < w[1] && w[1] < w[2]);
 println!("Rising trend detected: {rising}"); // true (70 < 72 < 75)
 
-// chunks(2): fixed-size groups — process in pairs
+// chunks(2): 固定サイズのグループ — ペアで処理
 for pair in temps.chunks(2) {
     println!("Pair: {pair:?}");
 }
 // Pair: [70, 72]
 // Pair: [75, 73]
 // Pair: [71, 68]
-// Pair: [65]       ← last chunk can be smaller
+// Pair: [65]       ← 最後のチャンクは小さくなる場合がある
 ```
 
-C++ equivalent: manual index arithmetic with `i` and `i+1`/`i+2`.
+C++ の同等の処理: `i` や `i+1`/`i+2` による手動のインデックス計算。
 
-#### `fold` — accumulate into a single value (replaces `std::accumulate`)
+#### `fold` — 単一の値への集約（`std::accumulate` の置き換え）
 
 ```rust
 let errors = vec![
@@ -256,7 +254,7 @@ let errors = vec![
     ("gpu3", 1),
 ];
 
-// Count total errors and build summary in one pass
+// 総エラー数をカウントし、1 回の走査でサマリーを構築
 let (total, summary) = errors.iter().fold(
     (0u32, String::new()),
     |(count, mut s), (name, errs)| {
@@ -270,35 +268,35 @@ println!("Total errors: {total}, details: {summary}");
 // Total errors: 11, details: gpu0:3 gpu2:7 gpu3:1
 ```
 
-#### `scan` — stateful transform (running total, delta detection)
+#### `scan` — 状態を持つ変換（累積合計、差分検出）
 
 ```rust
 let readings = [100, 105, 103, 110, 108];
 
-// Compute deltas between consecutive readings
+// 連続する測定値間の差分を計算
 let deltas: Vec<i32> = readings.iter()
     .scan(None::<i32>, |prev, &val| {
         let delta = prev.map(|p| val - p);
         *prev = Some(val);
         Some(delta)
     })
-    .flatten()  // Remove the initial None
+    .flatten()  // 最初の None を除去
     .collect();
 println!("Deltas: {deltas:?}"); // [5, -2, 7, -2]
 ```
 
-#### Quick reference: C++ loop → Rust iterator
+#### クイックリファレンス: C++ のループ → Rust のイテレータ
 
-| **C++ Pattern** | **Rust Iterator** | **Example** |
+| **C++ パターン** | **Rust のイテレータ** | **例** |
 |----------------|------------------|------------|
 | `for (int i = 0; i < v.size(); i++)` | `.enumerate()` | `v.iter().enumerate()` |
-| Parallel iteration with index | `.zip()` | `a.iter().zip(b.iter())` |
-| Nested loop → flat result | `.flat_map()` | `vecs.iter().flat_map(\|v\| v.iter())` |
-| Concatenate two containers | `.chain()` | `a.iter().chain(b.iter())` |
-| Sliding window `v[i..i+n]` | `.windows(n)` | `v.windows(3)` |
-| Process in fixed-size groups | `.chunks(n)` | `v.chunks(4)` |
-| `std::accumulate` / manual accumulator | `.fold()` | `.fold(init, \|acc, x\| ...)` |
-| Running total / delta tracking | `.scan()` | `.scan(state, \|s, x\| ...)` |
+| インデックスを用いた並列反復 | `.zip()` | `a.iter().zip(b.iter())` |
+| ネストしたループ → 平坦な結果 | `.flat_map()` | `vecs.iter().flat_map(\|v\| v.iter())` |
+| 2 つのコンテナの連結 | `.chain()` | `a.iter().chain(b.iter())` |
+| スライディングウィンドウ `v[i..i+n]` | `.windows(n)` | `v.windows(3)` |
+| 固定サイズのグループで処理 | `.chunks(n)` | `v.chunks(4)` |
+| `std::accumulate` / 手動のアキュムレータ | `.fold()` | `.fold(init, \|acc, x\| ...)` |
+| 累積合計 / 差分追跡 | `.scan()` | `.scan(state, \|s, x\| ...)` |
 | `while (it != end && count < n) { ++it; ++count; }` | `.take(n)` | `.iter().take(5)` |
 | `while (it != end && !pred(*it)) { ++it; }` | `.skip_while()` | `.skip_while(\|x\| x < &threshold)` |
 | `std::any_of` | `.any()` | `.iter().any(\|x\| x > &limit)` |
@@ -306,20 +304,19 @@ println!("Deltas: {deltas:?}"); // [5, -2, 7, -2]
 | `std::none_of` | `!.any()` | `!iter.any(\|x\| x.failed())` |
 | `std::count_if` | `.filter().count()` | `.filter(\|x\| x > &0).count()` |
 | `std::min_element` / `std::max_element` | `.min()` / `.max()` | `.iter().max()` → `Option<&T>` |
-| `std::unique` | `.dedup()` (on sorted) | `v.dedup()` (in-place on Vec) |
+| `std::unique` | `.dedup()` (ソート済みに対して) | `v.dedup()` (Vec をその場で変更) |
 
-### Exercise: Iterator chains
+### 演習: イテレータチェーン
 
-Given sensor data as `Vec<(String, f64)>` (name, temperature), write a **single
-iterator chain** that:
-1. Filters sensors with temp > 80.0
-2. Sorts them by temperature (descending)
-3. Formats each as `"{name}: {temp}°C [ALARM]"`
-4. Collects into `Vec<String>`
+`Vec<(String, f64)>`（センサー名、温度）として与えられたセンサーデータに対し、以下を行う **単一のイテレータチェーン** を作成してください：
+1. 温度 > 80.0 のセンサーをフィルタリングする
+2. 温度の降順にソートする
+3. 各要素を `"{name}: {temp}°C [ALARM]"` の形式でフォーマットする
+4. `Vec<String>` に集約（collect）する
 
-Hint: you'll need `.collect()` before `.sort_by()`, since sorting requires a `Vec`.
+ヒント: ソートには `Vec` が必要なため、`.sort_by()` の前に `.collect()` を呼び出す必要があります。
 
-<details><summary>Solution (click to expand)</summary>
+<details><summary>解答（クリックして展開）</summary>
 
 ```rust
 fn alarm_report(sensors: &[(String, f64)]) -> Vec<String> {
@@ -344,7 +341,7 @@ fn main() {
         println!("{line}");
     }
 }
-// Output:
+// 出力:
 // gpu2: 91°C [ALARM]
 // gpu4: 88.7°C [ALARM]
 // gpu1: 85.3°C [ALARM]
@@ -354,12 +351,10 @@ fn main() {
 
 ----
 
-# Rust iterators
-- The ```Iterator``` trait is used to implement iteration over user-defined types (https://doc.rust-lang.org/std/iter/trait.IntoIterator.html)
-    - In the example, we'll implement an iterator for the Fibonacci sequence, which starts with 1, 1, 2, ... and the successor is the sum of the previous two numbers
-    - The ```associated type``` in the ```Iterator``` (```type Item = u32;```) defines the output type from our iterator (```u32```)
-    - The ```next()``` method simply contains the logic for implementing our iterator. In this case, all state information is available in the ```Fibonacci``` structure
-    - We could have implemented another trait called ```IntoIterator``` to implement the ```into_iter()``` method for more specialized iterators
-    - [▶ Try it in the Rust Playground](https://play.rust-lang.org/)
-
-
+# Rust のイテレータ
+- `Iterator` トレイトは、ユーザー定義型に対する反復処理を実装するために使用されます (https://doc.rust-lang.org/std/iter/trait.IntoIterator.html)
+    - この例では、1, 1, 2, ... で始まり、後続の数値が直前の 2 つの数値の和となるフィボナッチ数列のイテレータを実装します
+    - `Iterator` 内の `関連型`（`type Item = u32;`）は、イテレータが出力する型（`u32`）を定義します
+    - `next()` メソッドには、イテレータを実装するためのロジックを記述するだけです。この場合、すべての状態情報は `Fibonacci` 構造体内に保持されます
+    - より特化したイテレータのために `into_iter()` メソッドを実装する `IntoIterator` という別のトレイトを実装することもできます
+    - [▶ Rust Playground で試す](https://play.rust-lang.org/)

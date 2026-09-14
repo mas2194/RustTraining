@@ -1,32 +1,32 @@
-## Capstone Project: Build a CLI Task Manager
+## キャップストーンプロジェクト：CLIタスクマネージャーの構築
 
-> **What you'll learn:** Tie together everything from the course by building a complete Rust CLI application
-> that a Python developer would typically write with `argparse` + `json` + `pathlib`.
+> **学ぶこと:** Python開発者が通常 `argparse` + `json` + `pathlib` で作成するような完全なRust製CLIアプリケーションを構築し、
+> 本コースで学んだすべての知識を結びつけます。
 >
-> **Difficulty:** 🔴 Advanced
+> **難易度:** 🔴 上級
 
-This capstone project exercises concepts from every major chapter:
-- **Ch. 3**: Types and variables (structs, enums)
-- **Ch. 5**: Collections (`Vec`, `HashMap`)
-- **Ch. 6**: Enums and pattern matching (task status, commands)
-- **Ch. 7**: Ownership and borrowing (passing references)
-- **Ch. 9**: Error handling (`Result`, `?`, custom errors)
-- **Ch. 10**: Traits (`Display`, `FromStr`)
-- **Ch. 11**: Type conversions (`From`, `TryFrom`)
-- **Ch. 12**: Iterators and closures (filtering, mapping)
-- **Ch. 8**: Modules (organized project structure)
+このキャップストーンプロジェクトでは、主要な各章の概念を実践します:
+- **第3章**: 型と変数（構造体、列挙型）
+- **第5章**: コレクション（`Vec`、`HashMap`）
+- **第6章**: 列挙型とパターンマッチング（タスクの状態、コマンド）
+- **第7章**: 所有権と借用（参照の受け渡し）
+- **第9章**: エラー処理（`Result`、`?`、カスタムエラー）
+- **第10章**: トレイト（`Display`、`FromStr`）
+- **第11章**: 型変換（`From`、`TryFrom`）
+- **第12章**: イテレータとクロージャ（フィルタリング、マッピング）
+- **第8章**: モジュール（整理されたプロジェクト構造）
 
 ***
 
-## The Project: `rustdo`
+## プロジェクト：`rustdo`
 
-A command-line task manager (like Python's `todo.txt` tools) that stores tasks in a JSON file.
+タスクをJSONファイルに保存するコマンドラインタスクマネージャー（Pythonの `todo.txt` ツールに類似）です。
 
-### Python Equivalent (what you'd write in Python)
+### Pythonでの実装例（Pythonで書く場合）
 
 ```python
 #!/usr/bin/env python3
-"""A simple CLI task manager — the Python version."""
+"""シンプルなCLIタスクマネージャー — Python版。"""
 import json
 import sys
 from pathlib import Path
@@ -57,17 +57,17 @@ def load_tasks() -> list[Task]:
 def save_tasks(tasks: list[Task]):
     TASK_FILE.write_text(json.dumps([t.__dict__ for t in tasks], indent=2))
 
-# Commands: add, list, done, remove, stats
-# ... (you know how this goes in Python)
+# コマンド: add, list, done, remove, stats
+# ... (Pythonでどのように書くかは想像できるでしょう)
 ```
 
-### Your Rust Implementation
+### Rustでの実装
 
-Build this step-by-step. Each step maps to concepts from specific chapters.
+これをステップバイステップで構築していきます。各ステップは特定の章の概念と対応しています。
 
 ***
 
-## Step 1: Define the Data Model (Ch. 3, 6, 10, 11)
+## ステップ1: データモデルの定義（第3, 6, 10, 11章）
 
 ```rust
 // src/task.rs
@@ -76,7 +76,7 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use chrono::Local;
 
-/// Task priority — maps to Python's Priority(Enum)
+/// タスクの優先度 — Pythonの Priority(Enum) に対応
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Priority {
@@ -85,7 +85,7 @@ pub enum Priority {
     High,
 }
 
-// Display trait (Python's __str__)
+// Display トレイト（Pythonの __str__ に相当）
 impl fmt::Display for Priority {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -96,7 +96,7 @@ impl fmt::Display for Priority {
     }
 }
 
-// FromStr trait (parsing "high" → Priority::High)
+// FromStr トレイト（文字列のパース: "high" → Priority::High）
 impl FromStr for Priority {
     type Err = String;
 
@@ -110,7 +110,7 @@ impl FromStr for Priority {
     }
 }
 
-/// A single task — maps to Python's Task class
+/// 単一のタスク — Pythonの Task クラスに対応
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Task {
     pub id: u32,
@@ -145,11 +145,11 @@ impl fmt::Display for Task {
 }
 ```
 
-> **Python comparison**: In Python you'd use `@dataclass` + `Enum`. In Rust, `struct` + `enum` + `derive` macros give you serialization, display, and parsing for free.
+> **Pythonとの比較**: Pythonでは `@dataclass` + `Enum` を使用します。Rustでは、`struct` + `enum` + `derive` マクロにより、シリアライゼーション、表示、パース処理を実質追加コードなしで実現できます。
 
 ***
 
-## Step 2: Storage Layer (Ch. 9, 7)
+## ステップ2: ストレージ層（第9, 7章）
 
 ```rust
 // src/storage.rs
@@ -157,24 +157,24 @@ use std::fs;
 use std::path::PathBuf;
 use crate::task::Task;
 
-/// Get the path to the task file (~/.rustdo.json)
+/// タスクファイルのパスを取得 (~/.rustdo.json)
 fn task_file_path() -> PathBuf {
-    let home = dirs::home_dir().expect("Could not determine home directory");
+    let home = dirs::home_dir().expect("ホームディレクトリを特定できませんでした");
     home.join(".rustdo.json")
 }
 
-/// Load tasks from disk — returns empty Vec if file doesn't exist
+/// ディスクからタスクを読み込む — ファイルが存在しない場合は空のVecを返す
 pub fn load_tasks() -> Result<Vec<Task>, Box<dyn std::error::Error>> {
     let path = task_file_path();
     if !path.exists() {
         return Ok(Vec::new());
     }
-    let content = fs::read_to_string(&path)?;  // ? propagates io::Error
-    let tasks: Vec<Task> = serde_json::from_str(&content)?;  // ? propagates serde error
+    let content = fs::read_to_string(&path)?;  // ? が io::Error を伝播する
+    let tasks: Vec<Task> = serde_json::from_str(&content)?;  // ? が serde のエラーを伝播する
     Ok(tasks)
 }
 
-/// Save tasks to disk
+/// タスクをディスクに保存する
 pub fn save_tasks(tasks: &[Task]) -> Result<(), Box<dyn std::error::Error>> {
     let path = task_file_path();
     let json = serde_json::to_string_pretty(tasks)?;
@@ -183,17 +183,17 @@ pub fn save_tasks(tasks: &[Task]) -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-> **Python comparison**: Python uses `Path.read_text()` + `json.loads()`. Rust uses `fs::read_to_string()` + `serde_json::from_str()`. Note the `?` — every error is explicit and propagated.
+> **Pythonとの比較**: Pythonでは `Path.read_text()` + `json.loads()` を使用します。Rustでは `fs::read_to_string()` + `serde_json::from_str()` を使用します。`?` に注目してください。すべてのエラーが明示的に扱われ、呼び出し元へ伝播されます。
 
 ***
 
-## Step 3: Command Enum (Ch. 6)
+## ステップ3: コマンド列挙型（第6章）
 
 ```rust
 // src/command.rs
 use crate::task::Priority;
 
-/// All possible commands — one enum variant per action
+/// すべての可能なコマンド — アクションごとに1つの列挙型バリアント
 pub enum Command {
     Add { title: String, priority: Priority },
     List { show_done: bool },
@@ -204,13 +204,13 @@ pub enum Command {
 }
 
 impl Command {
-    /// Parse command-line arguments into a Command
-    /// (In production, you'd use `clap` — this is educational)
+    /// コマンドライン引数をパースしてCommandに変換する
+    /// （本番環境では `clap` を使用しますが、ここでは学習用として手動パースします）
     pub fn parse(args: &[String]) -> Result<Self, String> {
         match args.first().map(|s| s.as_str()) {
             Some("add") => {
                 let title = args.get(1)
-                    .ok_or("usage: rustdo add <title> [priority]")?
+                    .ok_or("使用法: rustdo add <title> [priority]")?
                     .clone();
                 let priority = args.get(2)
                     .map(|p| p.parse::<Priority>())
@@ -225,16 +225,16 @@ impl Command {
             }
             Some("done") => {
                 let id: u32 = args.get(1)
-                    .ok_or("usage: rustdo done <id>")?
+                    .ok_or("使用法: rustdo done <id>")?
                     .parse()
-                    .map_err(|_| "id must be a number")?;
+                    .map_err(|_| "idは数値である必要があります")?;
                 Ok(Command::Done { id })
             }
             Some("remove") => {
                 let id: u32 = args.get(1)
-                    .ok_or("usage: rustdo remove <id>")?
+                    .ok_or("使用法: rustdo remove <id>")?
                     .parse()
-                    .map_err(|_| "id must be a number")?;
+                    .map_err(|_| "idは数値である必要があります")?;
                 Ok(Command::Remove { id })
             }
             Some("stats") => Ok(Command::Stats),
@@ -244,11 +244,11 @@ impl Command {
 }
 ```
 
-> **Python comparison**: Python uses `argparse` or `click`. This hand-rolled parser shows how `match` on enum-like patterns replaces Python's if/elif chains. For real projects, use the `clap` crate.
+> **Pythonとの比較**: Pythonでは `argparse` や `click` を使用します。この手作りのパーサーは、列挙型に対する `match` がPythonのif/elifチェーンをどのように置き換えるかを示しています。実際の大規模プロジェクトでは `clap` クレートを使用してください。
 
 ***
 
-## Step 4: Business Logic (Ch. 5, 12, 7)
+## ステップ4: ビジネスロジック（第5, 12, 7章）
 
 ```rust
 // src/actions.rs
@@ -259,7 +259,7 @@ pub fn add_task(title: String, priority: Priority) -> Result<(), Box<dyn std::er
     let mut tasks = storage::load_tasks()?;
     let next_id = tasks.iter().map(|t| t.id).max().unwrap_or(0) + 1;
     let task = Task::new(next_id, title.clone(), priority);
-    println!("Added: {task}");
+    println!("追加完了: {task}");
     tasks.push(task);
     storage::save_tasks(&tasks)?;
     Ok(())
@@ -268,28 +268,28 @@ pub fn add_task(title: String, priority: Priority) -> Result<(), Box<dyn std::er
 pub fn list_tasks(show_done: bool) -> Result<(), Box<dyn std::error::Error>> {
     let tasks = storage::load_tasks()?;
     let filtered: Vec<&Task> = tasks.iter()
-        .filter(|t| show_done || !t.done)   // Iterator + closure (Ch. 12)
+        .filter(|t| show_done || !t.done)   // イテレータ + クロージャ（第12章）
         .collect();
 
     if filtered.is_empty() {
-        println!("No tasks! 🎉");
+        println!("タスクはありません！ 🎉");
         return Ok(());
     }
 
     for task in &filtered {
-        println!("  {task}");   // Uses Display trait (Ch. 10)
+        println!("  {task}");   // Display トレイトを使用（第10章）
     }
-    println!("\n{} task(s) shown", filtered.len());
+    println!("\n表示件数: {} 件", filtered.len());
     Ok(())
 }
 
 pub fn complete_task(id: u32) -> Result<(), Box<dyn std::error::Error>> {
     let mut tasks = storage::load_tasks()?;
     let task = tasks.iter_mut()
-        .find(|t| t.id == id)                // Iterator::find (Ch. 12)
-        .ok_or(format!("No task with id {id}"))?;
+        .find(|t| t.id == id)                // Iterator::find（第12章）
+        .ok_or(format!("ID {} のタスクは見つかりませんでした", id))?;
     task.done = true;
-    println!("Completed: {task}");
+    println!("完了済みに更新: {task}");
     storage::save_tasks(&tasks)?;
     Ok(())
 }
@@ -297,11 +297,11 @@ pub fn complete_task(id: u32) -> Result<(), Box<dyn std::error::Error>> {
 pub fn remove_task(id: u32) -> Result<(), Box<dyn std::error::Error>> {
     let mut tasks = storage::load_tasks()?;
     let len_before = tasks.len();
-    tasks.retain(|t| t.id != id);            // Vec::retain (Ch. 5)
+    tasks.retain(|t| t.id != id);            // Vec::retain（第5章）
     if tasks.len() == len_before {
-        return Err(format!("No task with id {id}").into());
+        return Err(format!("ID {} のタスクは見つかりませんでした", id).into());
     }
-    println!("Removed task {id}");
+    println!("タスク {} を削除しました", id);
     storage::save_tasks(&tasks)?;
     Ok(())
 }
@@ -312,27 +312,27 @@ pub fn show_stats() -> Result<(), Box<dyn std::error::Error>> {
     let done = tasks.iter().filter(|t| t.done).count();
     let pending = total - done;
 
-    // Group by priority using iterators (Ch. 12)
+    // イテレータを使用して優先度別に集計（第12章）
     let high = tasks.iter().filter(|t| !t.done && t.priority == Priority::High).count();
     let medium = tasks.iter().filter(|t| !t.done && t.priority == Priority::Medium).count();
     let low = tasks.iter().filter(|t| !t.done && t.priority == Priority::Low).count();
 
-    println!("📊 Task Statistics");
-    println!("   Total:   {total}");
-    println!("   Done:    {done} ✅");
-    println!("   Pending: {pending}");
-    println!("   🔴 High:   {high}");
-    println!("   🟡 Medium: {medium}");
-    println!("   🟢 Low:    {low}");
+    println!("📊 タスク統計");
+    println!("   合計:     {total}");
+    println!("   完了:     {done} ✅");
+    println!("   未完了:   {pending}");
+    println!("   🔴 高:     {high}");
+    println!("   🟡 中:     {medium}");
+    println!("   🟢 低:     {low}");
     Ok(())
 }
 ```
 
-> **Key Rust patterns used**: `iter().map().max()`, `iter().filter().collect()`, `iter_mut().find()`, `retain()`, `iter().filter().count()`. These replace Python's list comprehensions, `next(x for x in ...)`, and `Counter`.
+> **使われている主なRustパターン**: `iter().map().max()`、`iter().filter().collect()`、`iter_mut().find()`、`retain()`、`iter().filter().count()`。これらはPythonのリスト内包表記、`next(x for x in ...)`、および `Counter` を置き換えるものです。
 
 ***
 
-## Step 5: Wire It Together (Ch. 8)
+## ステップ5: 全体を結合する（第8章）
 
 ```rust
 // src/main.rs
@@ -348,7 +348,7 @@ fn main() {
     let command = match Command::parse(&args) {
         Ok(cmd) => cmd,
         Err(e) => {
-            eprintln!("Error: {e}");
+            eprintln!("エラー: {e}");
             std::process::exit(1);
         }
     };
@@ -366,28 +366,28 @@ fn main() {
     };
 
     if let Err(e) = result {
-        eprintln!("Error: {e}");
+        eprintln!("エラー: {e}");
         std::process::exit(1);
     }
 }
 
 fn print_help() {
-    println!("rustdo — a task manager for Pythonistas learning Rust\n");
-    println!("USAGE:");
-    println!("  rustdo add <title> [low|medium|high]   Add a task");
-    println!("  rustdo list [--all]                    List pending tasks");
-    println!("  rustdo done <id>                       Mark task complete");
-    println!("  rustdo remove <id>                     Remove a task");
-    println!("  rustdo stats                           Show statistics");
+    println!("rustdo — Rustを学ぶPythonistaのためのタスクマネージャー\n");
+    println!("使用法:");
+    println!("  rustdo add <title> [low|medium|high]   タスクを追加");
+    println!("  rustdo list [--all]                    未完了タスク一覧を表示");
+    println!("  rustdo done <id>                       タスクを完了としてマーク");
+    println!("  rustdo remove <id>                     タスクを削除");
+    println!("  rustdo stats                           統計情報を表示");
 }
 ```
 
 ```mermaid
 graph TD
-    CLI["main.rs<br/>(CLI entry)"] --> CMD["command.rs<br/>(parse args)"]
-    CMD --> ACT["actions.rs<br/>(business logic)"]
-    ACT --> STORE["storage.rs<br/>(JSON persistence)"]
-    ACT --> TASK["task.rs<br/>(data model)"]
+    CLI["main.rs<br/>（CLIエントリポイント）"] --> CMD["command.rs<br/>（引数のパース）"]
+    CMD --> ACT["actions.rs<br/>（ビジネスロジック）"]
+    ACT --> STORE["storage.rs<br/>（JSONの永続化）"]
+    ACT --> TASK["task.rs<br/>（データモデル）"]
     STORE --> TASK
     style CLI fill:#d4edda
     style CMD fill:#fff3cd
@@ -398,7 +398,7 @@ graph TD
 
 ***
 
-## Step 6: Cargo.toml Dependencies
+## ステップ6: Cargo.toml の依存関係
 
 ```toml
 [package]
@@ -413,14 +413,14 @@ chrono = "0.4"
 dirs = "5"
 ```
 
-> **Python equivalent**: This is your `pyproject.toml` `[project.dependencies]`. `cargo add serde serde_json chrono dirs` is like `pip install`.
+> **Pythonでの相当物**: これは `pyproject.toml` の `[project.dependencies]` に相当します。`cargo add serde serde_json chrono dirs` は `pip install` のようなものです。
 
 ***
 
-## Step 7: Tests (Ch. 14)
+## ステップ7: テスト（第14章）
 
 ```rust
-// src/task.rs — add at the bottom
+// src/task.rs — 末尾に追加
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -439,7 +439,7 @@ mod tests {
         let display = format!("{task}");
         assert!(display.contains("Write Rust"));
         assert!(display.contains("🔴"));
-        assert!(display.contains("⬜")); // Not done yet
+        assert!(display.contains("⬜")); // まだ完了していない
     }
 
     #[test]
@@ -453,15 +453,15 @@ mod tests {
 }
 ```
 
-> **Python equivalent**: `pytest` tests. Run with `cargo test` instead of `pytest`. No test discovery magic needed — `#[test]` marks test functions explicitly.
+> **Pythonでの相当物**: `pytest` によるテストに相当します。`pytest` の代わりに `cargo test` で実行します。テスト自動検出の「黒魔術」は不要で、`#[test]` がテスト関数であることを明示的に宣言します。
 
 ***
 
-## Stretch Goals
+## さらなる発展課題（Stretch Goals）
 
-Once you have the basic version working, try these enhancements:
+基本機能が動作したら、以下の機能拡張に挑戦してみましょう:
 
-1. **Add `clap` for argument parsing** — Replace the hand-rolled parser with `clap`'s derive macros:
+1. **引数パースに `clap` を導入する** — 手作りのパーサーを `clap` の derive マクロに置き換える:
    ```rust
    #[derive(Parser)]
    enum Command {
@@ -473,31 +473,31 @@ Once you have the basic version working, try these enhancements:
    }
    ```
 
-2. **Add colored output** — Use the `colored` crate for terminal colors (like Python's `colorama`).
+2. **カラー出力を追加する** — ターミナルの色付けに `colored` クレートを使用する（Pythonの `colorama` に類似）。
 
-3. **Add due dates** — Add an `Option<NaiveDate>` field and filter overdue tasks.
+3. **期日（Due Date）を追加する** — `Option<NaiveDate>` フィールドを追加し、期限切れタスクをフィルタリングできるようにする。
 
-4. **Add tags/categories** — Use `Vec<String>` for tags and filter with `.iter().any()`.
+4. **タグ/カテゴリ機能を追加する** — タグ用に `Vec<String>` を追加し、`.iter().any()` を使ってフィルタリングできるようにする。
 
-5. **Make it a library + binary** — Split into `lib.rs` + `main.rs` so the logic is reusable (Ch. 8 module pattern).
+5. **ライブラリ + バイナリ構成にする** — ロジックを再利用可能にするため、`lib.rs` + `main.rs` に分割する（第8章のモジュールパターン）。
 
 ***
 
-## What You Practiced
+## 実践した概念の振り返り
 
-| Chapter | Concept | Where It Appeared |
-|---------|---------|-------------------|
-| Ch. 3 | Types and variables | `Task` struct fields, `u32`, `String`, `bool` |
-| Ch. 5 | Collections | `Vec<Task>`, `retain()`, `push()` |
-| Ch. 6 | Enums + match | `Priority`, `Command`, exhaustive matching |
-| Ch. 7 | Ownership + borrowing | `&[Task]` vs `Vec<Task>`, `&mut` for completion |
-| Ch. 8 | Modules | `mod task; mod storage; mod command; mod actions;` |
-| Ch. 9 | Error handling | `Result<T, E>`, `?` operator, `.ok_or()` |
-| Ch. 10 | Traits | `Display`, `FromStr`, `Serialize`, `Deserialize` |
-| Ch. 11 | From/Into | `FromStr` for Priority, `.into()` for error conversion |
-| Ch. 12 | Iterators | `filter`, `map`, `find`, `count`, `collect` |
-| Ch. 14 | Testing | `#[test]`, `#[cfg(test)]`, assertion macros |
+| 章 | 概念 | 登場箇所 |
+|----|------|----------|
+| 第3章 | 型と変数 | `Task` 構造体のフィールド、`u32`、`String`、`bool` |
+| 第5章 | コレクション | `Vec<Task>`、`retain()`、`push()` |
+| 第6章 | 列挙型 + match | `Priority`、`Command`、網羅的なパターンマッチング |
+| 第7章 | 所有権 + 借用 | `&[Task]` vs `Vec<Task>`、タスク完了時の `&mut` |
+| 第8章 | モジュール | `mod task; mod storage; mod command; mod actions;` |
+| 第9章 | エラー処理 | `Result<T, E>`、`?` 演算子、`.ok_or()` |
+| 第10章 | トレイト | `Display`、`FromStr`、`Serialize`、`Deserialize` |
+| 第11章 | From/Into | Priority用の `FromStr`、エラー変換用の `.into()` |
+| 第12章 | イテレータ | `filter`、`map`、`find`、`count`、`collect` |
+| 第14章 | テスト | `#[test]`、`#[cfg(test)]`、アサーションマクロ |
 
-> 🎓 **Congratulations!** If you've built this project, you've used every major Rust concept covered in this book. You're no longer a Python developer learning Rust — you're a Rust developer who also knows Python.
+> 🎓 **おめでとうございます！** このプロジェクトを構築できたなら、本書で扱った主要なRustの概念をすべて使いこなしたことになります。あなたはもはや「Rustを学んでいるPython開発者」ではなく、「Pythonも知っているRust開発者」です。
 
 ***

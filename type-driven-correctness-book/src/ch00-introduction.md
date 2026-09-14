@@ -1,92 +1,91 @@
-# Type-Driven Correctness in Rust
+# Rustにおける型主導の正当性 (Type-Driven Correctness)
 
-## Speaker Intro
+## 著者紹介
 
-- Principal Firmware Architect in Microsoft SCHIE (Silicon and Cloud Hardware Infrastructure Engineering) team
-- Industry veteran with expertise in security, systems programming (firmware, operating systems, hypervisors), CPU and platform architecture, and C++ systems
-- Started programming in Rust in 2017 (@AWS EC2), and have been in love with the language ever since
+- Microsoft SCHIE（Silicon and Cloud Hardware Infrastructure Engineering）チーム プリンシパルファームウェアアーキテクト
+- セキュリティ、システムプログラミング（ファームウェア、オペレーティングシステム、ハイパーバイザ）、CPUおよびプラットフォームアーキテクチャ、C++システムに関する専門知識を持つ業界のベテラン
+- 2017年にRustプログラミングを開始（@AWS EC2）、それ以来この言語に魅了され続けている
 
 ---
 
-A practical guide to using Rust's type system to make entire classes of bugs **impossible to compile**. While the companion [Rust Patterns](../../rust-patterns-book/src/SUMMARY.md) book covers the mechanics (traits, associated types, type-state), this guide shows how to **apply** those mechanics to real-world domains — hardware diagnostics, cryptography, protocol validation, and embedded systems.
+Rustの型システムを活用して、特定のバグのカテゴリ全体を**コンパイル不可能**にするための実践的なガイドです。姉妹書である [Rust Patterns](../../rust-patterns-book/src/SUMMARY.md) がその仕組み（トレイト、関連型、型状態）を解説しているのに対し、本書ではそれらの仕組みを実世界の領域（ハードウェア診断、暗号、プロトコル検証、組み込みシステム）に**適用**する方法を示します。
 
-Every pattern here follows one principle: **push invariants from runtime checks into the type system so the compiler enforces them.**
+ここで紹介するすべてのパターンは、1つの原則に従っています。**「不変条件を実行時チェックから型システムへと押し上げ、コンパイラに強制させる」**ということです。
 
-## How to Use This Book
+## 本書の使い方
 
-### Difficulty Legend
+### 難易度の凡例
 
-| Symbol | Level | Audience |
+| 記号 | レベル | 対象読者 |
 |:------:|-------|----------|
-| 🟢 | Introductory | Comfortable with ownership + traits |
-| 🟡 | Intermediate | Familiar with generics + associated types |
-| 🔴 | Advanced | Ready for type-state, phantom types, and session types |
+| 🟢 | 入門 | 所有権とトレイトに慣れていること |
+| 🟡 | 中級 | ジェネリクスと関連型に習熟していること |
+| 🔴 | 上級 | 型状態、Phantom 型、セッション型の準備ができていること |
 
-### Pacing Guide
+### 学習ペースガイド
 
-| Goal | Path | Time |
+| 目標 | 推奨ルート | 所要時間 |
 |------|------|------|
-| **Quick overview** | ch01, ch13 (reference card) | 30 min |
-| **IPMI / BMC developer** | ch02, ch05, ch07, ch10, ch17 | 2.5 hrs |
-| **GPU / PCIe developer** | ch02, ch06, ch09, ch10, ch15 | 2.5 hrs |
-| **Redfish implementer** | ch02, ch05, ch07, ch08, ch17, ch18 | 3 hrs |
-| **Framework / infrastructure** | ch04, ch08, ch11, ch14, ch18 | 2.5 hrs |
-| **New to correct-by-construction** | ch01 → ch10 in order, then ch12 exercises | 4 hrs |
-| **Full deep dive** | All chapters sequentially | 7 hrs |
+| **概要の把握** | ch01, ch13（リファレンスカード） | 30分 |
+| **IPMI / BMC 開発者** | ch02, ch05, ch07, ch10, ch17 | 2.5時間 |
+| **GPU / PCIe 開発者** | ch02, ch06, ch09, ch10, ch15 | 2.5時間 |
+| **Redfish 実装者** | ch02, ch05, ch07, ch08, ch17, ch18 | 3時間 |
+| **フレームワーク / インフラ開発** | ch04, ch08, ch11, ch14, ch18 | 2.5時間 |
+| **構築による正当性の入門** | ch01 → ch10を順に読み、ch12の演習問題へ | 4時間 |
+| **完全な徹底学習** | 全章を順番に通読 | 7時間 |
 
-### Annotated Table of Contents
+### 解説付き目次
 
-| Ch | Title | Difficulty | Key Idea |
+| 章 | タイトル | 難易度 | 主要な概念 |
 |----|-------|:----------:|----------|
-| 1 | The Philosophy — Why Types Beat Tests | 🟢 | Three levels of correctness; types as compiler-checked guarantees |
-| 2 | Typed Command Interfaces | 🟡 | Associated types bind request → response |
-| 3 | Single-Use Types | 🟡 | Move semantics as linear types for crypto |
-| 4 | Capability Tokens | 🟡 | Zero-sized proof-of-authority tokens |
-| 5 | Protocol State Machines | 🔴 | Type-state for IPMI sessions + PCIe LTSSM |
-| 6 | Dimensional Analysis | 🟢 | Newtype wrappers prevent unit mix-ups |
-| 7 | Validated Boundaries | 🟡 | Parse once at the edge, carry proof in types |
-| 8 | Capability Mixins | 🟡 | Ingredient traits + blanket impls |
-| 9 | Phantom Types | 🟡 | PhantomData for register width, DMA direction |
-| 10 | Putting It All Together | 🟡 | All 7 patterns in one diagnostic platform |
-| 11 | Fourteen Tricks from the Trenches | 🟡 | Sentinel→Option, sealed traits, builders, etc. |
-| 12 | Exercises | 🟡 | Six capstone problems with solutions |
-| 13 | Reference Card | — | Pattern catalogue + decision flowchart |
-| 14 | Testing Type-Level Guarantees | 🟡 | trybuild, proptest, cargo-show-asm |
-| 15 | Const Fn | 🟠 | Compile-time proofs for memory maps, registers, bitfields |
-| 16 | Send & Sync | 🟠 | Compile-time concurrency proofs |
-| 17 | Redfish Client Walkthrough | 🟡 | Eight patterns composed into a type-safe Redfish client |
-| 18 | Redfish Server Walkthrough | 🟡 | Builder type-state, source tokens, health rollup, mixins |
+| 1 | 哲学 — なぜ型はテストに勝るのか | 🟢 | 3つの正当性レベル。コンパイラ検証済みの保証としての型 |
+| 2 | 型付けされたコマンドインターフェース | 🟡 | 関連型がリクエスト → レスポンスを束縛 |
+| 3 | 単一使用型 | 🟡 | 暗号処理のための線形型としてのムーブセマンティクス |
+| 4 | ケーパビリティトークン | 🟡 | サイズゼロの権限証明トークン |
+| 5 | プロトコル状態機械 | 🔴 | IPMI セッションおよび PCIe LTSSM のための型状態 |
+| 6 | 次元解析 | 🟢 | newtype ラッパーによる単位の取り違え防止 |
+| 7 | 検証された境界 | 🟡 | 境界で一度パースし、型の中に証明を保持する |
+| 8 | ケーパビリティ Mixin | 🟡 | 材料トレイトとブランケット実装 |
+| 9 | Phantom 型 | 🟡 | レジスタ幅や DMA 方向のための PhantomData |
+| 10 | すべてを組み合わせる | 🟡 | 1つの診断プラットフォームにおける7つの全パターンの統合 |
+| 11 | 現場から得られた14のテクニック | 🟡 | 番兵値から Option への変換、シールドトレイト、ビルダーなど |
+| 12 | 演習問題 | 🟡 | 解答付きの6つの総括演習問題 |
+| 13 | リファレンスカード | — | パターンカタログと決定フローチャート |
+| 14 | 型レベル保証のテスト | 🟡 | trybuild, proptest, cargo-show-asm |
+| 15 | Const Fn | 🟠 | メモリマップ、レジスタ、ビットフィールドに対するコンパイル時の証明 |
+| 16 | Send & Sync | 🟠 | コンパイル時の並行性証明 |
+| 17 | Redfish クライアント実践ウォークスルー | 🟡 | 8つのパターンを組み合わせて構築する型安全な Redfish クライアント |
+| 18 | Redfish サーバー実践ウォークスルー | 🟡 | ビルダー型状態、送信元トークン、ヘルスロールアップ、Mixin |
 
-## Prerequisites
+## 前提知識
 
-| Concept | Where to learn it |
+| 概念 | 学習リソース |
 |---------|-------------------|
-| Ownership and borrowing | [Rust Patterns](../rust-patterns-book/src/SUMMARY.md), ch01 |
-| Traits and associated types | [Rust Patterns](../rust-patterns-book/src/SUMMARY.md), ch02 |
-| Newtypes and type-state | [Rust Patterns](../rust-patterns-book/src/SUMMARY.md), ch03 |
+| 所有権と借用 | [Rust Patterns](../rust-patterns-book/src/SUMMARY.md), ch01 |
+| トレイトと関連型 | [Rust Patterns](../rust-patterns-book/src/SUMMARY.md), ch02 |
+| newtype と型状態 | [Rust Patterns](../rust-patterns-book/src/SUMMARY.md), ch03 |
 | PhantomData | [Rust Patterns](../rust-patterns-book/src/SUMMARY.md), ch04 |
-| Generics and trait bounds | [Rust Patterns](../rust-patterns-book/src/SUMMARY.md), ch01 |
+| ジェネリクスとトレイト境界 | [Rust Patterns](../rust-patterns-book/src/SUMMARY.md), ch01 |
 
-## The Correct-by-Construction Spectrum
+## 構築による正当性（Correct-by-Construction）のスペクトラム
 
 ```text
-← Less Safe                                                    More Safe →
+← 安全性が低い                                                    安全性が高い →
 
-Runtime checks      Unit tests        Property tests      Correct by Construction
+実行時チェック      単体テスト        プロパティテスト    構築による正当性
 ─────────────       ──────────        ──────────────      ──────────────────────
 
 if temp > 100 {     #[test]           proptest! {         struct Celsius(f64);
-  panic!("too       fn test_temp() {    |t in 0..200| {   // Can't confuse with Rpm
-  hot");              assert!(          assert!(...)       // at the type level
+  panic!("too       fn test_temp() {    |t in 0..200| {   // 型レベルで Rpm と
+  hot");              assert!(          assert!(...)       // 混同不可能
 }                     check(42));     }
                     }                 }
-                                                          Invalid program?
-Invalid program?    Invalid program?  Invalid program?    Won't compile.
-Crashes in prod.    Fails in CI.      Fails in CI         Never exists.
-                                      (probabilistic).
+                                                          不正なプログラム？
+不正なプログラム？  不正なプログラム？ 不正なプログラム？ コンパイル不可。
+本番環境でクラッシュ CIで失敗         CIで失敗            存在すらしない。
+                                      （確率的）
 ```
 
-This guide operates at the rightmost position — where bugs don't exist because the type system **cannot express them**.
+本書は最も右側の領域、すなわち型システムがバグを**表現することすらできない**ためバグが存在し得ない領域を扱います。
 
 ---
-

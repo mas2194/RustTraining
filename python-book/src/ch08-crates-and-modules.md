@@ -1,19 +1,18 @@
-## Rust Modules vs Python Packages
+## Rustのモジュール vs Pythonのパッケージ
 
-> **What you'll learn:** `mod` and `use` vs `import`, visibility (`pub`) vs Python's convention-based privacy,
-> Cargo.toml vs pyproject.toml, crates.io vs PyPI, and workspaces vs monorepos.
+> **学ぶこと:** `mod` と `use` vs `import`、可視性（`pub`）とPythonの慣例による非公開の違い、Cargo.toml vs pyproject.toml、crates.io vs PyPI、そしてワークスペースとモノレポについて学びます。
 >
-> **Difficulty:** 🟢 Beginner
+> **難易度:** 🟢 初級
 
-### Python Module System
+### Pythonのモジュールシステム
 ```python
-# Python — files are modules, directories with __init__.py are packages
+# Python — ファイルがモジュールとなり、__init__.py を持つディレクトリがパッケージとなる
 
 # myproject/
-# ├── __init__.py          # Makes it a package
+# ├── __init__.py          # パッケージにするためのファイル
 # ├── main.py
 # ├── utils/
-# │   ├── __init__.py      # Makes utils a sub-package
+# │   ├── __init__.py      # utils をサブパッケージにする
 # │   ├── helpers.py
 # │   └── validators.py
 # └── models/
@@ -21,20 +20,20 @@
 #     ├── user.py
 #     └── product.py
 
-# Importing:
+# インポート:
 from myproject.utils.helpers import format_name
 from myproject.models.user import User
 import myproject.utils.validators as validators
 ```
 
-### Rust Module System
+### Rustのモジュールシステム
 ```rust
-// Rust — mod declarations create the module tree, files provide content
+// Rust — mod 宣言がモジュールツリーを構築し、ファイルが内容を提供する
 
 // src/
-// ├── main.rs             # Crate root — declares modules
+// ├── main.rs             # クレートルート — モジュールを宣言
 // ├── utils/
-// │   ├── mod.rs           # Module declaration (like __init__.py)
+// │   ├── mod.rs           # モジュール宣言（__init__.py に類似）
 // │   ├── helpers.rs
 // │   └── validators.rs
 // └── models/
@@ -42,21 +41,21 @@ import myproject.utils.validators as validators
 //     ├── user.rs
 //     └── product.rs
 
-// In src/main.rs:
-mod utils;       // Tells Rust to look for src/utils/mod.rs
-mod models;      // Tells Rust to look for src/models/mod.rs
+// src/main.rs 内:
+mod utils;       // Rust に src/utils/mod.rs を探索するよう指示
+mod models;      // Rust に src/models/mod.rs を探索するよう指示
 
 use utils::helpers::format_name;
 use models::user::User;
 
-// In src/utils/mod.rs:
-pub mod helpers;      // Declares and re-exports helpers.rs
-pub mod validators;   // Declares and re-exports validators.rs
+// src/utils/mod.rs 内:
+pub mod helpers;      // helpers.rs を宣言して再エクスポート
+pub mod validators;   // validators.rs を宣言して再エクスポート
 ```
 
 ```mermaid
 graph TD
-    A["main.rs<br/>(crate root)"] --> B["mod utils"]
+    A["main.rs<br/>（クレートルート）"] --> B["mod utils"]
     A --> C["mod models"]
     B --> D["utils/mod.rs"]
     D --> E["helpers.rs"]
@@ -69,40 +68,40 @@ graph TD
     style G fill:#fff3cd,stroke:#ffc107
 ```
 
-> **Python equivalent**: Think of `mod.rs` as `__init__.py` — it declares what the module exports. The crate root (`main.rs` / `lib.rs`) is like your top-level package `__init__.py`.
+> **Pythonでの相当物**: `mod.rs` は `__init__.py` のようなものと考えてください。モジュールが何をエクスポートするかを宣言します。クレートルート（`main.rs` / `lib.rs`）は、最上位パッケージの `__init__.py` に似ています。
 
-### Key Differences
+### 主な違い
 
-| Concept | Python | Rust |
+| 概念 | Python | Rust |
 |---------|--------|------|
-| Module = file | ✅ Automatic | Must declare with `mod` |
-| Package = directory | `__init__.py` | `mod.rs` |
-| Public by default | ✅ Everything | ❌ Private by default |
-| Make public | `_prefix` convention | `pub` keyword |
-| Import syntax | `from x import y` | `use x::y;` |
-| Wildcard import | `from x import *` | `use x::*;` (discouraged) |
-| Relative imports | `from . import sibling` | `use super::sibling;` |
-| Re-export | `__all__` or explicit | `pub use inner::Thing;` |
+| モジュール ＝ ファイル | ✅ 自動的 | `mod` で宣言する必要がある |
+| パッケージ ＝ ディレクトリ | `__init__.py` | `mod.rs` |
+| デフォルトで公開 | ✅ すべて公開 | ❌ デフォルトで非公開（private） |
+| 公開にする方法 | `_prefix` の慣例 | `pub` キーワード |
+| インポート構文 | `from x import y` | `use x::y;` |
+| ワイルドカードインポート | `from x import *` | `use x::*;`（非推奨） |
+| 相対インポート | `from . import sibling` | `use super::sibling;` |
+| 再エクスポート | `__all__` または明示的インポート | `pub use inner::Thing;` |
 
-### Visibility — Private by Default
+### 可視性 — デフォルトで非公開
 ```python
-# Python — "we're all adults here"
+# Python — "私たちはみな分別ある大人である"（紳士協定）
 class User:
     def __init__(self):
-        self.name = "Alice"       # Public (by convention)
-        self._age = 30            # "Private" (convention: single underscore)
-        self.__secret = "shhh"    # Name-mangled (not truly private)
+        self.name = "Alice"       # 公開（慣例による）
+        self._age = 30            # "非公開"（慣例: アンダースコア1つ）
+        self.__secret = "shhh"    # マングリング（完全な非公開ではない）
 
-# Nothing stops you from accessing _age or even __secret
-print(user._age)                  # Works fine
-print(user._User__secret)        # Works too (name mangling)
+# _age や __secret にアクセスすることを防ぐものは何もない
+print(user._age)                  # 正常に動作する
+print(user._User__secret)        # これも動作する（名前マングリング）
 ```
 
 ```rust
-// Rust — private is enforced by the compiler
+// Rust — 非公開（private）はコンパイラによって強制される
 pub struct User {
-    pub name: String,      // Public — anyone can access
-    age: i32,              // Private — only this module can access
+    pub name: String,      // 公開 — 誰でもアクセス可能
+    age: i32,              // 非公開 — このモジュール内からのみアクセス可能
 }
 
 impl User {
@@ -110,42 +109,42 @@ impl User {
         User { name: name.to_string(), age }
     }
 
-    pub fn age(&self) -> i32 {   // Public getter
+    pub fn age(&self) -> i32 {   // 公開ゲッター
         self.age
     }
 
-    fn validate(&self) -> bool { // Private method
+    fn validate(&self) -> bool { // 非公開メソッド
         self.age > 0
     }
 }
 
-// Outside the module:
+// モジュールの外部:
 let user = User::new("Alice", 30);
-println!("{}", user.name);        // ✅ Public
-// println!("{}", user.age);      // ❌ Compile error: field is private
-println!("{}", user.age());       // ✅ Public method (getter)
+println!("{}", user.name);        // ✅ 公開
+// println!("{}", user.age);      // ❌ コンパイルエラー: フィールドは非公開
+println!("{}", user.age());       // ✅ 公開メソッド（ゲッター）
 ```
 
 ***
 
-## Crates vs PyPI Packages
+## クレート vs PyPI パッケージ
 
-### Python Packages (PyPI)
+### Pythonのパッケージ (PyPI)
 ```bash
 # Python
-pip install requests           # Install from PyPI
-pip install "requests>=2.28"   # Version constraint
-pip freeze > requirements.txt  # Lock versions
-pip install -r requirements.txt # Reproduce environment
+pip install requests           # PyPI からインストール
+pip install "requests>=2.28"   # バージョン制約
+pip freeze > requirements.txt  # バージョンの固定（ロック）
+pip install -r requirements.txt # 環境の再現
 ```
 
-### Rust Crates (crates.io)
+### Rustのクレート (crates.io)
 ```bash
 # Rust
-cargo add reqwest              # Install from crates.io (adds to Cargo.toml)
-cargo add reqwest@0.12         # Version constraint
-# Cargo.lock is auto-generated — no manual step
-cargo build                    # Downloads and compiles dependencies
+cargo add reqwest              # crates.io からインストール（Cargo.toml に追加）
+cargo add reqwest@0.12         # バージョン制約
+# Cargo.lock は自動生成される — 手動での手順は不要
+cargo build                    # 依存関係をダウンロードしてコンパイル
 ```
 
 ### Cargo.toml vs pyproject.toml
@@ -157,7 +156,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-serde = { version = "1.0", features = ["derive"] }  # With feature flags
+serde = { version = "1.0", features = ["derive"] }  # 機能フラグ（features）付き
 reqwest = { version = "0.12", features = ["json"] }
 tokio = { version = "1", features = ["full"] }
 log = "0.4"
@@ -166,40 +165,40 @@ log = "0.4"
 mockall = "0.13"
 ```
 
-### Essential Crates for Python Developers
+### Python開発者のための必須クレート一覧
 
-| Python Library | Rust Crate | Purpose |
+| Pythonライブラリ | Rustクレート | 用途 |
 |---------------|------------|---------|
-| `requests` | `reqwest` | HTTP client |
-| `json` (stdlib) | `serde_json` | JSON parsing |
-| `pydantic` | `serde` | Serialization/validation |
-| `pathlib` | `std::path` (stdlib) | Path handling |
-| `os` / `shutil` | `std::fs` (stdlib) | File operations |
-| `re` | `regex` | Regular expressions |
-| `logging` | `tracing` / `log` | Logging |
-| `click` / `argparse` | `clap` | CLI argument parsing |
-| `asyncio` | `tokio` | Async runtime |
-| `datetime` | `chrono` | Date and time |
-| `pytest` | Built-in + `rstest` | Testing |
-| `dataclasses` | `#[derive(...)]` | Data structures |
-| `typing.Protocol` | Traits | Structural typing |
-| `subprocess` | `std::process` (stdlib) | Run external commands |
+| `requests` | `reqwest` | HTTPクライアント |
+| `json` (標準ライブラリ) | `serde_json` | JSONパース |
+| `pydantic` | `serde` | シリアライズ / バリデーション |
+| `pathlib` | `std::path` (標準ライブラリ) | パス操作 |
+| `os` / `shutil` | `std::fs` (標準ライブラリ) | ファイル操作 |
+| `re` | `regex` | 正規表現 |
+| `logging` | `tracing` / `log` | ロギング |
+| `click` / `argparse` | `clap` | CLI引数のパース |
+| `asyncio` | `tokio` | 非同期ランタイム |
+| `datetime` | `chrono` | 日時処理 |
+| `pytest` | 組み込み機能 + `rstest` | テスト |
+| `dataclasses` | `#[derive(...)]` | データ構造 |
+| `typing.Protocol` | トレイト | 構造的型付け |
+| `subprocess` | `std::process` (標準ライブラリ) | 外部コマンド実行 |
 | `sqlite3` | `rusqlite` | SQLite |
-| `sqlalchemy` | `diesel` / `sqlx` | ORM / SQL toolkit |
-| `fastapi` | `axum` / `actix-web` | Web framework |
+| `sqlalchemy` | `diesel` / `sqlx` | ORM / SQLツールキット |
+| `fastapi` | `axum` / `actix-web` | Webフレームワーク |
 
 ***
 
-## Workspaces vs Monorepos
+## ワークスペース vs モノレポ
 
-### Python Monorepo (typical)
+### Pythonのモノレポ（一般的な構成）
 ```text
-# Python monorepo (various approaches, no standard)
+# Python モノレポ（さまざまなアプローチがあり、標準はない）
 myproject/
-├── pyproject.toml           # Root project
+├── pyproject.toml           # ルートプロジェクト
 ├── packages/
 │   ├── core/
-│   │   ├── pyproject.toml   # Each package has its own config
+│   │   ├── pyproject.toml   # 各パッケージが独自の設定を持つ
 │   │   └── src/core/...
 │   ├── api/
 │   │   ├── pyproject.toml
@@ -207,12 +206,12 @@ myproject/
 │   └── cli/
 │       ├── pyproject.toml
 │       └── src/cli/...
-# Tools: poetry workspaces, pip -e ., uv workspaces — no standard
+# ツール: poetry workspaces, pip -e ., uv workspaces — 標準は存在しない
 ```
 
-### Rust Workspace
+### Rustのワークスペース
 ```toml
-# Rust — Cargo.toml at root
+# Rust — ルートの Cargo.toml
 [workspace]
 members = [
     "core",
@@ -220,17 +219,17 @@ members = [
     "cli",
 ]
 
-# Shared dependencies across workspace
+# ワークスペース全体で共有される依存関係
 [workspace.dependencies]
 serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
 ```
 
 ```text
-# Rust workspace structure — standardized, built into Cargo
+# Rust ワークスペース構造 — 標準化されており、Cargo に組み込み
 myproject/
-├── Cargo.toml               # Workspace root
-├── Cargo.lock               # Single lock file for all crates
+├── Cargo.toml               # ワークスペースルート
+├── Cargo.lock               # 全クレート共通の単一のロックファイル
 ├── core/
 │   ├── Cargo.toml            # [dependencies] serde.workspace = true
 │   └── src/lib.rs
@@ -243,27 +242,24 @@ myproject/
 ```
 
 ```bash
-# Workspace commands
-cargo build                  # Build everything
-cargo test                   # Test everything
-cargo build -p core          # Build just the core crate
-cargo test -p api            # Test just the api crate
-cargo clippy --all           # Lint everything
+# ワークスペースコマンド
+cargo build                  # すべてをビルド
+cargo test                   # すべてをテスト
+cargo build -p core          # core クレートのみビルド
+cargo test -p api            # api クレートのみテスト
+cargo clippy --all           # すべてをリント
 ```
 
-> **Key insight**: Rust workspaces are first-class, built into Cargo. Python monorepos
-> require third-party tools (poetry, uv, pants) with varying levels of support.
-> In a Rust workspace, all crates share a single `Cargo.lock`, ensuring consistent
-> dependency versions across the project.
+> **重要なポイント**: RustのワークスペースはCargoに標準で組み込まれたファーストクラスの機能です。Pythonのモノレポはサードパーティツール（poetry、uv、pantsなど）に依存しており、サポートレベルも様々です。Rustのワークスペースでは、すべてのクレートが単一の `Cargo.lock` を共有するため、プロジェクト全体で一貫した依存関係バージョンが保証されます。
 
 ---
 
-## Exercises
+## 演習問題
 
 <details>
-<summary><strong>🏋️ Exercise: Module Visibility</strong> (click to expand)</summary>
+<summary><strong>🏋️ 演習: モジュールの可視性</strong>（クリックして展開）</summary>
 
-**Challenge**: Given this module structure, predict which lines compile and which don't:
+**課題**: 以下のモジュール構造において、どの行がコンパイル可能でどの行がコンパイルエラーになるかを予測してください:
 
 ```rust
 mod kitchen {
@@ -285,16 +281,15 @@ fn main() {
 ```
 
 <details>
-<summary>🔑 Solution</summary>
+<summary>🔑 解答例</summary>
 
-- **Line A**: ✅ Compiles — `menu()` is `pub`
-- **Line B**: ❌ Compile error — `secret_recipe()` is private to `kitchen`
-- **Line C**: ✅ Compiles — `staff::cook()` is `pub`, and `cook()` can access `secret_recipe()` via `super::` (child modules can access parent's private items)
+- **Line A**: ✅ コンパイル可能 — `menu()` は `pub` です。
+- **Line B**: ❌ コンパイルエラー — `secret_recipe()` は `kitchen` モジュールの非公開アイテムです。
+- **Line C**: ✅ コンパイル可能 — `staff::cook()` は `pub` であり、`cook()` は `super::` を介して `secret_recipe()` にアクセスできます（子モジュールは親モジュールの非公開アイテムにアクセスできます）。
 
-**Key takeaway**: In Rust, child modules can see parent's privates (like Python's `_private` convention, but enforced). Outsiders cannot. This is the opposite of Python where `_private` is just a hint.
+**重要なポイント**: Rustでは、子モジュールは親の非公開アイテムを参照できます（Pythonの `_private` の慣例に似ていますが、コンパイラによって強制されます）。外部からはアクセスできません。これは、`_private` が単なるヒントに過ぎないPythonとは対照的です。
 
 </details>
 </details>
 
 ***
-

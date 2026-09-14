@@ -1,63 +1,62 @@
-## Macros: Code That Writes Code
+## マクロ: コードを書くコード
 
-> **What you'll learn:** Why Rust needs macros (no overloading, no variadic args), `macro_rules!` basics,
-> the `!` suffix convention, common derive macros, and `dbg!()` for quick debugging.
+> **学習内容:** Rust にマクロが必要な理由（オーバーロードや可変長引数の不在）、`macro_rules!` の基本、`!` 接尾辞の慣例、一般的な derive マクロ、および迅速なデバッグのための `dbg!()`。
 >
-> **Difficulty:** 🟡 Intermediate
+> **難易度:** 🟡 中級
 
-C# has no direct equivalent to Rust macros. Understanding why they exist and how they work removes a major source of confusion for C# developers.
+C# には Rust のマクロに直接相当するものはありません。マクロが存在する理由とその仕組みを理解することで、C# 開発者が抱きがちな大きな疑問を解消できます。
 
-### Why Macros Exist in Rust
+### なぜRustにマクロが存在するのか
 
 ```mermaid
 graph LR
-    SRC["vec![1, 2, 3]"] -->|"compile time"| EXP["{
+    SRC["vec![1, 2, 3]"] -->|"コンパイル時"| EXP["{
   let mut v = Vec::new();
   v.push(1);
   v.push(2);
   v.push(3);
   v
 }"]
-    EXP -->|"compiles to"| BIN["machine code"]
+    EXP -->|"以下にコンパイル"| BIN["機械語コード"]
 
     style SRC fill:#fff9c4,color:#000
     style EXP fill:#c8e6c9,color:#000
 ```
 
 ```csharp
-// C# has features that make macros unnecessary:
-Console.WriteLine("Hello");           // Method overloading (1-16 params)
-Console.WriteLine("{0}, {1}", a, b);  // Variadic via params array
-var list = new List<int> { 1, 2, 3 }; // Collection initializer syntax
+// C# にはマクロを不要にする言語機能があります:
+Console.WriteLine("Hello");           // メソッドオーバーロード (1〜16個のパラメータ)
+Console.WriteLine("{0}, {1}", a, b);  // params 配列による可変長引数
+var list = new List<int> { 1, 2, 3 }; // コレクション初期化子構文
 ```
 
 ```rust
-// Rust has NO function overloading, NO variadic arguments, NO special syntax.
-// Macros fill these gaps:
-println!("Hello");                    // Macro — handles 0+ args at compile time
-println!("{}, {}", a, b);             // Macro — type-checked at compile time
-let list = vec![1, 2, 3];            // Macro — expands to Vec::new() + push()
+// Rust には関数のオーバーロードも、可変長引数も、特別なリテラル構文もありません。
+// マクロがこれらの隙間を埋めます:
+println!("Hello");                    // マクロ — 0個以上の引数をコンパイル時に処理
+println!("{}, {}", a, b);             // マクロ — コンパイル時に型チェックされる
+let list = vec![1, 2, 3];            // マクロ — Vec::new() + push() に展開される
 ```
 
-### Recognizing Macros: The `!` Suffix
+### マクロの見分け方: 「!」接尾辞
 
-Every macro invocation ends with `!`. If you see `!`, it's a macro, not a function:
+すべてのマクロ呼び出しの末尾には `!` が付きます。`!` を見かけたら、それは関数ではなくマクロです:
 
 ```rust
-println!("hello");     // macro — generates format string code at compile time
-format!("{x}");        // macro — returns String, compile-time format checking
-vec![1, 2, 3];         // macro — creates and populates a Vec
-todo!();               // macro — panics with "not yet implemented"
-dbg!(expression);      // macro — prints file:line + expression + value, returns value
-assert_eq!(a, b);      // macro — panics with diff if a ≠ b
-cfg!(target_os = "linux"); // macro — compile-time platform detection
+println!("hello");     // マクロ — コンパイル時にフォーマット文字列コードを生成
+format!("{x}");        // マクロ — String を返し、コンパイル時にフォーマットをチェック
+vec![1, 2, 3];         // マクロ — Vec を作成して要素を格納
+todo!();               // マクロ — "not yet implemented" でパニック
+dbg!(expression);      // マクロ — ファイル名:行番号 + 式 + 値を出力し、値を返す
+assert_eq!(a, b);      // マクロ — a ≠ b の場合に差分を表示してパニック
+cfg!(target_os = "linux"); // マクロ — コンパイル時のプラットフォーム検出
 ```
 
-### Writing a Simple Macro with `macro_rules!`
+### macro_rules! によるシンプルなマクロの作成
 ```rust
-// Define a macro that creates a HashMap from key-value pairs
+// キーと値のペアから HashMap を作成するマクロを定義
 macro_rules! hashmap {
-    // Pattern: key => value pairs separated by commas
+    // パターン: カンマ区切りの key => value ペア
     ( $( $key:expr => $value:expr ),* $(,)? ) => {{
         let mut map = std::collections::HashMap::new();
         $( map.insert($key, $value); )*
@@ -75,83 +74,83 @@ fn main() {
 }
 ```
 
-### Derive Macros: Auto-Implementing Traits
+### Derive マクロ: トレイトの自動実装
 ```rust
-// #[derive] is a procedural macro that generates trait implementations
+// #[derive] はトレイトの実装を自動生成する手続き型マクロです
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct User {
     name: String,
     age: u32,
 }
-// The compiler generates Debug::fmt, Clone::clone, PartialEq::eq, etc.
-// automatically by examining the struct fields.
+// コンパイラは構造体のフィールドを検査することで、
+// Debug::fmt, Clone::clone, PartialEq::eq などを自動生成します。
 ```
 
 ```csharp
-// C# equivalent: none — you'd manually implement IEquatable, ICloneable, etc.
-// Or use records: public record User(string Name, int Age);
-// Records auto-generate Equals, GetHashCode, ToString — similar idea!
+// C# における同等機能: 直接のものはなし — IEquatable や ICloneable などを手動で実装します。
+// または record を使用します: public record User(string Name, int Age);
+// record は Equals, GetHashCode, ToString を自動生成します — 発想としては似ています！
 ```
 
-### Common Derive Macros
+### 一般的な Derive マクロ
 
-| Derive | Purpose | C# Equivalent |
-|--------|---------|---------------|
-| `Debug` | `{:?}` format string output | `ToString()` override |
-| `Clone` | Deep copy via `.clone()` | `ICloneable` |
-| `Copy` | Implicit bitwise copy (no `.clone()` needed) | Value type (`struct`) semantics |
-| `PartialEq`, `Eq` | `==` comparison | `IEquatable<T>` |
-| `PartialOrd`, `Ord` | `<`, `>` comparison + sorting | `IComparable<T>` |
-| `Hash` | Hashing for `HashMap` keys | `GetHashCode()` |
-| `Default` | Default values via `Default::default()` | Parameterless constructor |
-| `Serialize`, `Deserialize` | JSON/TOML/etc. (serde) | `[JsonProperty]` attributes |
+| Derive | 用途 | C# の同等機能 |
+|--------|------|---------------|
+| `Debug` | `{:?}` によるフォーマット文字列出力 | `ToString()` のオーバーライド |
+| `Clone` | `.clone()` によるディープコピー | `ICloneable` |
+| `Copy` | 暗黙的なビット単位のコピー（`.clone()` は不要） | 値型（`struct`）のセマンティクス |
+| `PartialEq`, `Eq` | `==` による等価性比較 | `IEquatable<T>` |
+| `PartialOrd`, `Ord` | `<`, `>` による大小比較とソート | `IComparable<T>` |
+| `Hash` | `HashMap` のキー用のハッシュ計算 | `GetHashCode()` |
+| `Default` | `Default::default()` によるデフォルト値の提供 | 引数なしコンストラクタ |
+| `Serialize`, `Deserialize` | JSON / TOML などのシリアライズ（serde） | `[JsonProperty]` 属性 |
 
-> **Rule of thumb:** Start with `#[derive(Debug)]` on every type. Add `Clone`, `PartialEq` when needed. Add `Serialize, Deserialize` for any type that crosses a boundary (API, file, database).
+> **経験則（Rule of thumb）:** まずすべての型に `#[derive(Debug)]` を付与することから始めましょう。必要に応じて `Clone` や `PartialEq` を追加します。境界（API、ファイル、データベースなど）を越える型には `Serialize, Deserialize` を追加します。
 
-### Procedural & Attribute Macros (Awareness Level)
+### 手続き型マクロと属性マクロ（基礎知識）
 
-Derive macros are one kind of **procedural macro** — code that runs at compile time to generate code. You'll encounter two other forms:
+Derive マクロは、コンパイル時に実行されてコードを生成する**手続き型マクロ（procedural macro）**の一種です。この他に以下の2つの形態をよく目にします:
 
-**Attribute macros** — attached to items with `#[...]`:
+**属性マクロ（Attribute macros）** — `#[...]` でアイテムに付与されます:
 ```rust
-#[tokio::main]          // turns main() into an async runtime entry point
+#[tokio::main]          // main() を非同期ランタイムのエントリポイントに変換
 async fn main() { }
 
-#[test]                 // marks a function as a unit test
+#[test]                 // 関数を単体テストとしてマーク
 fn it_works() { assert_eq!(2 + 2, 4); }
 
-#[cfg(test)]            // conditionally compile this module only during testing
+#[cfg(test)]            // テスト時のみこのモジュールを条件付きコンパイル
 mod tests { /* ... */ }
 ```
 
-**Function-like macros** — look like function calls:
+**関数風マクロ（Function-like macros）** — 関数呼び出しのように見えます:
 ```rust
-// sqlx::query! verifies your SQL against the database at compile time
+// sqlx::query! はコンパイル時にデータベースに対して SQL を検証します
 let users = sqlx::query!("SELECT id, name FROM users WHERE active = $1", true)
     .fetch_all(&pool)
     .await?;
 ```
 
-> **Key insight for C# developers:** You rarely *write* procedural macros — they're an advanced library-author tool. But you *use* them constantly (`#[derive(...)]`, `#[tokio::main]`, `#[test]`). Think of them like C# source generators: you benefit from them without implementing them.
+> **C# 開発者向けの重要な洞察:** 自分で手続き型マクロを*書く*ことは滅多にありません — それは高度なライブラリ作成者向けのツールです。しかし、日常的に*利用する*ことになります（`#[derive(...)]`、`#[tokio::main]`、`#[test]` など）。C# のソースジェネレーター（Source Generators）のようなものと考えてください。自分で実装しなくても、その恩恵を大いに享受できます。
 
-### Conditional Compilation with `#[cfg]`
+### #[cfg] による条件付きコンパイル
 
-Rust's `#[cfg]` attributes are like C#'s `#if DEBUG` preprocessor directives, but type-checked:
+Rust の `#[cfg]` 属性は C# の `#if DEBUG` プリプロセッサディレクティブに似ていますが、型チェックが行われる点が優れています:
 
 ```rust
-// Compile this function only on Linux
+// この関数を Linux でのみコンパイル
 #[cfg(target_os = "linux")]
 fn platform_specific() {
-    println!("Running on Linux");
+    println!("Linux で実行中");
 }
 
-// Debug-only assertions (like C# Debug.Assert)
+// デバッグ時のみのアサーション（C# の Debug.Assert に相当）
 #[cfg(debug_assertions)]
 fn expensive_check(data: &[u8]) {
-    assert!(data.len() < 1_000_000, "data unexpectedly large");
+    assert!(data.len() < 1_000_000, "データが想定外に大きすぎます");
 }
 
-// Feature flags (like C# #if FEATURE_X, but declared in Cargo.toml)
+// 機能フラグ（C# の #if FEATURE_X に似ていますが、Cargo.toml で宣言します）
 #[cfg(feature = "json")]
 pub fn to_json<T: Serialize>(val: &T) -> String {
     serde_json::to_string(val).unwrap()
@@ -159,42 +158,42 @@ pub fn to_json<T: Serialize>(val: &T) -> String {
 ```
 
 ```csharp
-// C# equivalent
+// C# の同等機能
 #if DEBUG
     Debug.Assert(data.Length < 1_000_000);
 #endif
 ```
 
-### `dbg!()` — Your Best Friend for Debugging
+### dbg!() — デバッグの頼れる相棒
 ```rust
 fn calculate(x: i32) -> i32 {
-    let intermediate = dbg!(x * 2);     // prints: [src/main.rs:3] x * 2 = 10
-    let result = dbg!(intermediate + 1); // prints: [src/main.rs:4] intermediate + 1 = 11
+    let intermediate = dbg!(x * 2);     // 出力例: [src/main.rs:3] x * 2 = 10
+    let result = dbg!(intermediate + 1); // 出力例: [src/main.rs:4] intermediate + 1 = 11
     result
 }
-// dbg! prints to stderr, includes file:line, and returns the value
-// Far more useful than Console.WriteLine for debugging!
+// dbg! は標準エラー出力に出力し、ファイル名:行番号を含み、式自体の値をそのまま返します
+// デバッグ目的では Console.WriteLine よりもはるかに便利です！
 ```
 
 <details>
-<summary><strong>🏋️ Exercise: Write a min! Macro</strong> (click to expand)</summary>
+<summary><strong>🏋️ 演習問題: min! マクロの作成</strong> (クリックして展開)</summary>
 
-**Challenge**: Write a `min!` macro that accepts 2 or more arguments and returns the smallest.
+**課題**: 2つ以上の引数を受け取り、その中で最小の値を返す `min!` マクロを作成してください。
 
 ```rust
-// Should work like:
+// 以下のように動作する必要があります:
 let smallest = min!(5, 3, 8, 1, 4); // → 1
 let pair = min!(10, 20);             // → 10
 ```
 
 <details>
-<summary>🔑 Solution</summary>
+<summary>🔑 解答例</summary>
 
 ```rust
 macro_rules! min {
-    // Base case: single value
+    // 基本ケース: 単一の値
     ($x:expr) => ($x);
-    // Recursive: compare first with min of rest
+    // 再帰ケース: 最初の値と残りの最小値を比較
     ($x:expr, $($rest:expr),+) => {{
         let first = $x;
         let rest = min!($($rest),+);
@@ -206,15 +205,13 @@ fn main() {
     assert_eq!(min!(5, 3, 8, 1, 4), 1);
     assert_eq!(min!(10, 20), 10);
     assert_eq!(min!(42), 42);
-    println!("All assertions passed!");
+    println!("すべてのアサーションに合格しました！");
 }
 ```
 
-**Key takeaway**: `macro_rules!` uses pattern matching on token trees — it's like `match` but for code structure instead of values.
+**重要なポイント**: `macro_rules!` はトークンツリーに対するパターンマッチングを行います — 値ではなくコードの構造に対して `match` を行うようなものです。
 
 </details>
 </details>
 
 ***
-
-

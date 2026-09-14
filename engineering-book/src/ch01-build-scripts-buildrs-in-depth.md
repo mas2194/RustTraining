@@ -1,90 +1,73 @@
-# Build Scripts — `build.rs` in Depth 🟢
+# ビルドスクリプト — `build.rs` 徹底解説 🟢
 
-> **What you'll learn:**
-> - How `build.rs` fits into the Cargo build pipeline and when it runs
-> - Five production patterns: compile-time constants, C/C++ compilation, protobuf codegen, `pkg-config` linking, and feature detection
-> - Anti-patterns that slow builds or break cross-compilation
-> - How to balance traceability with reproducible builds
->
-> **Cross-references:** [Cross-Compilation](ch02-cross-compilation-one-source-many-target.md) uses build scripts for target-aware builds · [`no_std` & Features](ch09-no-std-and-feature-verification.md) extends `cfg` flags set here · [CI/CD Pipeline](ch11-putting-it-all-together-a-production-cic.md) orchestrates build scripts in automation
+> **学ぶこと:**
+> - `build.rs` が Cargo のビルドパイプラインにどのように組み込まれ、いつ実行されるか
+> - 5つの本番向けパターン: コンパイル時定数、C/C++ のコンパイル、protobuf のコード生成、`pkg-config` によるリンク、機能検出
+> - ビルドを遅延させたりクロスコンパイルを壊したりするアンチパターン
+> - 追跡可能性（トレーサビリティ）と再現可能なビルド（Reproducible builds）のバランス
 
-Every Cargo package can include a file named `build.rs` at the crate root.
-Cargo compiles and executes this file *before* compiling your crate. The build
-script communicates back to Cargo through `println!` instructions on stdout.
+> **相互参照:** [クロスコンパイル](ch02-cross-compilation-one-source-many-target.md) ではターゲットに応じたビルドのためにビルドスクリプトを活用します · [`no_std` と機能フラグ](ch09-no-std-and-feature-verification.md) ではここで設定した `cfg` フラグを拡張します · [CI/CD パイプライン](ch11-putting-it-all-together-a-production-cic.md) では自動化フロー内でビルドスクリプトをオーケストレーションします
 
-### What build.rs Is and When It Runs
+すべての Cargo パッケージは、クレートルートに `build.rs` という名前のファイルを配置できます。Cargo はクレートをコンパイルする**前**に、まずこのファイルをコンパイルして実行します。ビルドスクリプトは、標準出力への `println!` 命令を通じて Cargo と通信します。
+
+### build.rs とは何か、いつ実行されるか
 
 ```text
 ┌─────────────────────────────────────────────────────────┐
-│                    Cargo Build Pipeline                  │
+│                 Cargo ビルドパイプライン                 │
 │                                                         │
-│  1. Resolve dependencies                                │
-│  2. Download crates                                     │
-│  3. Compile build.rs  ← ordinary Rust, runs on HOST     │
-│  4. Execute build.rs  ← stdout → Cargo instructions     │
-│  5. Compile the crate (using instructions from step 4)  │
-│  6. Link                                                │
+│  1. 依存関係の解決                                      │
+│  2. クレートのダウンロード                              │
+│  3. build.rs のコンパイル ← 通常の Rust、ホスト上で実行  │
+│  4. build.rs の実行       ← stdout → Cargo への指示     │
+│  5. クレートのコンパイル (ステップ4の指示を適用)        │
+│  6. リンク                                              │
 └─────────────────────────────────────────────────────────┘
 ```
 
-Key facts:
-- `build.rs` runs on the **host** machine, not the target. During cross-compilation,
-  the build script runs on your development machine even when the final binary targets
-  a different architecture.
-- The build script's scope is limited to its own package. It cannot affect how
-  other crates compile — unless the package declares a `links` key in `Cargo.toml`,
-  which enables passing metadata to dependent crates via
-  `cargo::metadata=KEY=VALUE`.
-- It runs **every time** Cargo detects a change — unless you emit `cargo::rerun-if-changed`
-  instructions to limit re-runs.
+重要なポイント：
+- `build.rs` はターゲット環境ではなく**ホスト**マシン上で実行されます。クロスコンパイル時であっても、最終バイナリが異なるアーキテクチャ向けであるかどうかにかかわらず、ビルドスクリプトは開発マシン上で動作します。
+- ビルドスクリプトのスコープは自身のパッケージ内に限定されます。パッケージの `Cargo.toml` で `links` キーを宣言し、`cargo::metadata=KEY=VALUE` 経由で依存先クレートにメタデータを渡す場合を除き、他のクレートのコンパイル方法に影響を与えることはできません。
+- 再実行を制限する `cargo::rerun-if-changed` 命令を出力しない限り、Cargo が変更を検知する**たびに毎回**実行されます。
 
-> **Note (Rust 1.71+)**: Since Rust 1.71, Cargo fingerprints the compiled
-> `build.rs` binary — if the binary is identical, it won't re-run even if
-> source timestamps changed. However, `cargo::rerun-if-changed=build.rs` is
-> still valuable: without *any* `rerun-if-changed` instruction, Cargo re-runs
-> `build.rs` whenever **any file in the package** changes (not just `build.rs`).
-> Emitting `cargo::rerun-if-changed=build.rs` limits re-runs to only when
-> `build.rs` itself changes — a significant compile-time saving in large crates.
-- It can emit *cfg flags*, *environment variables*, *linker arguments*, and
-  *file paths* that the main crate consumes.
+> **注意 (Rust 1.71以降)**: Rust 1.71 以降、Cargo はコンパイルされた `build.rs` バイナリのフィンガープリントをチェックするようになりました。バイナリが同一であれば、ソースのタイムスタンプが変わっていても再実行されません。しかし、`cargo::rerun-if-changed=build.rs` の指定は依然として重要です。`rerun-if-changed` 命令が一切ない場合、Cargo は（`build.rs` だけでなく）**パッケージ内のいずれかのファイル**が変更されるたびに `build.rs` を再実行します。`cargo::rerun-if-changed=build.rs` を出力しておくことで、`build.rs` 自体が変更されたときのみに再実行を限定でき、大規模クレートにおけるコンパイル時間を大幅に節約できます。
+- メインクレートが利用する *cfg フラグ*、*環境変数*、*リンカ引数*、*ファイルパス* を出力できます。
 
-The minimal `Cargo.toml` entry:
+最小限の `Cargo.toml` 設定：
 
 ```toml
 [package]
 name = "my-crate"
 version = "0.1.0"
 edition = "2021"
-build = "build.rs"       # default — Cargo looks for build.rs automatically
-# build = "src/build.rs" # or put it elsewhere
+build = "build.rs"       # デフォルト — Cargo は自動的に build.rs を探します
+# build = "src/build.rs" # または別の場所に配置することも可能です
 ```
 
-### The Cargo Instruction Protocol
+### Cargo 命令プロトコル
 
-Your build script communicates with Cargo by printing instructions to stdout.
-Since Rust 1.77, the preferred prefix is `cargo::` (replacing the older
-`cargo:` single-colon form).
+ビルドスクリプトは標準出力に命令を出力することで Cargo と通信します。Rust 1.77 以降では、従来のシングルコロン形式（`cargo:`）に代わり、`cargo::` プレフィックスの使用が推奨されています。
 
-| Instruction | Purpose |
+| 命令 | 目的 |
 |-------------|---------|
-| `cargo::rerun-if-changed=PATH` | Only re-run build.rs when PATH changes |
-| `cargo::rerun-if-env-changed=VAR` | Only re-run when environment variable VAR changes |
-| `cargo::rustc-link-lib=NAME` | Link against native library NAME |
-| `cargo::rustc-link-search=PATH` | Add PATH to the library search path |
-| `cargo::rustc-cfg=KEY` | Set a `#[cfg(KEY)]` flag for conditional compilation |
-| `cargo::rustc-cfg=KEY="VALUE"` | Set a `#[cfg(KEY = "VALUE")]` flag |
-| `cargo::rustc-env=KEY=VALUE` | Set an environment variable accessible via `env!()` |
-| `cargo::rustc-cdylib-link-arg=FLAG` | Pass FLAG to the linker for cdylib targets |
-| `cargo::warning=MESSAGE` | Display a warning during compilation |
-| `cargo::metadata=KEY=VALUE` | Store metadata readable by dependent crates |
+| `cargo::rerun-if-changed=PATH` | PATH が変更された場合のみ build.rs を再実行する |
+| `cargo::rerun-if-env-changed=VAR` | 環境変数 VAR が変更された場合のみ再実行する |
+| `cargo::rustc-link-lib=NAME` | ネイティブライブラリ NAME とリンクする |
+| `cargo::rustc-link-search=PATH` | ライブラリ検索パスに PATH を追加する |
+| `cargo::rustc-cfg=KEY` | 条件付きコンパイル用の `#[cfg(KEY)]` フラグを設定する |
+| `cargo::rustc-cfg=KEY="VALUE"` | `#[cfg(KEY = "VALUE")]` フラグを設定する |
+| `cargo::rustc-env=KEY=VALUE` | `env!()` 経由でアクセス可能な環境変数を設定する |
+| `cargo::rustc-cdylib-link-arg=FLAG` | cdylib ターゲット用のリンカに FLAG を渡す |
+| `cargo::warning=MESSAGE` | コンパイル中に警告を表示する |
+| `cargo::metadata=KEY=VALUE` | 依存先クレートから参照可能なメタデータを格納する |
 
 ```rust
-// build.rs — minimal example
+// build.rs — 最小限の例
 fn main() {
-    // Only re-run if build.rs itself changes
+    // build.rs 自体が変更された場合のみ再実行
     println!("cargo::rerun-if-changed=build.rs");
 
-    // Set a compile-time environment variable
+    // コンパイル時の環境変数を設定
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs().to_string())
@@ -93,10 +76,9 @@ fn main() {
 }
 ```
 
-### Pattern 1: Compile-Time Constants
+### パターン 1: コンパイル時定数
 
-The most common use case: baking build metadata into the binary so you can
-report it at runtime (git hash, build date, CI job ID).
+最も一般的なユースケースは、実行時に報告できるようにビルドメタデータ（Gitハッシュ、ビルド日時、CIジョブIDなど）をバイナリに焼き込むことです。
 
 ```rust
 // build.rs
@@ -106,7 +88,7 @@ fn main() {
     println!("cargo::rerun-if-changed=.git/HEAD");
     println!("cargo::rerun-if-changed=.git/refs");
 
-    // Git commit hash
+    // Git のコミットハッシュ
     let output = Command::new("git")
         .args(["rev-parse", "--short", "HEAD"])
         .output()
@@ -114,18 +96,18 @@ fn main() {
     let git_hash = String::from_utf8_lossy(&output.stdout).trim().to_string();
     println!("cargo::rustc-env=GIT_HASH={git_hash}");
 
-    // Build profile (debug or release)
+    // ビルドプロファイル（debug または release）
     let profile = std::env::var("PROFILE").unwrap_or_else(|_| "unknown".into());
     println!("cargo::rustc-env=BUILD_PROFILE={profile}");
 
-    // Target triple
+    // ターゲットトリプル
     let target = std::env::var("TARGET").unwrap_or_else(|_| "unknown".into());
     println!("cargo::rustc-env=BUILD_TARGET={target}");
 }
 ```
 
 ```rust
-// src/main.rs — consuming the build-time values
+// src/main.rs — ビルド時の値を消費
 fn print_version() {
     println!(
         "{} {} (git:{} target:{} profile:{})",
@@ -138,16 +120,15 @@ fn print_version() {
 }
 ```
 
-> **Built-in Cargo environment variables** you get for free, no build.rs needed:
+> **標準で提供される Cargo 環境変数**:
+> `build.rs` を書かなくても自動で提供される環境変数があります：
 > `CARGO_PKG_NAME`, `CARGO_PKG_VERSION`, `CARGO_PKG_AUTHORS`,
-> `CARGO_PKG_DESCRIPTION`, `CARGO_MANIFEST_DIR`.
-> See the [full list](https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates).
+> `CARGO_PKG_DESCRIPTION`, `CARGO_MANIFEST_DIR` など。
+> 詳細は[完全なリスト](https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-crates)を参照してください。
 
-### Pattern 2: Compiling C/C++ Code with the `cc` Crate
+### パターン 2: `cc` クレートを用いた C/C++ コードのコンパイル
 
-When your Rust crate wraps a C library or needs a small C helper (common in
-hardware interfaces), the [`cc`](https://docs.rs/cc) crate simplifies
-compilation inside build.rs.
+Rust クレートが C ライブラリをラップする場合や、小さな C ヘルパーを必要とする場合（ハードウェアインターフェースではよくあります）、[`cc`](https://docs.rs/cc) クレートを使用すると build.rs 内でのコンパイルが非常に容易になります。
 
 ```toml
 # Cargo.toml
@@ -168,13 +149,13 @@ fn main() {
         .flag("-Wextra")
         .opt_level(2)
         .compile("diag_helpers");
-    // This produces libdiag_helpers.a and emits the right
-    // cargo::rustc-link-lib and cargo::rustc-link-search instructions.
+    // これにより libdiag_helpers.a が生成され、適切な
+    // cargo::rustc-link-lib および cargo::rustc-link-search 命令が出力されます。
 }
 ```
 
 ```rust
-// src/lib.rs — FFI bindings to the compiled C code
+// src/lib.rs — コンパイルされた C コードへの FFI バインディング
 extern "C" {
     fn ipmi_raw_command(
         netfn: u8,
@@ -186,13 +167,13 @@ extern "C" {
     ) -> i32;
 }
 
-/// Safe wrapper around the raw IPMI command interface.
-/// Assumes: enum IpmiError { CommandFailed(i32), ... }
+/// 生の IPMI コマンドインターフェースに対する安全なラッパー。
+/// 前提: enum IpmiError { CommandFailed(i32), ... }
 pub fn send_ipmi_command(netfn: u8, cmd: u8, data: &[u8]) -> Result<Vec<u8>, IpmiError> {
     let mut response = vec![0u8; 256];
     let mut response_len: usize = response.len();
 
-    // SAFETY: response buffer is large enough and response_len is correctly initialized.
+    // SAFETY: レスポンスバッファは十分な大きさがあり、response_len も正しく初期化されています。
     let rc = unsafe {
         ipmi_raw_command(
             netfn,
@@ -212,10 +193,10 @@ pub fn send_ipmi_command(netfn: u8, cmd: u8, data: &[u8]) -> Result<Vec<u8>, Ipm
 }
 ```
 
-For C++ code, use `.cpp(true)` and `.flag("-std=c++17")`:
+C++ コードをコンパイルする場合は、`.cpp(true)` および `.flag("-std=c++17")` を指定します：
 
 ```rust
-// build.rs — C++ variant
+// build.rs — C++ の場合
 fn main() {
     println!("cargo::rerun-if-changed=cppsrc/");
 
@@ -223,16 +204,14 @@ fn main() {
         .cpp(true)
         .file("cppsrc/vendor_parser.cpp")
         .flag("-std=c++17")
-        .flag("-fno-exceptions")    // match Rust's no-exception model
+        .flag("-fno-exceptions")    // Rust の例外なしモデルに合わせる
         .compile("vendor_helpers");
 }
 ```
 
-### Pattern 3: Protocol Buffers and Code Generation
+### パターン 3: Protocol Buffers とコード生成
 
-Build scripts excel at code generation — turning `.proto`, `.fbs`, or `.json`
-schema files into Rust source at compile time. Here's the protobuf pattern
-using [`prost-build`](https://docs.rs/prost-build):
+ビルドスクリプトはコード生成に最適です。`.proto`、`.fbs`、`.json` などのスキーマファイルをコンパイル時に Rust ソースコードに変換できます。以下は [`prost-build`](https://docs.rs/prost-build) を使用した protobuf の例です：
 
 ```toml
 # Cargo.toml
@@ -254,7 +233,7 @@ fn main() {
 ```
 
 ```rust
-// src/lib.rs — include the generated code
+// src/lib.rs — 生成されたコードを取り込む
 pub mod diagnostics {
     include!(concat!(env!("OUT_DIR"), "/diagnostics.rs"));
 }
@@ -264,14 +243,11 @@ pub mod telemetry {
 }
 ```
 
-> **`OUT_DIR`** is a Cargo-provided directory where build scripts should place
-> generated files. Each crate gets its own `OUT_DIR` under `target/`.
+> **`OUT_DIR`** は Cargo が提供するディレクトリで、ビルドスクリプトが生成ファイルを配置すべき場所です。各クレートは `target/` 配下に固有の `OUT_DIR` を持ちます。
 
-### Pattern 4: Linking System Libraries with `pkg-config`
+### パターン 4: `pkg-config` によるシステムライブラリのリンク
 
-For system libraries that provide `.pc` files (systemd, OpenSSL, libpci),
-the [`pkg-config`](https://docs.rs/pkg-config) crate probes the system and
-emits the right link instructions:
+`.pc` ファイルを提供するシステムライブラリ（systemd、OpenSSL、libpci など）の場合、[`pkg-config`](https://docs.rs/pkg-config) クレートを使用してシステムを調査し、適切なリンク命令を出力できます：
 
 ```toml
 # Cargo.toml
@@ -282,13 +258,13 @@ pkg-config = "0.3"
 ```rust
 // build.rs
 fn main() {
-    // Probe for libpci (used for PCIe device enumeration)
+    // libpci を検索 (PCIe デバイスの列挙に使用)
     pkg_config::Config::new()
         .atleast_version("3.6.0")
         .probe("libpci")
-        .expect("libpci >= 3.6.0 not found — install pciutils-dev");
+        .expect("libpci >= 3.6.0 が見つかりません — pciutils-dev をインストールしてください");
 
-    // Probe for libsystemd (optional — for sd_notify integration)
+    // libsystemd を検索 (任意 — sd_notify との連携用)
     if pkg_config::probe_library("libsystemd").is_ok() {
         println!("cargo::rustc-cfg=has_systemd");
     }
@@ -296,7 +272,7 @@ fn main() {
 ```
 
 ```rust
-// src/lib.rs — conditional compilation based on pkg-config probing
+// src/lib.rs — pkg-config の検出結果に基づく条件付きコンパイル
 #[cfg(has_systemd)]
 mod systemd_notify {
     extern "C" {
@@ -305,7 +281,7 @@ mod systemd_notify {
 
     pub fn notify_ready() {
         let state = std::ffi::CString::new("READY=1").unwrap();
-        // SAFETY: state is a valid null-terminated C string.
+        // SAFETY: state は有効な null 終端 C 文字列です。
         unsafe { sd_notify(0, state.as_ptr()) };
     }
 }
@@ -313,52 +289,50 @@ mod systemd_notify {
 #[cfg(not(has_systemd))]
 mod systemd_notify {
     pub fn notify_ready() {
-        // no-op on systems without systemd
+        // systemd のないシステムでは何もしない
     }
 }
 ```
 
-### Pattern 5: Feature Detection and Conditional Compilation
+### パターン 5: 機能検出と条件付きコンパイル
 
-Build scripts can probe the compilation environment and set cfg flags that
-the main crate uses for conditional code paths.
+ビルドスクリプトはコンパイル環境を調査し、メインクレートが条件分岐で使用できる cfg フラグを設定できます。
 
-**CPU architecture and OS detection** (safe — these are compile-time constants):
+**CPU アーキテクチャと OS の検出**（安全 — これらはコンパイル時定数です）：
 
 ```rust
-// build.rs — detect CPU features and OS capabilities
+// build.rs — CPU 機能と OS 機能を検出
 fn main() {
     println!("cargo::rerun-if-changed=build.rs");
 
     let target = std::env::var("TARGET").unwrap();
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();
 
-    // Enable AVX2-optimized paths on x86_64
+    // x86_64 上で AVX2 最適化パスを有効化
     if target.starts_with("x86_64") {
         println!("cargo::rustc-cfg=has_x86_64");
     }
 
-    // Enable ARM NEON paths on aarch64
+    // aarch64 上で ARM NEON パスを有効化
     if target.starts_with("aarch64") {
         println!("cargo::rustc-cfg=has_aarch64");
     }
 
-    // Detect if /dev/ipmi0 is available (build-time check)
+    // /dev/ipmi0 が存在するか検出 (ビルド時チェック)
     if target_os == "linux" && std::path::Path::new("/dev/ipmi0").exists() {
         println!("cargo::rustc-cfg=has_ipmi_device");
     }
 }
 ```
 
-> ⚠️ **Anti-pattern demonstration** — The code below shows a tempting but
-> problematic approach. **Do not use this in production.**
+> ⚠️ **アンチパターンの実例** — 以下のコードは魅力的ですが問題のあるアプローチです。**本番環境では決して使用しないでください。**
 
 ```rust
-// build.rs — BAD: runtime hardware detection at build time
+// build.rs — 悪い例: ビルド時に実行時のハードウェアを検出
 fn main() {
-    // ANTI-PATTERN: Binary is baked to the BUILD machine's hardware.
-    // If you build on a machine with a GPU and deploy to one without,
-    // the binary silently assumes a GPU is present.
+    // アンチパターン: バイナリが「ビルドマシン」のハードウェアに固定されてしまう。
+    // GPU を搭載したマシンでビルドし、GPU のないマシンにデプロイした場合、
+    // バイナリは GPU が存在するものとして誤動作します。
     if std::process::Command::new("accel-query")
         .arg("--query-gpu=name")
         .arg("--format=csv,noheader")
@@ -371,7 +345,7 @@ fn main() {
 ```
 
 ```rust
-// src/gpu.rs — code that adapts based on build-time detection
+// src/gpu.rs — ビルド時の検出結果に適応するコード
 pub fn query_gpu_info() -> GpuResult {
     #[cfg(has_accel_device)]
     {
@@ -380,42 +354,36 @@ pub fn query_gpu_info() -> GpuResult {
 
     #[cfg(not(has_accel_device))]
     {
-        GpuResult::NotAvailable("accel-query not found at build time".into())
+        GpuResult::NotAvailable("ビルド時に accel-query が見つかりませんでした".into())
     }
 }
 ```
 
-> ⚠️ **Why this is wrong**: Runtime device detection is almost always better than
-> build-time detection for optional hardware. The binary produced above is
-> *tied to the build machine's hardware configuration* — it will behave differently
-> on the deployment target. Use build-time detection only for capabilities that are
-> truly fixed at compile time (architecture, OS, library availability).
-> For hardware like GPUs, detect at runtime with `which accel-query` or `accel-mgmt` probing.
+> ⚠️ **なぜこれが誤りなのか**: オプションのハードウェア検出においては、ビルド時検出よりも実行時デバイス検出のほうがほぼ常に優れています。上記で生成されたバイナリは*ビルドマシンのハードウェア構成に縛られてしまい*、デプロイ先ターゲットで異なる挙動を示します。ビルド時検出は、コンパイル時に真に固定されている機能（アーキテクチャ、OS、ライブラリの有無など）に対してのみ使用してください。GPU のようなハードウェアに対しては、実行時に `which accel-query` や `accel-mgmt` のプローブを行って検出してください。
 
-### Anti-Patterns and Pitfalls
+### アンチパターンと落とし穴
 
-| Anti-Pattern | Why It's Bad | Fix |
+| アンチパターン | 問題点 | 解決策 |
 |-------------|-------------|-----|
-| No `rerun-if-changed` | build.rs runs on *every* build, slowing iteration | Always emit at least `cargo::rerun-if-changed=build.rs` |
-| Network calls in build.rs | Builds fail offline, non-reproducible | Vendor files or use a separate fetch step |
-| Writing to `src/` | Cargo doesn't expect source to change during build | Write to `OUT_DIR` and use `include!()` |
-| Heavy computation | Slows every `cargo build` | Cache results in `OUT_DIR`, gate with `rerun-if-changed` |
-| Ignoring cross-compilation | Using `Command::new("gcc")` without respecting `$CC` | Use the `cc` crate which handles cross-compilation toolchains |
-| Panicking without context | `unwrap()` gives opaque "build script failed" error | Use `.expect("descriptive message")` or print `cargo::warning=` |
+| `rerun-if-changed` の指定漏れ | ビルドのたびに build.rs が再実行され、開発イテレーションが遅くなる | 常に最低でも `cargo::rerun-if-changed=build.rs` を出力する |
+| build.rs 内でのネットワーク呼び出し | オフラインビルドが失敗し、ビルドの再現性が失われる | ファイルをベンダリング（同梱）するか、別のフェッチ手順を設ける |
+| `src/` 配下へのファイル書き込み | Cargo はビルド中にソースコードが変化することを想定していない | `OUT_DIR` に書き込み、`include!()` マクロを使用する |
+| 過度に重い処理の実行 | すべての `cargo build` が遅延する | `OUT_DIR` に結果をキャッシュし、`rerun-if-changed` でゲートする |
+| クロスコンパイルの無視 | `$CC` を無視して `Command::new("gcc")` を直接呼び出す | クロスコンパイルツールチェーンを適切に処理する `cc` クレートを使用する |
+| コンテキストなしのパニック | `unwrap()` を使うと「build script failed」という不透明なエラーになる | `.expect("詳細なメッセージ")` を使うか、`cargo::warning=` を出力する |
 
-### Application: Embedding Build Metadata
+### 実践応用：ビルドメタデータの埋め込み
 
-The project currently uses `env!("CARGO_PKG_VERSION")` for version
-reporting. A build script would extend this with richer metadata:
+プロジェクトでは現在、バージョン報告に `env!("CARGO_PKG_VERSION")` を使用しています。ビルドスクリプトを追加することで、より豊富なメタデータを取り込めます：
 
 ```rust
-// build.rs — proposed addition
+// build.rs — 推奨される追加設定
 fn main() {
     println!("cargo::rerun-if-changed=.git/HEAD");
     println!("cargo::rerun-if-changed=.git/refs");
     println!("cargo::rerun-if-changed=build.rs");
 
-    // Embed git hash for traceability in diagnostic reports
+    // 診断レポートでの追跡可能性のために Git ハッシュを埋め込む
     if let Ok(output) = std::process::Command::new("git")
         .args(["rev-parse", "--short=10", "HEAD"])
         .output()
@@ -426,21 +394,21 @@ fn main() {
         println!("cargo::rustc-env=APP_GIT_HASH=unknown");
     }
 
-    // Embed build timestamp for report correlation
+    // レポートの相関分析のためにビルドタイムスタンプを埋め込む
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs().to_string())
         .unwrap_or_else(|_| "0".into());
     println!("cargo::rustc-env=APP_BUILD_EPOCH={timestamp}");
 
-    // Emit target triple — useful in multi-arch deployment
+    // マルチアーキテクチャデプロイで有用なターゲットトリプルを出力
     let target = std::env::var("TARGET").unwrap_or_else(|_| "unknown".into());
     println!("cargo::rustc-env=APP_TARGET={target}");
 }
 ```
 
 ```rust
-// src/version.rs — consuming the metadata
+// src/version.rs — メタデータを消費
 pub struct BuildInfo {
     pub version: &'static str,
     pub git_hash: &'static str,
@@ -456,8 +424,8 @@ pub const BUILD_INFO: BuildInfo = BuildInfo {
 };
 
 impl BuildInfo {
-    /// Parse the epoch at runtime when needed (const &str → u64 is not
-    /// possible on stable Rust — there is no const fn for str-to-int).
+    /// 必要に応じて実行時にエポック秒をパースする
+    /// （安定版 Rust では文字列から整数への const fn がないため、const &str → u64 の変換は実行時に行います）。
     pub fn build_epoch_secs(&self) -> u64 {
         self.build_epoch.parse().unwrap_or(0)
     }
@@ -474,55 +442,39 @@ impl std::fmt::Display for BuildInfo {
 }
 ```
 
-> **Key insight from the project**: The codebase has zero `build.rs` files
-> across all many crates because it's pure Rust with no C dependencies, no codegen,
-> and no system library linking. When you need these, `build.rs` is the tool — but
-> don't add it "just because." The absence of build scripts in a large codebase
-> is a feature, not a gap. See [Dependency Management](ch06-dependency-management-and-supply-chain-s.md)
-> for how the project manages its supply chain without custom build logic.
-> is a *positive* signal of a clean architecture.
+> **実践からの重要な洞察**: 本プロジェクトの大規模コードベースでは、C 依存関係、コード生成、システムライブラリリンクが存在しないピュア Rust で構成されているため、多数のクレート全体を通じて `build.rs` が 1 つも存在しません。これらが必要になったときに `build.rs` は強力なツールとなりますが、「なんとなく」で追加すべきではありません。大規模コードベースにおいてビルドスクリプトが存在しないことは、欠落ではなく利点です。カスタムビルドロジックなしでサプライチェーンを管理する方法については、[依存関係管理](ch06-dependency-management-and-supply-chain-s.md) を参照してください。クリーンなアーキテクチャが保たれている*ポジティブ*な兆候と言えます。
 
-### Try It Yourself
+### 自分で試してみよう
 
-1. **Embed git metadata**: Create a `build.rs` that emits `APP_GIT_HASH` and
-   `APP_BUILD_EPOCH` as environment variables. Consume them with `env!()` in
-   `main.rs` and print the build info. Verify the hash changes after a commit.
+1. **Git メタデータの埋め込み**: 環境変数として `APP_GIT_HASH` と `APP_BUILD_EPOCH` を出力する `build.rs` を作成してください。`main.rs` で `env!()` を使ってこれらを読み取り、ビルド情報を出力します。コミット後にハッシュが変わることを確認してください。
+2. **システムライブラリの検出**: `pkg-config` を使って `libz` (zlib) を調査する `build.rs` を作成してください。見つかった場合は `cargo::rustc-cfg=has_zlib` を出力します。`main.rs` で、cfg フラグに基づいて「zlib available」または「zlib not found」を条件付きで出力してください。
+3. **意図的にビルドの再実行を引き起こす**: `build.rs` から `rerun-if-changed` の行を削除し、`cargo build` や `cargo test` の間に何回再実行されるか観察してください。その後、行を元に戻して違いを比較してください。
 
-2. **Probe a system library**: Write a `build.rs` that uses `pkg-config` to probe
-   for `libz` (zlib). Emit `cargo::rustc-cfg=has_zlib` if found. In `main.rs`,
-   conditionally print "zlib available" or "zlib not found" based on the cfg flag.
+### 再現可能なビルド（Reproducible Builds）
 
-3. **Trigger a build failure intentionally**: Remove the `rerun-if-changed` line
-   from your `build.rs` and observe how many times it reruns during `cargo build`
-   and `cargo test`. Then add it back and compare.
+本章ではタイムスタンプや Git ハッシュをバイナリに埋め込む方法を解説しました。これは追跡可能性には非常に有用ですが、**再現可能なビルド（Reproducible builds）**（同一のソースコードからビルドした場合に常に全く同じバイナリが生成される性質）とは**相反します**。
 
-### Reproducible Builds
+**トレードオフの構造:**
 
-Chapter 1 teaches embedding timestamps and git hashes into binaries. This is
-useful for traceability, but it **conflicts with reproducible builds** — the
-property that building the same source always produces the same binary.
-
-**The tension:**
-
-| Goal | Achievement | Cost |
+| 目標 | 達成手段 | コスト |
 |------|-------------|------|
-| Traceability | `APP_BUILD_EPOCH` in binary | Every build is unique — can't verify integrity |
-| Reproducibility | `cargo build --locked` always produces same output | No build-time metadata |
+| 追跡可能性 | バイナリ内に `APP_BUILD_EPOCH` を含める | ビルドごとにバイナリが固有になり、ハッシュによる完全性検証が困難 |
+| 再現性 | `cargo build --locked` で常に同一出力を得る | ビルド時の動的メタデータが埋め込めない |
 
-**Practical resolution:**
+**実践的な解決策:**
 
 ```bash
-# 1. Always use --locked in CI (ensures Cargo.lock is respected)
+# 1. CI では常に --locked を使用する (Cargo.lock が確実に尊重される)
 cargo build --release --locked
-# Fails if Cargo.lock is missing or outdated — catches "works on my machine"
+# Cargo.lock が存在しないか古い場合はビルドが失敗し、「自分の環境では動く」を防ぐ
 
-# 2. For reproducibility-critical builds, set SOURCE_DATE_EPOCH
+# 2. 再現性がクリティカルなビルドでは SOURCE_DATE_EPOCH を設定する
 SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) cargo build --release --locked
-# Uses the last commit timestamp instead of "now" — same commit = same binary
+# "現在日時" の代わりに最新コミットのタイムスタンプを使用 — 同一コミットなら同一バイナリが生成される
 ```
 
 ```rust
-// In build.rs: respect SOURCE_DATE_EPOCH for reproducibility
+// build.rs 内: 再現性のために SOURCE_DATE_EPOCH を尊重する
 let timestamp = std::env::var("SOURCE_DATE_EPOCH")
     .unwrap_or_else(|_| {
         std::time::SystemTime::now()
@@ -533,24 +485,22 @@ let timestamp = std::env::var("SOURCE_DATE_EPOCH")
 println!("cargo::rustc-env=APP_BUILD_EPOCH={timestamp}");
 ```
 
-> **Best practice**: Use `SOURCE_DATE_EPOCH` in build scripts so release builds
-> are reproducible (`git-hash + locked deps + deterministic timestamp = same binary`),
-> while dev builds still get live timestamps for convenience.
+> **ベストプラクティス**: リリースビルドが再現可能（`Gitハッシュ + ロックされた依存関係 + 決定論的タイムスタンプ = 同一バイナリ`）になるよう、ビルドスクリプトで `SOURCE_DATE_EPOCH` をサポートしつつ、開発ビルドでは利便性のために現在日時のタイムスタンプを取得できるようにします。
 
-### Build Pipeline Decision Diagram
+### ビルドパイプライン決定ダイアグラム
 
 ```mermaid
 flowchart TD
-    START["Need compile-time work?"] -->|No| SKIP["No build.rs needed"]
-    START -->|Yes| WHAT{"What kind?"}
+    START["コンパイル時処理が必要？"] -->|いいえ| SKIP["build.rs は不要"]
+    START -->|はい| WHAT{"どのような処理？"}
     
-    WHAT -->|"Embed metadata"| P1["Pattern 1<br/>Compile-Time Constants"]
-    WHAT -->|"Compile C/C++"| P2["Pattern 2<br/>cc crate"]
-    WHAT -->|"Code generation"| P3["Pattern 3<br/>prost-build / tonic-build"]
-    WHAT -->|"Link system lib"| P4["Pattern 4<br/>pkg-config"]
-    WHAT -->|"Detect features"| P5["Pattern 5<br/>cfg flags"]
+    WHAT -->|"メタデータの埋め込み"| P1["パターン 1<br/>コンパイル時定数"]
+    WHAT -->|"C/C++ のコンパイル"| P2["パターン 2<br/>cc クレート"]
+    WHAT -->|"コード生成"| P3["パターン 3<br/>prost-build / tonic-build"]
+    WHAT -->|"システムライブラリのリンク"| P4["パターン 4<br/>pkg-config"]
+    WHAT -->|"機能の検出"| P5["パターン 5<br/>cfg フラグ"]
     
-    P1 --> RERUN["Always emit<br/>cargo::rerun-if-changed"]
+    P1 --> RERUN["常に以下を出力<br/>cargo::rerun-if-changed"]
     P2 --> RERUN
     P3 --> RERUN
     P4 --> RERUN
@@ -565,14 +515,14 @@ flowchart TD
     style P5 fill:#e3f2fd,color:#000
 ```
 
-### 🏋️ Exercises
+### 🏋️ 演習問題
 
-#### 🟢 Exercise 1: Version Stamp
+#### 🟢 演習 1: バージョンスタンプ
 
-Create a minimal crate with a `build.rs` that embeds the current git hash and build profile into environment variables. Print them from `main()`. Verify the output changes between debug and release builds.
+現在の Git ハッシュとビルドプロファイルを環境変数に埋め込む `build.rs` を備えた最小限のクレートを作成してください。`main()` からそれらを出力します。デバッグビルドとリリースビルドで出力が変わることを確認してください。
 
 <details>
-<summary>Solution</summary>
+<summary>解答例</summary>
 
 ```rust
 // build.rs
@@ -603,17 +553,17 @@ fn main() {
 ```
 
 ```bash
-cargo run          # shows profile:debug
-cargo run --release # shows profile:release
+cargo run          # profile:debug と表示
+cargo run --release # profile:release と表示
 ```
 </details>
 
-#### 🟡 Exercise 2: Conditional System Library
+#### 🟡 演習 2: 条件付きシステムライブラリ
 
-Write a `build.rs` that probes for both `libz` and `libpci` using `pkg-config`. Emit a `cfg` flag for each one found. In `main.rs`, print which libraries were detected at build time.
+`pkg-config` を使用して `libz` と `libpci` の両方を検索する `build.rs` を作成してください。見つかったものそれぞれに対して `cfg` フラグを出力します。`main.rs` で、ビルド時にどのライブラリが検出されたかを出力してください。
 
 <details>
-<summary>Solution</summary>
+<summary>解答例</summary>
 
 ```toml
 # Cargo.toml
@@ -638,25 +588,24 @@ fn main() {
 // src/main.rs
 fn main() {
     #[cfg(has_zlib)]
-    println!("✅ zlib detected");
+    println!("✅ zlib が検出されました");
     #[cfg(not(has_zlib))]
-    println!("❌ zlib not found");
+    println!("❌ zlib は見つかりませんでした");
 
     #[cfg(has_libpci)]
-    println!("✅ libpci detected");
+    println!("✅ libpci が検出されました");
     #[cfg(not(has_libpci))]
-    println!("❌ libpci not found");
+    println!("❌ libpci は見つかりませんでした");
 }
 ```
 </details>
 
-### Key Takeaways
+### 重要なまとめ
 
-- `build.rs` runs on the **host** at compile time — always emit `cargo::rerun-if-changed` to avoid unnecessary rebuilds
-- Use the `cc` crate (not raw `gcc` commands) for C/C++ compilation — it handles cross-compilation toolchains correctly
-- Write generated files to `OUT_DIR`, never to `src/` — Cargo doesn't expect source to change during builds
-- Prefer runtime detection over build-time detection for optional hardware
-- Use `SOURCE_DATE_EPOCH` to make builds reproducible when embedding timestamps
+- `build.rs` はコンパイル時に**ホスト**上で実行されます — 不要な再ビルドを避けるため、常に `cargo::rerun-if-changed` を出力してください。
+- C/C++ のコンパイルには生の `gcc` コマンドではなく `cc` クレートを使用してください — クロスコンパイルツールチェーンを適切に処理してくれます。
+- 生成ファイルは `OUT_DIR` に書き込み、決して `src/` に書き込まないでください — Cargo はビルド中にソースが変化することを想定していません。
+- オプションのハードウェアに対しては、ビルド時検出ではなく実行時検出を優先してください。
+- タイムスタンプを埋め込む際は、ビルドの再現性を維持するために `SOURCE_DATE_EPOCH` をサポートしてください。
 
 ---
-

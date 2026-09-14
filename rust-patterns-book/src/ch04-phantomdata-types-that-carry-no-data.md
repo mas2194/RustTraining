@@ -1,69 +1,69 @@
-# 4. PhantomData — Types That Carry No Data 🔴
+# 4. PhantomData — データを保持しない型 🔴
 
-> **What you'll learn:**
-> - Why `PhantomData<T>` exists and the three problems it solves
-> - Lifetime branding for compile-time scope enforcement
-> - The unit-of-measure pattern for dimension-safe arithmetic
-> - Variance (covariant, contravariant, invariant) and how PhantomData controls it
+> **学べること:**
+> - `PhantomData<T>` が存在する理由と、それが解決する3つの課題
+> - コンパイル時のスコープ制限を強制するライフタイムブランディング
+> - 次元の安全な計算を実現する単位系（Unit-of-Measure）パターン
+> - 変性（共変・反変・不変）の仕組みと、PhantomData によるその制御
 
-## What PhantomData Solves
+## PhantomData が解決するもの
 
-`PhantomData<T>` is a zero-sized type that tells the compiler "this struct is logically associated with `T`, even though it doesn't contain a `T`." It affects variance, drop checking, and auto-trait inference — without using any memory.
+`PhantomData<T>` は、メモリを一切消費することなく、コンパイラに対して「この構造体は実際には `T` を保持していないが、論理的に `T` と関連づけられている」と伝えるためのゼロサイズ型（ZST）です。変性（variance）、ドロップチェック（drop checking）、自動トレイト（auto trait）の推論に影響を与えます。
 
 ```rust
 use std::marker::PhantomData;
 
-// Without PhantomData:
+// PhantomData を使わない場合:
 struct Slice<'a, T> {
     ptr: *const T,
     len: usize,
-    // Problem: compiler doesn't know this struct borrows from 'a
-    // or that it's associated with T for drop-check purposes
+    // 課題: コンパイラは、この構造体が 'a から借用していることも、
+    // ドロップチェックの観点で T と関連していることも認識できない
 }
 
-// With PhantomData:
+// PhantomData を使う場合:
 struct Slice<'a, T> {
     ptr: *const T,
     len: usize,
     _marker: PhantomData<&'a T>,
-    // Now the compiler knows:
-    // 1. This struct borrows data with lifetime 'a
-    // 2. It's covariant over 'a (lifetimes can shrink)
-    // 3. Drop check considers T
+    // これによりコンパイラは以下を理解する:
+    // 1. この構造体はライフタイム 'a を持つデータを借用している
+    // 2. 'a に関して共変（covariant）である（ライフタイムの縮小が可能）
+    // 3. ドロップチェック時に T を考慮する
 }
 ```
 
-**The three jobs of PhantomData**:
+**PhantomData の3つの役割**:
 
-| Job | Example | What It Does |
-|-----|---------|-------------|
-| **Lifetime binding** | `PhantomData<&'a T>` | Struct is treated as borrowing `'a` |
-| **Ownership simulation** | `PhantomData<T>` | Drop check assumes struct owns a `T` |
-| **Variance control** | `PhantomData<fn(T)>` | Makes struct contravariant over `T` |
+| 役割 | 実例 | 具体的な動作 |
+|------|------|-------------|
+| **ライフタイムの束縛** | `PhantomData<&'a T>` | 構造体がライフタイム `'a` のデータを借用しているものとして扱われる |
+| **所有権のシミュレーション** | `PhantomData<T>` | ドロップチェックにおいて、構造体が `T` を所有していると見なされる |
+| **変性の制御** | `PhantomData<fn(T)>` | 構造体を `T` に関して反変（contravariant）にする |
 
-### Lifetime Branding
+### ライフタイムブランディング
 
-Use `PhantomData` to prevent mixing values from different "sessions" or "contexts":
+`PhantomData` を利用して、異なる「セッション」や「コンテキスト」の値が混ざり合うのを防ぐことができます：
 
 ```rust
 use std::cell::RefCell;
 use std::marker::PhantomData;
 
-/// A handle branded to a specific arena instance.
-/// Invariant over 'arena — prevents using a handle from one arena with another.
+/// 特定のアリーナインスタンスにブランド付け（刻印）されたハンドル。
+/// 'arena に関して不変（invariant） — あるアリーナのハンドルを別のアリーナで使うのを防ぐ。
 struct ArenaHandle<'arena> {
     index: usize,
     _brand: PhantomData<*mut &'arena ()>,
 }
 
-/// An arena that brands each handle with its unique lifetime.
+/// 各ハンドルに固有のライフタイムをブランド付けするアリーナ。
 struct Arena<'arena> {
     data: RefCell<Vec<String>>,
     _phantom: PhantomData<&'arena ()>,
 }
 
-/// Create an arena and pass it to a closure.
-/// Each call gets a unique, opaque lifetime that can't be forged.
+/// アリーナを作成し、クロージャに渡す。
+/// 呼び出しごとに偽造不可能な固有かつ不透明なライフタイムが割り当てられる。
 fn with_arena<R>(f: impl for<'arena> FnOnce(&Arena<'arena>) -> R) -> R {
     let arena = Arena {
         data: RefCell::new(Vec::new()),
@@ -73,7 +73,7 @@ fn with_arena<R>(f: impl for<'arena> FnOnce(&Arena<'arena>) -> R) -> R {
 }
 
 impl<'arena> Arena<'arena> {
-    /// Allocate a string and return a branded handle
+    /// 文字列をアロケートし、ブランド付けされたハンドルを返す
     fn alloc(&self, value: String) -> ArenaHandle<'arena> {
         let mut data = self.data.borrow_mut();
         let index = data.len();
@@ -81,7 +81,7 @@ impl<'arena> Arena<'arena> {
         ArenaHandle { index, _brand: PhantomData }
     }
 
-    /// Look up by handle — only accepts handles from THIS arena
+    /// ハンドルによる値の取得 — 「この」アリーナから発行されたハンドルのみ受け付ける
     fn get(&self, handle: &ArenaHandle<'arena>) -> String {
         let data = self.data.borrow();
         data[handle.index].clone()
@@ -93,23 +93,23 @@ fn main() {
         let handle1 = arena1.alloc("hello".to_string());
         println!("{}", arena1.get(&handle1)); // ✅
 
-        // Can't use handle1 with a different arena — compile-time error
+        // handle1 を別のアリーナで使用することはできない — コンパイルエラーになる
         // with_arena(|arena2| {
-        //     arena2.get(&handle1); // ❌ borrowed data escapes outside of closure
+        //     arena2.get(&handle1); // ❌ 借用データがクロージャの外に漏洩する
         // });
     });
 }
 ```
 
-### Unit-of-Measure Pattern
+### 単位系（Unit-of-Measure）パターン
 
-Prevent mixing incompatible units at compile time, with zero runtime cost:
+互換性のない単位同士の混同を、実行時オーバーヘッドゼロでコンパイル時に防止します：
 
 ```rust
 use std::marker::PhantomData;
 use std::ops::{Add, Mul};
 
-// Unit marker types (zero-sized)
+// 単位を表すマーカー型（ゼロサイズ）
 struct Meters;
 struct Seconds;
 struct MetersPerSecond;
@@ -126,7 +126,7 @@ impl<U> Quantity<U> {
     }
 }
 
-// Can only add same units:
+// 同一の単位同士のみ加算可能:
 impl<U> Add for Quantity<U> {
     type Output = Quantity<U>;
     fn add(self, rhs: Self) -> Self::Output {
@@ -134,7 +134,7 @@ impl<U> Add for Quantity<U> {
     }
 }
 
-// Meters / Seconds = MetersPerSecond (custom trait)
+// メートル / 秒 = メートル毎秒 (カスタム除算)
 impl std::ops::Div<Quantity<Seconds>> for Quantity<Meters> {
     type Output = Quantity<MetersPerSecond>;
     fn div(self, rhs: Quantity<Seconds>) -> Quantity<MetersPerSecond> {
@@ -146,63 +146,59 @@ fn main() {
     let dist = Quantity::<Meters>::new(100.0);
     let time = Quantity::<Seconds>::new(9.58);
     let speed = dist / time; // Quantity<MetersPerSecond>
-    println!("Speed: {:.2} m/s", speed.value); // 10.44 m/s
+    println!("速度: {:.2} m/s", speed.value); // 10.44 m/s
 
-    // let nonsense = dist + time; // ❌ Compile error: can't add Meters + Seconds
+    // let nonsense = dist + time; // ❌ コンパイルエラー: Meters と Seconds は加算できない
 }
 ```
 
-> **This is pure type-system magic** — `PhantomData<Meters>` is zero-sized,
-> so `Quantity<Meters>` has the same layout as `f64`. No wrapper overhead
-> at runtime, but full unit safety at compile time.
+> **型システムの驚くべき力** — `PhantomData<Meters>` はサイズが0であるため、`Quantity<Meters>` のメモリレイアウトは通常の `f64` と完全に同一です。実行時のラッパーオーバーヘッドは一切なく、コンパイル時に完全な単位安全性が得られます。
 
-### PhantomData and Drop Check
+### PhantomData とドロップチェック（Drop Check）
 
-When the compiler checks whether a struct's destructor might access expired data, it uses `PhantomData` to decide:
+構造体のデストラクタが有効期限の切れたデータにアクセスする可能性があるかをコンパイラが検証する際、`PhantomData` の有無と型を手がかりに判定します：
 
 ```rust
 use std::marker::PhantomData;
 
-// PhantomData<T> — compiler assumes we MIGHT drop a T
-// This means T must outlive our struct
+// PhantomData<T> — コンパイラは「この型は T をドロップする可能性がある」とみなす
+// つまり、T はこの構造体よりも長生きでなければならない
 struct OwningSemantic<T> {
     ptr: *const T,
-    _marker: PhantomData<T>,  // "I logically own a T"
+    _marker: PhantomData<T>,  // 「論理的に T を所有している」
 }
 
-// PhantomData<*const T> — compiler assumes we DON'T own T
-// More permissive — T doesn't need to outlive us
+// PhantomData<*const T> — コンパイラは「T を所有していない」とみなす
+// より寛容 — T がこの構造体より長生きである必要はない
 struct NonOwningSemantic<T> {
     ptr: *const T,
-    _marker: PhantomData<*const T>,  // "I just point to T"
+    _marker: PhantomData<*const T>,  // 「単に T を指しているだけ」
 }
 ```
 
-**Practical rule**: When wrapping raw pointers, choose PhantomData carefully:
-- Writing a container that owns its data? → `PhantomData<T>`
-- Writing a view/reference type? → `PhantomData<&'a T>` or `PhantomData<*const T>`
+**実践的なルール**: 生ポインタ（raw pointer）をラップする際は、PhantomData を慎重に選択してください：
+- データを所有するコンテナを書く場合 → `PhantomData<T>`
+- ビューや参照の型を書く場合 → `PhantomData<&'a T>` または `PhantomData<*const T>`
 
-### Variance — Why PhantomData's Type Parameter Matters
+### 変性（Variance） — なぜ PhantomData の型パラメータが重要なのか
 
-**Variance** determines whether a generic type can be substituted with a sub- or
-super-type (in Rust, "subtype" means "has a longer lifetime"). Getting variance
-wrong causes either rejected-good-code or unsound-accepted-code.
+**変性（Variance）**は、ジェネリック型において、部分型（サブタイプ）や上位型（スーパータイプ）への代入・置換が可能かどうかを決定します（Rustにおいて「部分型」とは主に「より長いライフタイムを持つ型」を意味します）。変性を誤って設定すると、本来安全なコードがコンパイル拒絶されたり、不健全なコードが誤って受理されたりする原因になります。
 
 ```mermaid
 graph LR
-    subgraph Covariant
+    subgraph "共変（Covariant）"
         direction TB
-        A1["&'long T"] -->|"can become"| A2["&'short T"]
+        A1["&'long T"] -->|"置換可能"| A2["&'short T"]
     end
 
-    subgraph Contravariant
+    subgraph "反変（Contravariant）"
         direction TB
-        B1["fn(&'short T)"] -->|"can become"| B2["fn(&'long T)"]
+        B1["fn(&'short T)"] -->|"置換可能"| B2["fn(&'long T)"]
     end
 
-    subgraph Invariant
+    subgraph "不変（Invariant）"
         direction TB
-        C1["&'a mut T"] ---|"NO substitution"| C2["&'b mut T"]
+        C1["&'a mut T"] ---|"一切置換不可"| C2["&'b mut T"]
     end
 
     style A1 fill:#d4efdf,stroke:#27ae60,color:#000
@@ -213,15 +209,15 @@ graph LR
     style C2 fill:#fadbd8,stroke:#e74c3c,color:#000
 ```
 
-#### The Three Variances
+#### 3つの変性
 
-| Variance | Meaning | "Can I substitute…" | Rust example |
-|----------|---------|---------------------|--------------|
-| **Covariant** | Subtype flows through | `'long` where `'short` expected ✅ | `&'a T`, `Vec<T>`, `Box<T>` |
-| **Contravariant** | Subtype flows *against* | `'short` where `'long` expected ✅ | `fn(T)` (in parameter position) |
-| **Invariant** | No substitution allowed | Neither direction ✅ | `&mut T`, `Cell<T>`, `UnsafeCell<T>` |
+| 変性 | 意味 | 「〜を代入・置換できるか？」 | Rustにおける実例 |
+|------|------|-----------------------------|-----------------|
+| **共変（Covariant）** | 部分型関係がそのまま維持される | `'short` が期待される場所に `'long` を渡せる ✅ | `&'a T`、`Vec<T>`、`Box<T>` |
+| **反変（Contravariant）** | 部分型関係が逆転する | `'long` が期待される場所に `'short` を渡せる ✅ | `fn(T)`（引数位置） |
+| **不変（Invariant）** | 置換が一切許可されない | どちらの方向への置換も不可 ❌ | `&mut T`、`Cell<T>`、`UnsafeCell<T>` |
 
-#### Why `&'a T` is Covariant Over `'a`
+#### なぜ `&'a T` は `'a` に関して共変なのか
 
 ```rust
 fn print_str(s: &str) {
@@ -230,114 +226,112 @@ fn print_str(s: &str) {
 
 fn main() {
     let owned = String::from("hello");
-    // owned lives for the entire function ('long)
-    // print_str expects &'_ str ('short — just for the call)
-    print_str(&owned); // ✅ Covariance: 'long → 'short is safe
-    // A longer-lived reference can always be used where a shorter one is needed.
+    // owned は関数全体で生存している（'long）
+    // print_str は単なる呼び出しの間だけの参照を期待している（'short）
+    print_str(&owned); // ✅ 共変性: 'long → 'short への縮小は安全
+    // より長く生存する参照は、より短い生存期間が求められる場所へ常に代入可能です。
 }
 ```
 
-#### Why `&mut T` is Invariant Over `T`
+#### なぜ `&mut T` は `T` に関して不変なのか
 
 ```rust
-// If &mut T were covariant over T, this would compile:
+// もし &mut T が T に関して共変だったとすると、以下の不正なコードがコンパイルを通ってしまう:
 fn evil(s: &mut &'static str) {
-    // We could write a shorter-lived &str into a &'static str slot!
-    let local = String::from("temporary");
-    // *s = &local; // ← Would create a dangling &'static str
+    // &'static str スロットに、より短命なローカルの &str を書き込めてしまう！
+    let local = String::from("一時的な文字列");
+    // *s = &local; // ← ダングリング（解放済み）な &'static str を生み出してしまう
 }
 
-// Invariance prevents this: &'static str ≠ &'a str when mutating.
-// The compiler rejects the substitution entirely.
+// 不変性（Invariance）がこれを防止する: ミュータブル参照経由での書き換え時、
+// &'static str と &'a str は厳密に同一でなければならない。
+// コンパイラはこの置換を完全に拒否します。
 ```
 
-#### How PhantomData Controls Variance
+#### PhantomData による変性の制御
 
-`PhantomData<X>` gives your struct the **same variance as `X`**:
+`PhantomData<X>` を持たせることで、構造体に **`X` と全く同じ変性**を付与できます：
 
 ```rust
 use std::marker::PhantomData;
 
-// Covariant over 'a — a Ref<'long> can be used as Ref<'short>
+// 'a に関して共変 — Ref<'long> を Ref<'short> として使用可能
 struct Ref<'a, T> {
     ptr: *const T,
-    _marker: PhantomData<&'a T>,  // Covariant over 'a, covariant over T
+    _marker: PhantomData<&'a T>,  // 'a に関して共変、T に関して共変
 }
 
-// Invariant over T — prevents unsound lifetime shortening of T
+// T に関して不変 — T のライフタイムが不健全に縮小されるのを防ぐ
 struct MutRef<'a, T> {
     ptr: *mut T,
-    _marker: PhantomData<&'a mut T>,  // Covariant over 'a, INVARIANT over T
+    _marker: PhantomData<&'a mut T>,  // 'a に関して共変、T に関して「不変」
 }
 
-// Contravariant over T — useful for callback containers
+// T に関して反変 — コールバックのコンテナなどに有用
 struct CallbackSlot<T> {
-    _marker: PhantomData<fn(T)>,  // Contravariant over T
+    _marker: PhantomData<fn(T)>,  // T に関して反変
 }
 ```
 
-**PhantomData variance cheat sheet**:
+**PhantomData の変性チートシート**:
 
-| PhantomData type | Variance over `T` | Variance over `'a` | Use when |
-|------------------|--------------------|--------------------|-----------|
-| `PhantomData<T>` | Covariant | — | You logically own a `T` |
-| `PhantomData<&'a T>` | Covariant | Covariant | You borrow a `T` with lifetime `'a` |
-| `PhantomData<&'a mut T>` | **Invariant** | Covariant | You mutably borrow `T` |
-| `PhantomData<*const T>` | Covariant | — | Non-owning pointer to `T` |
-| `PhantomData<*mut T>` | **Invariant** | — | Non-owning mutable pointer |
-| `PhantomData<fn(T)>` | **Contravariant** | — | `T` appears in argument position |
-| `PhantomData<fn() -> T>` | Covariant | — | `T` appears in return position |
-| `PhantomData<fn(T) -> T>` | **Invariant** | — | `T` in both positions cancels out |
+| PhantomData の型 | `T` に関する変性 | `'a` に関する変性 | 使うべき場面 |
+|------------------|------------------|-------------------|--------------|
+| `PhantomData<T>` | 共変 | — | `T` を論理的に所有している場合 |
+| `PhantomData<&'a T>` | 共変 | 共変 | ライフタイム `'a` の `T` を借用している場合 |
+| `PhantomData<&'a mut T>` | **不変** | 共変 | `T` を可変借用している場合 |
+| `PhantomData<*const T>` | 共変 | — | `T` を指す非所有の生ポインタ |
+| `PhantomData<*mut T>` | **不変** | — | 非所有の可変生ポインタ |
+| `PhantomData<fn(T)>` | **反変** | — | `T` が引数位置に出現する場合 |
+| `PhantomData<fn() -> T>` | 共変 | — | `T` が戻り値位置に出現する場合 |
+| `PhantomData<fn(T) -> T>` | **不変** | — | 引数と戻り値の両方に `T` がある場合（相殺） |
 
-#### Worked Example: Why This Matters in Practice
+#### 実践的な実例: なぜこれが重要なのか
 
 ```rust
 use std::marker::PhantomData;
 
-// A token that brands values with a session lifetime.
-// MUST be covariant over 'a — otherwise callers can't shorten
-// the lifetime when passing to functions that need a shorter borrow.
+// 値にセッションライフタイムをブランド付けするトークン。
+// 呼び出し側が短い借用を必要とする関数に渡せるよう、
+// 'a に関して必ず「共変」でなければならない。
 struct SessionToken<'a> {
     id: u64,
-    _brand: PhantomData<&'a ()>,  // ✅ Covariant — callers can shorten 'a
-    // _brand: PhantomData<fn(&'a ())>,  // ❌ Contravariant — breaks ergonomics
-    // _brand: PhantomData<&'a mut ()>;  // Still covariant over 'a (invariant over T, but T is fixed as ())
+    _brand: PhantomData<&'a ()>,  // ✅ 共変 — 呼び出し側が 'a を縮小可能
+    // _brand: PhantomData<fn(&'a ())>,  // ❌ 反変 — 人間工学（使い勝手）が破壊される
+    // _brand: PhantomData<&'a mut ()>;  // これも 'a に関しては共変（T は () に固定されているため不変なのは () のみ）
 }
 
 fn use_token(token: &SessionToken<'_>) {
-    println!("Using token {}", token.id);
+    println!("トークン {} を使用中", token.id);
 }
 
 fn main() {
     let token = SessionToken { id: 42, _brand: PhantomData };
-    use_token(&token); // ✅ Works because SessionToken is covariant over 'a
+    use_token(&token); // ✅ SessionToken が 'a に関して共変であるため動作する
 }
 ```
 
-> **Decision rule**: Start with `PhantomData<&'a T>` (covariant). Switch to
-> `PhantomData<&'a mut T>` (invariant) only if your abstraction hands out
-> mutable access to `T`. Use `PhantomData<fn(T)>` (contravariant) almost
-> never — it's only correct for callback-storage scenarios.
+> **意思決定ルール**: まずは `PhantomData<&'a T>`（共変）から始めましょう。自作の抽象化が `T` への可変アクセス（`&mut T`）を外部へ公開・提供する場合にのみ、`PhantomData<&'a mut T>`（不変）に切り替えます。`PhantomData<fn(T)>`（反変）は、コールバックを直接保持する特殊なシナリオを除き、ほとんど使う機会はありません。
 
-> **Key Takeaways — PhantomData**
-> - `PhantomData<T>` carries type/lifetime information without runtime cost
-> - Use it for lifetime branding, variance control, and unit-of-measure patterns
-> - Drop check: `PhantomData<T>` tells the compiler your type logically owns a `T`
+> **重要ポイント — PhantomData**
+> - `PhantomData<T>` は実行時コストゼロで型やライフタイムの情報を伝達する
+> - ライフタイムブランディング、変性の制御、単位系パターンに活用される
+> - ドロップチェック: `PhantomData<T>` はコンパイラに「この型は論理的に `T` を所有している」と通知する
 
-> **See also:** [Ch 3 — Newtype & Type-State](ch03-the-newtype-and-type-state-patterns.md) for type-state patterns that use PhantomData. [Ch 11 — Unsafe Rust](ch12-unsafe-rust-controlled-danger.md) for how PhantomData interacts with raw pointers.
+> **参照:** PhantomData を活用する型状態パターンについては [第3章 — ニュータイプと型状態](ch03-the-newtype-and-type-state-patterns.md) を参照してください。PhantomData と生ポインタの連携については [第12章 — Unsafe Rust](ch12-unsafe-rust-controlled-danger.md) を参照してください。
 
 ---
 
-### Exercise: Unit-of-Measure with PhantomData ★★ (~30 min)
+### 演習問題: PhantomData を用いた単位系 ★★（目安: 約30分）
 
-Extend the unit-of-measure pattern to support:
-- `Meters`, `Seconds`, `Kilograms`
-- Addition of same units
-- Multiplication: `Meters * Meters = SquareMeters`
-- Division: `Meters / Seconds = MetersPerSecond`
+単位系パターンを拡張し、以下の演算をサポートしてください：
+- `Meters`（メートル）、`Seconds`（秒）、`Kilograms`（キログラム）
+- 同一単位同士の加算
+- 乗算: `Meters * Meters = SquareMeters`（平方メートル）
+- 除算: `Meters / Seconds = MetersPerSecond`（メートル毎秒）
 
 <details>
-<summary>🔑 Solution</summary>
+<summary>🔑 解答例</summary>
 
 ```rust
 use std::marker::PhantomData;
@@ -387,21 +381,20 @@ fn main() {
     let width = Qty::<Meters>::new(5.0);
     let height = Qty::<Meters>::new(3.0);
     let area = width * height; // Qty<SquareMeters>
-    println!("Area: {:.1} m²", area.value);
+    println!("面積: {:.1} m²", area.value);
 
     let dist = Qty::<Meters>::new(100.0);
     let time = Qty::<Seconds>::new(9.58);
     let speed = dist / time;
-    println!("Speed: {:.2} m/s", speed.value);
+    println!("速度: {:.2} m/s", speed.value);
 
-    let sum = width + height; // Same unit ✅
-    println!("Sum: {:.1} m", sum.value);
+    let sum = width + height; // 同じ単位 ✅
+    println!("合計: {:.1} m", sum.value);
 
-    // let bad = width + time; // ❌ Compile error: can't add Meters + Seconds
+    // let bad = width + time; // ❌ コンパイルエラー: Meters と Seconds は加算できません
 }
 ```
 
 </details>
 
 ***
-

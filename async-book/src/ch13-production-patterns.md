@@ -1,79 +1,79 @@
-# 13. Production Patterns 🔴
+# 13. 本番環境のパターン 🔴
 
-> **What you'll learn:**
-> - Graceful shutdown with `watch` channels and `select!`
-> - Backpressure: bounded channels prevent OOM
-> - Structured concurrency: `JoinSet` and `TaskTracker`
-> - Timeouts, retries, and exponential backoff
-> - Error handling: `thiserror` vs `anyhow`, the double-`?` pattern
-> - Tower: the middleware pattern used by axum, tonic, and hyper
+> **学習内容:**
+> - `watch` チャネルと `select!` を用いたグレースフルシャットダウン
+> - バックプレッシャー：バッファ付きチャネルによる OOM（メモリ枯渇）の防止
+> - 構造化並行性：`JoinSet` と `TaskTracker`
+> - タイムアウト、リトライ、指数関数的バックオフ
+> - エラー処理：`thiserror` 対 `anyhow`、二重 `?` パターン
+> - Tower：axum、tonic、hyper で使われるミドルウェアパターン
 
-## Graceful Shutdown
+## グレースフルシャットダウン
 
-Production servers must shut down cleanly — finish in-flight requests, flush buffers, close connections:
+本番環境のサーバーは正常に終了（シャットダウン）できなければなりません。処理中のリクエストを完了させ、バッファをフラッシュし、接続を閉じます：
 
 ```rust
 use tokio::signal;
 use tokio::sync::watch;
 
 async fn main_server() {
-    // Create a shutdown signal channel
+    // シャットダウンシグナルチャネルを作成
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
 
-    // Spawn the server
+    // サーバーをスポーン
     let server_handle = tokio::spawn(run_server(shutdown_rx.clone()));
 
-    // Wait for Ctrl+C
-    signal::ctrl_c().await.expect("Failed to listen for Ctrl+C");
-    println!("Shutdown signal received, finishing in-flight requests...");
+    // Ctrl+C を待機
+    signal::ctrl_c().await.expect("Ctrl+Cの監視に失敗しました");
+    println!("シャットダウンシグナルを受信しました。処理中のリクエストを完了させています...");
 
-    // Notify all tasks to shut down
-    // NOTE: .unwrap() is used for brevity. Production code should handle
-    // the case where all receivers have been dropped.
+    // 全タスクにシャットダウンを通知
+    // 注意: 簡潔さのため .unwrap() を使用しています。本番コードでは
+    // すべての受信側がドロップされたケースを適切に処理してください。
     shutdown_tx.send(true).unwrap();
 
-    // Wait for server to finish (with timeout)
+    // サーバーの完了を待機（タイムアウト付き）
     match tokio::time::timeout(
         std::time::Duration::from_secs(30),
         server_handle,
     ).await {
-        Ok(Ok(())) => println!("Server shut down gracefully"),
-        Ok(Err(e)) => eprintln!("Server error: {e}"),
-        Err(_) => eprintln!("Server shutdown timed out — forcing exit"),
+        Ok(Ok(())) => println!("サーバーは正常に終了しました"),
+        Ok(Err(e)) => eprintln!("サーバーエラー: {e}"),
+        Err(_) => eprintln!("サーバーのシャットダウンがタイムアウトしました — 強制終了します"),
     }
 }
 
 async fn run_server(mut shutdown: watch::Receiver<bool>) {
     loop {
         tokio::select! {
-            // Accept new connections
+            // 新規接続の受け入れ
             conn = accept_connection() => {
                 let shutdown = shutdown.clone();
                 tokio::spawn(handle_connection(conn, shutdown));
             }
-            // Shutdown signal
+            // シャットダウンシグナル
             _ = shutdown.changed() => {
                 if *shutdown.borrow() {
-                    println!("Stopping accepting new connections");
+                    println!("新規接続の受け入れを停止します");
                     break;
                 }
             }
         }
     }
-    // In-flight connections will finish on their own
-    // because they have their own shutdown_rx clone
+    // 処理中の接続は自身の shutdown_rx クローンを持っているため、
+    // 自律して完了します
 }
 
 async fn handle_connection(conn: Connection, mut shutdown: watch::Receiver<bool>) {
     loop {
         tokio::select! {
             request = conn.next_request() => {
-                // Process the request fully — don't abandon mid-request
+                // リクエストを完全に処理 — 途中で放棄しない
                 process_request(request).await;
             }
             _ = shutdown.changed() => {
                 if *shutdown.borrow() {
-                    // Finish current request, then exit
+                    // 現在のリクエストを完了してから終了
                     break;
                 }
             }
@@ -84,63 +84,63 @@ async fn handle_connection(conn: Connection, mut shutdown: watch::Receiver<bool>
 
 ```mermaid
 sequenceDiagram
-    participant OS as OS Signal
-    participant Main as Main Task
-    participant WCH as watch Channel
-    participant W1 as Worker 1
-    participant W2 as Worker 2
+    participant OS as OSシグナル
+    participant Main as メインタスク
+    participant WCH as watchチャネル
+    participant W1 as ワーカー 1
+    participant W2 as ワーカー 2
 
     OS->>Main: SIGINT (Ctrl+C)
     Main->>WCH: send(true)
     WCH-->>W1: changed()
     WCH-->>W2: changed()
 
-    Note over W1: Finish current request
-    Note over W2: Finish current request
+    Note over W1: 処理中のリクエストを完了
+    Note over W2: 処理中のリクエストを完了
 
-    W1-->>Main: Task complete
-    W2-->>Main: Task complete
-    Main->>Main: All workers done → exit
+    W1-->>Main: タスク完了
+    W2-->>Main: タスク完了
+    Main->>Main: 全ワーカー完了 → 終了
 ```
 
-### Backpressure with Bounded Channels
+### バッファ付きチャネルによるバックプレッシャー
 
-Unbounded channels can lead to OOM if the producer is faster than the consumer. Always use bounded channels in production:
+容量無制限のチャネル（unbounded channel）は、プロデューサーがコンシューマーより高速な場合に OOM（メモリ枯渇）を引き起こす可能性があります。本番環境では常にバッファ付きチャネル（bounded channel）を使用してください：
 
 ```rust
 use tokio::sync::mpsc;
 
 async fn backpressure_example() {
-    // Bounded channel: max 100 items buffered
+    // バッファ付きチャネル: 最大100個のアイテムをバッファリング
     let (tx, mut rx) = mpsc::channel::<WorkItem>(100);
 
-    // Producer: slows down naturally when buffer is full
+    // プロデューサー: バッファが満杯になると自然に減速する
     let producer = tokio::spawn(async move {
         for i in 0..1_000_000 {
-            // send() is async — waits if buffer is full
-            // This creates natural backpressure!
+            // send() は非同期 — バッファが満杯の場合は待機する
+            // これにより自然なバックプレッシャーが生まれる！
             tx.send(WorkItem { id: i }).await.unwrap();
         }
     });
 
-    // Consumer: processes items at its own pace
+    // コンシューマー: 自身のペースでアイテムを処理する
     let consumer = tokio::spawn(async move {
         while let Some(item) = rx.recv().await {
-            process(item).await; // Slow processing is OK — producer waits
+            process(item).await; // 処理が遅くてもOK — プロデューサーが待機する
         }
     });
 
     let _ = tokio::join!(producer, consumer);
 }
 
-// Compare with unbounded — DANGEROUS:
-// let (tx, rx) = mpsc::unbounded_channel(); // No backpressure!
-// Producer can fill memory indefinitely
+// 容量無制限の場合との比較 — 危険:
+// let (tx, rx) = mpsc::unbounded_channel(); // バックプレッシャーなし！
+// プロデューサーがメモリを無制限に消費する可能性がある
 ```
 
-### Structured Concurrency: JoinSet and TaskTracker
+### 構造化並行性: JoinSet と TaskTracker
 
-`JoinSet` groups related tasks and ensures they all complete:
+`JoinSet` は関連するタスクをグループ化し、それらがすべて完了することを保証します：
 
 ```rust
 use tokio::task::JoinSet;
@@ -149,28 +149,28 @@ use tokio::time::{sleep, Duration};
 async fn structured_concurrency() {
     let mut set = JoinSet::new();
 
-    // Spawn a batch of tasks
+    // タスクのバッチをスポーン
     for url in get_urls() {
         set.spawn(async move {
             fetch_and_process(url).await
         });
     }
 
-    // Collect all results (order not guaranteed)
+    // すべての結果を収集（順序は保証されない）
     let mut results = Vec::new();
     while let Some(result) = set.join_next().await {
         match result {
             Ok(Ok(data)) => results.push(data),
-            Ok(Err(e)) => eprintln!("Task error: {e}"),
-            Err(e) => eprintln!("Task panicked: {e}"),
+            Ok(Err(e)) => eprintln!("タスクエラー: {e}"),
+            Err(e) => eprintln!("タスクがパニックしました: {e}"),
         }
     }
 
-    // ALL tasks are done here — no dangling background work
-    println!("Processed {} items", results.len());
+    // すべてのタスクがここで完了 — 宙に浮いたバックグラウンド処理は残らない
+    println!("{} 個のアイテムを処理しました", results.len());
 }
 
-// TaskTracker (tokio-util 0.7.9+) — wait for all spawned tasks
+// TaskTracker (tokio-util 0.7.9+) — スポーンされた全タスクの完了を待機
 use tokio_util::task::TaskTracker;
 
 async fn with_tracker() {
@@ -179,22 +179,22 @@ async fn with_tracker() {
     for i in 0..10 {
         tracker.spawn(async move {
             sleep(Duration::from_millis(100 * i)).await;
-            println!("Task {i} done");
+            println!("タスク {i} 完了");
         });
     }
 
-    tracker.close(); // No more tasks will be added
-    tracker.wait().await; // Wait for ALL tracked tasks
-    println!("All tasks finished");
+    tracker.close(); // これ以上のタスクは追加されない
+    tracker.wait().await; // 追跡対象の全タスクの完了を待機
+    println!("すべてのタスクが終了しました");
 }
 ```
 
-### Timeouts and Retries
+### タイムアウトとリトライ
 
 ```rust
 use tokio::time::{timeout, sleep, Duration};
 
-// Simple timeout
+// 単純なタイムアウト
 async fn with_timeout() -> Result<Response, Error> {
     match timeout(Duration::from_secs(5), fetch_data()).await {
         Ok(Ok(response)) => Ok(response),
@@ -203,7 +203,7 @@ async fn with_timeout() -> Result<Response, Error> {
     }
 }
 
-// Exponential backoff retry
+// 指数関数的バックオフによるリトライ
 async fn retry_with_backoff<F, Fut, T, E>(
     max_attempts: u32,
     base_delay_ms: u64,
@@ -221,38 +221,35 @@ where
             Ok(result) => return Ok(result),
             Err(e) => {
                 if attempt == max_attempts {
-                    eprintln!("Final attempt {attempt} failed: {e}");
+                    eprintln!("最終試行 {attempt} が失敗しました: {e}");
                     return Err(e);
                 }
-                eprintln!("Attempt {attempt} failed: {e}, retrying in {delay:?}");
+                eprintln!("試行 {attempt} が失敗しました: {e}。{delay:?} 後に再試行します");
                 sleep(delay).await;
-                delay *= 2; // Exponential backoff
+                delay *= 2; // 指数関数的バックオフ
             }
         }
     }
     unreachable!()
 }
 
-// Usage:
+// 使用例:
 // let result = retry_with_backoff(3, 100, || async {
 //     reqwest::get("https://api.example.com/data").await
 // }).await?;
 ```
 
-> **Production tip — add jitter**: The function above uses pure exponential backoff, but in
-> production many clients failing simultaneously will all retry at the same intervals (thundering
-> herd). Add random *jitter* — e.g., `sleep(delay + rand_jitter)` where `rand_jitter` is
-> `0..delay/4` — so retries spread out over time.
+> **本番運用のヒント — ジッター（揺らぎ）の追加**: 上記の関数は純粋な指数関数的バックオフを使用していますが、本番環境では多数のクライアントが同時に失敗した場合に全員が同じ間隔でリトライしてしまいます（サンダリングハード問題）。ランダムな「ジッター（jitter）」— 例えば `sleep(delay + rand_jitter)`（`rand_jitter` は `0..delay/4` の範囲など）— を追加して、リトライのタイミングを時間的に分散させてください。
 
-### Error Handling in Async Code
+### 非同期コードにおけるエラー処理
 
-Async introduces unique error propagation challenges — spawned tasks create error boundaries, timeout errors wrap inner errors, and `?` interacts differently when futures cross task boundaries.
+非同期処理では固有のエラー伝播の課題が生じます。スポーンされたタスクがエラー境界を形成し、タイムアウトエラーが内部エラーをラップし、Futureがタスク境界を跨ぐ際に `?` の挙動が変化するためです。
 
-**`thiserror` vs `anyhow`** — choosing the right tool:
+**`thiserror` 対 `anyhow`** — 適切なツールの選択：
 
 ```rust
-// thiserror: Define typed errors for libraries and public APIs
-// Every variant is explicit — callers can match on specific errors
+// thiserror: ライブラリやパブリックAPI向けの型付きエラーを定義
+// 各バリアントが明示的 — 呼び出し元が特定のエラーに対してマッチ可能
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -270,31 +267,31 @@ enum DiagError {
     TaskPanic(#[from] tokio::task::JoinError),
 }
 
-// anyhow: Quick error handling for applications and prototypes
-// Wraps any error — no need to define types for every case
+// anyhow: アプリケーションやプロトタイプ向けの迅速なエラー処理
+// 任意のエラーをラップ可能 — ケースごとに型を定義する必要がない
 use anyhow::{Context, Result};
 
 async fn run_diagnostics() -> Result<()> {
     let config = load_config()
         .await
-        .context("Failed to load diagnostic config")?;  // Adds context
+        .context("診断設定の読み込みに失敗しました")?;  // コンテキストの追加
 
     let result = run_gpu_test(&config)
         .await
-        .context("GPU diagnostic failed")?;              // Chains context
+        .context("GPU診断に失敗しました")?;              // コンテキストの連鎖
 
     Ok(())
 }
-// anyhow prints: "GPU diagnostic failed: IPMI command failed: timeout"
+// anyhow の出力例: "GPU診断に失敗しました: IPMI command failed: timeout"
 ```
 
-| Crate | Use When | Error Type | Matching |
-|-------|----------|-----------|----------|
-| `thiserror` | Library code, public APIs | `enum MyError { ... }` | `match err { MyError::Timeout => ... }` |
-| `anyhow` | Applications, CLI tools, scripts | `anyhow::Error` (type-erased) | `err.downcast_ref::<MyError>()` |
-| Both together | Library exposes `thiserror`, app wraps with `anyhow` | Best of both | Library errors are typed, app doesn't care |
+| クレート | 使用場面 | エラー型 | マッチング |
+|---------|----------|----------|------------|
+| `thiserror` | ライブラリコード、パブリックAPI | `enum MyError { ... }` | `match err { MyError::Timeout => ... }` |
+| `anyhow` | アプリケーション、CLIツール、スクリプト | `anyhow::Error`（型消去済み） | `err.downcast_ref::<MyError>()` |
+| 両方の併用 | ライブラリが `thiserror` を公開し、アプリが `anyhow` でラップ | 両方のメリットを享受 | ライブラリのエラーは型付けされ、アプリ側は気にせず扱える |
 
-**The double-`?` pattern** with `tokio::spawn`:
+**`tokio::spawn` における二重 `?` パターン**:
 
 ```rust
 use thiserror::Error;
@@ -315,42 +312,42 @@ async fn spawn_with_errors() -> Result<String, AppError> {
         Ok::<_, reqwest::Error>(resp.text().await?)
     });
 
-    // Double ?: First ? unwraps JoinError (task panic), second ? unwraps inner Result
+    // 二重 ?: 1つ目の ? は JoinError（タスクのパニック）を展開し、2つ目の ? は内部の Result を展開する
     let result = handle.await??;
     Ok(result)
 }
 ```
 
-**The error boundary problem** — `tokio::spawn` erases context:
+**エラー境界問題** — `tokio::spawn` によるコンテキストの消失：
 
 ```rust
-// ❌ Error context is lost across spawn boundaries:
+// ❌ スポーンの境界を越えるとエラーコンテキストが失われる:
 async fn bad_error_handling() -> Result<()> {
     let handle = tokio::spawn(async {
-        some_fallible_work().await  // Returns Result<T, SomeError>
+        some_fallible_work().await  // Result<T, SomeError> を返す
     });
 
-    // handle.await returns Result<Result<T, SomeError>, JoinError>
-    // The inner error has no context about what task failed
+    // handle.await は Result<Result<T, SomeError>, JoinError> を返す
+    // 内部エラーには、どのタスクが失敗したのかというコンテキストが含まれない
     let result = handle.await??;
     Ok(())
 }
 
-// ✅ Add context at the spawn boundary:
+// ✅ スポーン境界でコンテキストを追加する:
 async fn good_error_handling() -> Result<()> {
     let handle = tokio::spawn(async {
         some_fallible_work()
             .await
-            .context("worker task failed")  // Context before crossing boundary
+            .context("ワーカタスクが失敗しました")  // 境界を越える前にコンテキストを付与
     });
 
     let result = handle.await
-        .context("worker task panicked")??;  // Context for JoinError too
+        .context("ワーカタスクがパニックしました")??;  // JoinError にもコンテキストを付与
     Ok(())
 }
 ```
 
-**Timeout errors** — wrapping vs replacing:
+**タイムアウトエラー** — ラップするか置き換えるか：
 
 ```rust
 use tokio::time::{timeout, Duration};
@@ -359,18 +356,18 @@ async fn with_timeout_context() -> Result<String, DiagError> {
     let dur = Duration::from_secs(30);
     match timeout(dur, fetch_sensor_data()).await {
         Ok(Ok(data)) => Ok(data),
-        Ok(Err(e)) => Err(e),                      // Inner error preserved
-        Err(_) => Err(DiagError::Timeout(dur)),     // Timeout → typed error
+        Ok(Err(e)) => Err(e),                      // 内部エラーを維持
+        Err(_) => Err(DiagError::Timeout(dur)),     // タイムアウト → 型付きエラーに変換
     }
 }
 ```
 
-### Tower: The Middleware Pattern
+### Tower: ミドルウェアパターン
 
-The [Tower](https://docs.rs/tower) crate defines a composable `Service` trait — the backbone of async middleware in Rust (used by `axum`, `tonic`, `hyper`):
+[Tower](https://docs.rs/tower) クレートは、合成可能な `Service` トレイトを定義しています。これはRustの非同期ミドルウェア（`axum`、`tonic`、`hyper` など）の基盤となっています：
 
 ```rust
-// Tower's core trait (simplified):
+// Towerのコアートレイト（簡略版）:
 pub trait Service<Request> {
     type Response;
     type Error;
@@ -381,29 +378,29 @@ pub trait Service<Request> {
 }
 ```
 
-Middleware wraps a `Service` to add cross-cutting behavior — logging, timeouts, rate-limiting — without modifying inner logic:
+ミドルウェアは `Service` をラップして、内部のビジネスロジックを変更することなく、ロギング、タイムアウト、レート制限などの横断的関心事（cross-cutting concerns）を追加します：
 
 ```rust
 use tower::{ServiceBuilder, timeout::TimeoutLayer, limit::RateLimitLayer};
 use std::time::Duration;
 
 let service = ServiceBuilder::new()
-    .layer(TimeoutLayer::new(Duration::from_secs(10)))       // Outermost: timeout
-    .layer(RateLimitLayer::new(100, Duration::from_secs(1))) // Then: rate limit
-    .service(my_handler);                                     // Innermost: your code
+    .layer(TimeoutLayer::new(Duration::from_secs(10)))       // 最外層: タイムアウト
+    .layer(RateLimitLayer::new(100, Duration::from_secs(1))) // 次層: レート制限
+    .service(my_handler);                                     // 最内層: 独自のハンドラ
 ```
 
-**Why this matters**: If you've used ASP.NET middleware or Express.js middleware, Tower is the Rust equivalent. It's how production Rust services add cross-cutting concerns without code duplication.
+**これが重要な理由**: ASP.NET のミドルウェアや Express.js のミドルウェアを使ったことがあれば、Tower はまさにそれらに相当するRustの仕組みです。本番環境のRustサービスにおいて、コードの重複なしに横断的関心事を組み込む標準的な方法となっています。
 
-### Exercise: Graceful Shutdown with Worker Pool
-
-<details>
-<summary>🏋️ Exercise (click to expand)</summary>
-
-**Challenge**: Build a task processor with a channel-based work queue, N worker tasks, and graceful shutdown on Ctrl+C. Workers should finish in-flight work before exiting.
+### 演習: ワーカープールによるグレースフルシャットダウン
 
 <details>
-<summary>🔑 Solution</summary>
+<summary>🏋️ 演習（クリックして展開）</summary>
+
+**課題**: チャネルベースの作業キュー、N個のワーカタスク、およびCtrl+Cによるグレースフルシャットダウンを備えたタスクプロセッサを構築してください。ワーカーは終了する前に処理中の作業を完了させる必要があります。
+
+<details>
+<summary>🔑 解答</summary>
 
 ```rust
 use tokio::sync::{mpsc, watch};
@@ -434,7 +431,7 @@ async fn main() {
                 };
                 match item {
                     Some(work) => {
-                        println!("Worker {id}: processing {}", work.id);
+                        println!("ワーカー {id}: {} を処理中", work.id);
                         sleep(Duration::from_millis(200)).await;
                     }
                     None => break,
@@ -443,33 +440,31 @@ async fn main() {
         }));
     }
 
-    // Submit work
+    // 作業の投入
     for i in 0..20 {
         let _ = work_tx.send(WorkItem { id: i, payload: format!("task-{i}") }).await;
         sleep(Duration::from_millis(50)).await;
     }
 
-    // On Ctrl+C: signal shutdown, wait for workers
-    // NOTE: .unwrap() is used for brevity — handle errors in production.
+    // Ctrl+C 受信時: シャットダウンを合図し、ワーカーを待機
+    // 注意: 簡潔さのため .unwrap() を使用 — 本番環境ではエラーを適切に処理してください。
     tokio::signal::ctrl_c().await.unwrap();
     shutdown_tx.send(true).unwrap();
     for h in handles { let _ = h.await; }
-    println!("Shut down cleanly.");
+    println!("正常に終了しました。");
 }
 ```
 
 </details>
 </details>
 
-> **Key Takeaways — Production Patterns**
-> - Use a `watch` channel + `select!` for coordinated graceful shutdown
-> - Bounded channels (`mpsc::channel(N)`) provide **backpressure** — senders block when the buffer is full
-> - `JoinSet` and `TaskTracker` provide **structured concurrency**: track, abort, and await task groups
-> - Always add timeouts to network operations — `tokio::time::timeout(dur, fut)`
-> - Tower's `Service` trait is the standard middleware pattern for production Rust services
+> **重要なポイント — 本番環境のパターン**
+> - 連携したグレースフルシャットダウンには `watch` チャネル ＋ `select!` を使用する
+> - バッファ付きチャネル（`mpsc::channel(N)`）は**バックプレッシャー**を提供する — バッファが満杯のとき送信側がブロックされる
+> - `JoinSet` と `TaskTracker` は**構造化並行性**を提供する：タスクグループの追跡、中断、待機を行う
+> - ネットワーク操作には常にタイムアウトを設定する — `tokio::time::timeout(dur, fut)`
+> - Tower の `Service` トレイトは、本番用Rustサービスにおける標準的なミドルウェアパターンである
 
-> **See also:** [Ch 8 — Tokio Deep Dive](ch08-tokio-deep-dive.md) for channels and sync primitives, [Ch 12 — Common Pitfalls](ch12-common-pitfalls.md) for cancellation hazards during shutdown
+> **関連情報:** チャネルと同期プリミティブについては [第8章 — Tokio詳細](ch08-tokio-deep-dive.md) を、シャットダウン中のキャンセルの危険性については [第12章 — よくある落とし穴](ch12-common-pitfalls.md) を参照してください。
 
-***
-
-
+---

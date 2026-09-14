@@ -1,67 +1,50 @@
-# Containerized deployment
+# コンテナ化デプロイ
 
-Optional, opt-in way to self-host the book collection without GitHub Pages —
-useful behind a firewall or on an internal network.
+GitHub Pages を使用せずにブックコレクションをセルフホストするための任意（オプトイン）の方法です。ファイアウォール内や内部ネットワークでの利用に便利です。
 
-**This is not the local development path.** For writing and previewing, use
-`cargo xtask serve`, which rebuilds and serves at <http://localhost:3000> with
-no container involved.
+**これはローカル開発用ではありません。** 執筆やプレビューには `cargo xtask serve` を使用してください。コンテナを使用せずに再ビルドし、<http://localhost:3000> で配信します。
 
-## Usage
+## 使い方
 
-From the repository root:
+リポジトリのルートから以下を実行します:
 
 ```bash
 docker compose -f docker/compose.yaml up --build
 ```
 
-Then open <http://localhost:3000>. Override the host port with `PORT`:
+起動後、<http://localhost:3000> を開きます。ホスト側のポートは `PORT` で上書きできます:
 
 ```bash
 PORT=8080 docker compose -f docker/compose.yaml up --build
 ```
 
-Without Compose:
+Compose を使用しない場合:
 
 ```bash
 docker build -f docker/Dockerfile -t rust-training .
 docker run --rm -p 3000:8080 rust-training
 ```
 
-Note the build context is the repository root in both cases — the build needs
-the book sources and the `xtask` crate.
+いずれの場合もビルドコンテキストはリポジトリルートである点に注意してください。ビルドにはブックのソースコードと `xtask` クレートが必要です。
 
-## How it works
+## 動作の仕組み
 
-Two stages:
+2つのステージで構成されています:
 
-1. **builder** (`rust:1-slim-bookworm`) installs `mdbook` and `mdbook-mermaid`,
-   then runs `cargo xtask build`, which builds all seven books into `site/`
-   along with the generated landing page.
-2. **runtime** (`nginxinc/nginx-unprivileged:alpine`) serves `site/` on port
-   8080. No Rust toolchain, no mdbook, no book sources in the final image.
+1. **builder** (`rust:1-slim-bookworm`): `mdbook` と `mdbook-mermaid` をインストールし、`cargo xtask build` を実行して、生成されたランディングページとともに7冊すべてのブックを `site/` にビルドします。
+2. **runtime** (`nginxinc/nginx-unprivileged:alpine`): ポート 8080 で `site/` を配信します。最終イメージには Rust ツールチェーン、mdbook、ブックのソースコードは含まれません。
 
-`xtask build` is used rather than `xtask deploy` because the two produce
-identical content — `deploy` only differs in writing to `docs/` and printing
-GitHub Pages instructions, which are irrelevant in a container.
+`xtask deploy` ではなく `xtask build` を使用しているのは、両者が生成するコンテンツが同一であるためです。`deploy` の違いは、`docs/` への出力と、コンテナ環境では不要な GitHub Pages 向けの手順を出力することのみです。
 
-## Pinned versions
+## バージョンの固定（ピン留め）
 
-`MDBOOK_VERSION` and `MDBOOK_MERMAID_VERSION` are build args in the Dockerfile.
-CI (`pages.yml`) currently installs both unpinned via `cargo install`, so the
-container may lag or lead the published site after an upstream mdbook release.
-Bump the args when that matters.
+`MDBOOK_VERSION` と `MDBOOK_MERMAID_VERSION` は Dockerfile 内のビルド引数（build args）です。
+CI（`pages.yml`）は現在 `cargo install` を介して両方をバージョン未指定でインストールしているため、アップストリームの mdbook リリース後、コンテナ側のバージョンが進んでいたり遅れていたりする可能性があります。必要に応じて引数の値を更新してください。
 
-Prebuilt release binaries are used where upstream publishes them, falling back
-to `cargo install` otherwise. As of the pinned versions, `mdbook-mermaid` has no
-published arm64 Linux binary, so arm64 builds compile it from source and take
-noticeably longer.
+アップストリームで配布されている場合はビルド済みリリースバイナリを使用し、そうでない場合は `cargo install` にフォールバックします。固定されているバージョン時点では、`mdbook-mermaid` には arm64 Linux 向けの公開バイナリが存在しないため、arm64 ビルドではソースからコンパイルが行われ、所要時間が著しく長くなります。
 
-## Notes
+## 注意事項
 
-- The container runs as uid 101 and binds an unprivileged port, so it needs no
-  root and no added capabilities.
-- Adding `read_only: true` to the service is possible but requires tmpfs mounts
-  for nginx's cache and pid paths; it is left off by default rather than shipped
-  untested.
-- Content is baked in at build time. Rebuild the image to pick up book changes.
+- コンテナは UID 101 として実行され、非特権ポートにバインドされるため、root 権限や追加のケーパビリティは不要です。
+- サービスに `read_only: true` を追加することは可能ですが、nginx のキャッシュおよび PID パス用に tmpfs マウントが必要になります。未テストのまま提供するのを避けるため、デフォルトでは無効になっています。
+- コンテンツはビルド時にイメージ内に組み込まれます。ブックの変更を反映するには、イメージを再ビルドしてください。

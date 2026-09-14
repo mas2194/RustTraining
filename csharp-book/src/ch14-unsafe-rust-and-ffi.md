@@ -1,77 +1,76 @@
 ## Unsafe Rust
 
-> **What you'll learn:** What `unsafe` permits (raw pointers, FFI, unchecked casts), safe wrapper patterns,
-> C# P/Invoke vs Rust FFI for calling native code, and the safety checklist for `unsafe` blocks.
+> **学習内容:** `unsafe` が許可する操作（生ポインタ、FFI、チェックなしキャスト）、安全なラッパーパターン、ネイティブコード呼び出しにおける C# P/Invoke vs Rust FFI、および `unsafe` ブロックの安全性チェックリスト。
 >
-> **Difficulty:** 🔴 Advanced
+> **難易度:** 🔴 上級
 
-Unsafe Rust allows you to perform operations that the borrow checker cannot verify. Use it sparingly and with clear documentation.
+Unsafe Rust では、借用チェッカーが検証できない操作を実行できます。使用は最小限にとどめ、明確なドキュメント（安全性理由）を添えてください。
 
-> **Advanced coverage**: For safe abstraction patterns over unsafe code (arena allocators, lock-free structures, custom vtables), see [Rust Patterns](../../rust-patterns-book/src/summary.md).
+> **より高度な内容**: unsafe コードに対する安全な抽象化パターン（アリーナアロケータ、ロックフリーデータ構造、カスタム仮想関数テーブル等）については、[Rust Patterns](../../rust-patterns-book/src/summary.md) を参照してください。
 
-### When You Need Unsafe
+### Unsafeが必要になる場面
 
 ```rust
-// 1. Dereferencing raw pointers
+// 1. 生ポインタの参照解決（逆参照）
 let mut value = 42;
 let ptr = &mut value as *mut i32;
-// SAFETY: ptr points to a valid, live local variable.
+// SAFETY: ptr は有効で生存しているローカル変数を指しています。
 unsafe {
-    *ptr = 100; // Must be in unsafe block
+    *ptr = 100; // unsafe ブロック内である必要があります
 }
 
-// 2. Calling unsafe functions
+// 2. unsafe な関数の呼び出し
 unsafe fn dangerous() {
-    // Internal implementation that requires caller to maintain invariants
+    // 呼び出し元が不変条件を維持することを要求する内部実装
 }
 
-// SAFETY: no invariants to uphold for this example function.
+// SAFETY: このサンプル関数には維持すべき不変条件はありません。
 unsafe {
-    dangerous(); // Caller takes responsibility
+    dangerous(); // 呼び出し元が責任を負います
 }
 
-// 3. Accessing mutable static variables
+// 3. 可変静的変数のアクセス・変更
 static mut COUNTER: u32 = 0;
-// SAFETY: single-threaded context; no concurrent access to COUNTER.
+// SAFETY: シングルスレッドのコンテキストであり、COUNTER への並行アクセスはありません。
 unsafe {
-    COUNTER += 1; // Not thread-safe — caller must ensure synchronization
+    COUNTER += 1; // スレッドセーフではありません — 呼び出し元が同期を保証する必要があります
 }
 
-// 4. Implementing unsafe traits
+// 4. unsafe なトレイトの実装
 unsafe trait UnsafeTrait {
     fn do_something(&self);
 }
 ```
 
-### C# Comparison: unsafe Keyword
+### C#との比較: unsafe キーワード
 
 ```csharp
-// C# unsafe - similar concept, different scope
+// C# の unsafe - 概念は似ていますが、スコープが異なります
 unsafe void UnsafeExample()
 {
     int value = 42;
     int* ptr = &value;
     *ptr = 100;
     
-    // C# unsafe is about pointer arithmetic
-    // Rust unsafe is about ownership/borrow rule relaxation
+    // C# の unsafe は主にポインタ演算を対象とします
+    // Rust の unsafe は所有権・借用ルールの緩和を対象とします
 }
 
-// C# fixed - pinning managed objects
+// C# の fixed - マネージドオブジェクトの Pin留め（固定）
 unsafe void PinnedExample()
 {
     byte[] buffer = new byte[100];
     fixed (byte* ptr = buffer)
     {
-        // ptr is valid only within this block
+        // ptr はこのブロック内でのみ有効です
     }
 }
 ```
 
-### Safe Wrappers
+### 安全なラッパー
 
 ```rust
-/// The key pattern: wrap unsafe code in a safe API
+/// 重要なパターン: unsafe コードを安全な API でラップする
 pub struct SafeBuffer {
     data: Vec<u8>,
 }
@@ -81,15 +80,15 @@ impl SafeBuffer {
         SafeBuffer { data: vec![0; size] }
     }
     
-    /// Safe API — bounds-checked access
+    /// 安全な API — 境界チェック付きのアクセス
     pub fn get(&self, index: usize) -> Option<u8> {
         self.data.get(index).copied()
     }
     
-    /// Fast unchecked access — unsafe but wrapped safely with bounds check
+    /// 高速なチェックなしアクセス — unsafe ですが境界チェックにより安全にラップされています
     pub fn get_unchecked_safe(&self, index: usize) -> Option<u8> {
         if index < self.data.len() {
-            // SAFETY: we just checked that index is in bounds
+            // SAFETY: index が境界内にあることを直前で確認済みです
             Some(unsafe { *self.data.get_unchecked(index) })
         } else {
             None
@@ -100,19 +99,19 @@ impl SafeBuffer {
 
 ***
 
-## Interop with C# via FFI
+## FFIを介したC#との相互運用
 
-Rust can expose C-compatible functions that C# can call via P/Invoke.
+Rust は、C# から P/Invoke を介して呼び出せる C 互換の関数を公開できます。
 
 ```mermaid
 graph LR
-    subgraph "C# Process"
-        CS["C# Code"] -->|"P/Invoke"| MI["Marshal Layer<br/>UTF-16 → UTF-8<br/>struct layout"]
+    subgraph "C# プロセス"
+        CS["C# コード"] -->|"P/Invoke"| MI["マーシャリング層<br/>UTF-16 → UTF-8<br/>構造体のレイアウト"]
     end
-    MI -->|"C ABI call"| FFI["FFI Boundary"]
+    MI -->|"C ABI 呼び出し"| FFI["FFI 境界"]
     subgraph "Rust cdylib (.so / .dll)"
         FFI --> RF["extern #quot;C#quot; fn<br/>#[no_mangle]"]
-        RF --> Safe["Safe Rust<br/>internals"]
+        RF --> Safe["安全な Rust の<br/>内部ロジック"]
     end
 
     style FFI fill:#fff9c4,color:#000
@@ -120,7 +119,7 @@ graph LR
     style Safe fill:#c8e6c9,color:#000
 ```
 
-### Rust Library (compiled as cdylib)
+### Rustライブラリ（cdylib としてコンパイル）
 
 ```rust
 // src/lib.rs
@@ -131,7 +130,7 @@ pub extern "C" fn add_numbers(a: i32, b: i32) -> i32 {
 
 #[no_mangle]
 pub extern "C" fn process_string(input: *const std::os::raw::c_char) -> i32 {
-    // SAFETY: input is non-null (checked inside) and assumed null-terminated by caller.
+    // SAFETY: input は非 null であり（内部でチェック済み）、呼び出し元によって null 終端されていると仮定します。
     let c_str = unsafe {
         if input.is_null() {
             return -1;
@@ -152,7 +151,7 @@ pub extern "C" fn process_string(input: *const std::os::raw::c_char) -> i32 {
 crate-type = ["cdylib"]
 ```
 
-### C# Consumer (P/Invoke)
+### C#側の利用コード（P/Invoke）
 
 ```csharp
 using System.Runtime.InteropServices;
@@ -167,54 +166,54 @@ public static class RustInterop
         [MarshalAs(UnmanagedType.LPUTF8Str)] string input);
 }
 
-// Usage
+// 使用例
 int sum = RustInterop.add_numbers(5, 3);  // 8
 int len = RustInterop.process_string("Hello from C#!");  // 15
 ```
 
-### FFI Safety Checklist
+### FFI 安全性チェックリスト
 
-When exposing Rust functions to C#, these rules prevent the most common bugs:
+Rust の関数を C# に公開する場合、以下のルールを守ることで最も一般的なバグを防ぐことができます:
 
-1. **Always use `extern "C"`** — without it, Rust uses its own (unstable) calling convention. C# P/Invoke expects the C ABI.
+1. **常に `extern "C"` を使用する** — これを指定しないと、Rust は独自の（不安定な）呼び出し規約を使用します。C# の P/Invoke は C ABI を前提としています。
 
-2. **`#[no_mangle]`** — prevents the Rust compiler from mangling the function name. Without it, C# can't find the symbol.
+2. **`#[no_mangle]`** — Rust コンパイラによる関数名のマングリング（名前修飾）を防ぎます。これがないと、C# からシンボルを見つけることができません。
 
-3. **Never let a panic cross the FFI boundary** — a Rust panic unwinding into C# is **undefined behavior**. Catch panics at FFI entry points:
+3. **パニックを FFI 境界を越えて伝播させない** — Rust のパニックが C# へと巻き戻る（アンワインドする）動作は **未定義動作（Undefined Behavior）** です。FFI のエントリポイントでパニックをキャッチしてください:
 
     ```rust
     #[no_mangle]
     pub extern "C" fn safe_ffi_function() -> i32 {
         match std::panic::catch_unwind(|| {
-            // actual logic here
+            // 実際のロジックをここに記述
             42
         }) {
             Ok(result) => result,
-            Err(_) => -1,  // Return error code instead of panicking into C#
+            Err(_) => -1,  // C# にパニックを波及させる代わりにエラーコードを返す
         }
     }
     ```
 
-4. **Opaque vs transparent structs** — if C# only holds a pointer (opaque handle), `#[repr(C)]` is not needed. If C# reads struct fields via `StructLayout`, you **must** use `#[repr(C)]`:
+4. **不透明構造体（Opaque） vs 透過構造体（Transparent）** — C# 側がポインタ（不透明ハンドル）のみを保持する場合、`#[repr(C)]` は不要です。C# 側が `StructLayout` を介して構造体のフィールドを直接読み取る場合は、**必ず** `#[repr(C)]` を使用してください:
 
     ```rust
-    // Opaque — C# only holds IntPtr. No #[repr(C)] needed.
-    pub struct Connection { /* Rust-only fields */ }
+    // 不透明（Opaque） — C# は IntPtr のみを保持。#[repr(C)] は不要。
+    pub struct Connection { /* Rust 専用フィールド */ }
 
-    // Transparent — C# marshals fields directly. MUST use #[repr(C)].
+    // 透過（Transparent） — C# がフィールドを直接マーシャリング。#[repr(C)] が必須。
     #[repr(C)]
     pub struct Point { pub x: f64, pub y: f64 }
     ```
 
-5. **Null pointer checks** — always validate pointers before dereferencing. C# can pass `IntPtr.Zero`.
+5. **null ポインタのチェック** — 逆参照する前に必ずポインタを検証してください。C# から `IntPtr.Zero` が渡される可能性があります。
 
-6. **String encoding** — C# uses UTF-16 internally. `MarshalAs(UnmanagedType.LPUTF8Str)` converts to UTF-8 for Rust's `CStr`. Document this contract explicitly.
+6. **文字列のエンコーディング** — C# は内部で UTF-16 を使用します。`MarshalAs(UnmanagedType.LPUTF8Str)` により、Rust の `CStr` 用に UTF-8 へ変換されます。この契約事項を明示的にドキュメント化してください。
 
-### End-to-End Example: Opaque Handle with Lifecycle Management
+### エンドツーエンドの例: ライフサイクル管理を伴う不透明ハンドル
 
-This pattern is common in production: Rust owns an object, C# holds an opaque handle, and explicit create/destroy functions manage the lifecycle.
+本番環境でよく見られるパターンです: Rust がオブジェクトを所有し、C# は不透明ハンドルを保持し、明示的な生成・破棄関数がライフサイクルを管理します。
 
-**Rust side** (`src/lib.rs`):
+**Rust 側** (`src/lib.rs`):
 
 ```rust
 use std::ffi::{c_char, CStr};
@@ -225,7 +224,7 @@ pub struct ImageProcessor {
     pixels: Vec<u8>,
 }
 
-/// Create a new processor. Returns null on invalid dimensions.
+/// 新しいプロセッサを作成する。無効なサイズの場合は null を返す。
 #[no_mangle]
 pub extern "C" fn processor_new(width: u32, height: u32) -> *mut ImageProcessor {
     if width == 0 || height == 0 {
@@ -236,13 +235,13 @@ pub extern "C" fn processor_new(width: u32, height: u32) -> *mut ImageProcessor 
         height,
         pixels: vec![0u8; (width * height * 4) as usize],
     };
-    Box::into_raw(Box::new(proc)) // Allocate on heap, return raw pointer
+    Box::into_raw(Box::new(proc)) // ヒープ上に確保し、生ポインタを返す
 }
 
-/// Apply a grayscale filter. Returns 0 on success, -1 on null pointer.
+/// グレースケールフィルタを適用する。成功時は 0、null ポインタ時は -1 を返す。
 #[no_mangle]
 pub extern "C" fn processor_grayscale(ptr: *mut ImageProcessor) -> i32 {
-    // SAFETY: ptr was created by Box::into_raw (non-null), still valid.
+    // SAFETY: ptr は Box::into_raw によって作成され（非 null）、依然として有効です。
     let proc = match unsafe { ptr.as_mut() } {
         Some(p) => p,
         None => return -1,
@@ -258,17 +257,17 @@ pub extern "C" fn processor_grayscale(ptr: *mut ImageProcessor) -> i32 {
     0
 }
 
-/// Destroy the processor. Safe to call with null.
+/// プロセッサを破棄する。null を渡して呼び出しても安全。
 #[no_mangle]
 pub extern "C" fn processor_free(ptr: *mut ImageProcessor) {
     if !ptr.is_null() {
-        // SAFETY: ptr was created by processor_new via Box::into_raw
+        // SAFETY: ptr は processor_new の Box::into_raw によって作成されたものです
         unsafe { drop(Box::from_raw(ptr)); }
     }
 }
 ```
 
-**C# side**:
+**C# 側**:
 
 ```csharp
 using System.Runtime.InteropServices;
@@ -309,40 +308,40 @@ public sealed class ImageProcessor : IDisposable
     }
 }
 
-// Usage — IDisposable ensures Rust memory is freed
+// 使用例 — IDisposable により Rust 側のメモリ解放が保証される
 using var proc = new ImageProcessor(1920, 1080);
 proc.Grayscale();
-// proc.Dispose() called automatically → processor_free() → Rust drops the Vec
+// proc.Dispose() が自動的に呼び出される → processor_free() → Rust 側で Vec が破棄（Drop）される
 ```
 
-> **Key insight**: This is the Rust equivalent of C#'s `SafeHandle` pattern. Rust's `Box::into_raw` / `Box::from_raw` transfers ownership across the FFI boundary, and the C# `IDisposable` wrapper ensures cleanup.
+> **重要な洞察**: これは C# の `SafeHandle` パターンに相当する Rust のアプローチです。Rust の `Box::into_raw` / `Box::from_raw` が FFI 境界を越えて所有権を受け渡し、C# の `IDisposable` ラッパーが確実なクリーンアップを保証します。
 
 ---
 
-## Exercises
+## 演習問題
 
 <details>
-<summary><strong>🏋️ Exercise: Safe Wrapper for Raw Pointer</strong> (click to expand)</summary>
+<summary><strong>🏋️ 演習問題: 生ポインタの安全なラッパー</strong> (クリックして展開)</summary>
 
-You receive a raw pointer from a C library. Write a safe Rust wrapper:
+C ライブラリから生ポインタを受け取るとします。安全な Rust ラッパーを作成してください:
 
 ```rust
-// Simulated C API
+// 疑似的な C API
 extern "C" {
     fn lib_create_buffer(size: usize) -> *mut u8;
     fn lib_free_buffer(ptr: *mut u8);
 }
 ```
 
-Requirements:
+要件:
 
-1. Create a `SafeBuffer` struct that wraps the raw pointer
-2. Implement `Drop` to call `lib_free_buffer`
-3. Provide a safe `&[u8]` view via `as_slice()`
-4. Ensure `SafeBuffer::new()` returns `None` if the pointer is null
+1. 生ポインタをラップする `SafeBuffer` 構造体を作成する
+2. `lib_free_buffer` を呼び出す `Drop` を実装する
+3. `as_slice()` 経由で安全な `&[u8]` ビューを提供する
+4. ポインタが null の場合、`SafeBuffer::new()` が `None` を返すようにする
 
 <details>
-<summary>🔑 Solution</summary>
+<summary>🔑 解答例</summary>
 
 ```rust,ignore
 struct SafeBuffer {
@@ -352,7 +351,7 @@ struct SafeBuffer {
 
 impl SafeBuffer {
     fn new(size: usize) -> Option<Self> {
-        // SAFETY: lib_create_buffer returns a valid pointer or null (checked below).
+        // SAFETY: lib_create_buffer は有効なポインタまたは null を返します（以下でチェック済み）。
         let ptr = unsafe { lib_create_buffer(size) };
         if ptr.is_null() {
             None
@@ -362,27 +361,26 @@ impl SafeBuffer {
     }
 
     fn as_slice(&self) -> &[u8] {
-        // SAFETY: ptr is non-null (checked in new()), len is the
-        // allocated size, and we hold exclusive ownership.
+        // SAFETY: ptr は非 null であり（new() でチェック済み）、len は確保されたサイズであり、排他的所有権を保持しています。
         unsafe { std::slice::from_raw_parts(self.ptr, self.len) }
     }
 }
 
 impl Drop for SafeBuffer {
     fn drop(&mut self) {
-        // SAFETY: ptr was allocated by lib_create_buffer
+        // SAFETY: ptr は lib_create_buffer によって確保されたものです
         unsafe { lib_free_buffer(self.ptr); }
     }
 }
 
-// Usage: all unsafe is contained in SafeBuffer
+// 使用例: すべての unsafe は SafeBuffer 内にカプセル化されています
 fn process(buf: &SafeBuffer) {
-    let data = buf.as_slice(); // completely safe API
-    println!("First byte: {}", data[0]);
+    let data = buf.as_slice(); // 完全に安全な API
+    println!("先頭バイト: {}", data[0]);
 }
 ```
 
-**Key pattern**: Encapsulate `unsafe` in a small module with `// SAFETY:` comments. Expose a 100% safe public API. This is how Rust's standard library works — `Vec`, `String`, `HashMap` all contain unsafe internally but present safe interfaces.
+**重要なパターン**: `unsafe` は `// SAFETY:` コメントを添えて小さなモジュール内にカプセル化し、外部には 100% 安全な公開 API を提供します。これは Rust 標準ライブラリが採用している設計そのものです — `Vec`、`String`、`HashMap` も内部には unsafe を含んでいますが、安全なインターフェースを提供しています。
 
 </details>
 </details>

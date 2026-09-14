@@ -1,7 +1,7 @@
 [book]
-title = "Rust for C# Programmers"
+title = "C# プログラマーのための Rust 入門"
 authors = ["Rust Training Team"]
-language = "en"
+language = "ja"
 src = "src"
 
 [build]

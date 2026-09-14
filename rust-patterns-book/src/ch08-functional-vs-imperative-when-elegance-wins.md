@@ -1,16 +1,16 @@
-# 8. Functional vs. Imperative: When Elegance Wins (and When It Doesn't)
+# 8. 関数型 vs. 命令型: エレガンスが勝る時（そして勝てない時）
 
-> **Difficulty:** 🟡 Intermediate | **Time:** 2–3 hours | **Prerequisites:** [Ch 7 — Closures](ch07-closures-and-higher-order-functions.md)
+> **難易度:** 🟡 中級 | **所要時間:** 2〜3時間 | **前提知識:** [第7章 — クロージャ](ch07-closures-and-higher-order-functions.md)
 
-Rust gives you genuine parity between functional and imperative styles. Unlike Haskell (functional by fiat) or C (imperative by default), Rust lets you choose — and the right choice depends on what you're expressing. This chapter builds the judgment to pick well.
+Rust は関数型スタイルと命令型スタイルの間で真の同等性（パリティ）を提供します。Haskell（宣言的に関数型）や C（デフォルトで命令型）とは異なり、Rust ではどちらを選択することも可能です — そして適切な選択は、何を表現しようとしているかによって決まります。本章では、適切な選択をするための判断力を養います。
 
-**The core principle:** Functional style shines when you're *transforming data through a pipeline*. Imperative style shines when you're *managing state transitions with side effects*. Most real code has both, and the skill is knowing where the boundary falls.
+**基本原則:** 関数型スタイルは、*パイプラインを通じてデータを変換する*場合に真価を発揮します。命令型スタイルは、*副作用を伴う状態遷移を管理する*場合に真価を発揮します。実際のコードの大半にはその両方が含まれており、スキルの本質はどこにその境界線を引くかを知ることにあります。
 
 ---
 
-## 8.1 The Combinator You Didn't Know You Wanted
+## 8.1 自分でも気づいていなかったコンビネータ
 
-Many Rust developers write this:
+多くの Rust 開発者は次のように書きます：
 
 ```rust
 let value = if let Some(x) = maybe_config() {
@@ -21,13 +21,13 @@ let value = if let Some(x) = maybe_config() {
 process(value);
 ```
 
-When they could write this:
+しかし、次のように書くこともできます：
 
 ```rust
 process(maybe_config().unwrap_or_else(default_config));
 ```
 
-Or this common pattern:
+あるいは、よくある以下のパターン：
 
 ```rust
 let display_name = if let Some(name) = user.nickname() {
@@ -37,7 +37,7 @@ let display_name = if let Some(name) = user.nickname() {
 };
 ```
 
-Which is:
+これは次のように書けます：
 
 ```rust
 let display_name = user.nickname()
@@ -45,54 +45,54 @@ let display_name = user.nickname()
     .unwrap_or_else(|| "ANONYMOUS".to_string());
 ```
 
-The functional version isn't just shorter — it tells you *what* is happening (transform, then default) without making you trace control flow. The `if let` version makes you read the branches to figure out that both paths end up in the same place.
+関数型バージョンは単に短いだけではありません — 制御フローを追跡させることなく、*何*が行われているか（変換、そしてフォールバック）を明確に伝えます。`if let` バージョンでは、両方のパスが最終的に同じ場所に到達することを確認するために分岐を読み解く必要があります。
 
-### The Option combinator family
+### Option コンビネータファミリー
 
-Here's the mental model: `Option<T>` is a one-element-or-empty collection. Every combinator on `Option` has an analogy to a collection operation.
+メンタルモデルは次の通りです: `Option<T>` は「1要素または空のコレクション」です。`Option` 上のすべてのコンビネータには、コレクション操作とのアナロジーが存在します。
 
-| You write... | Instead of... | What it communicates |
+| 書くべきコード... | これの代わりに... | 伝達する意図 |
 |---|---|---|
-| `opt.unwrap_or(default)` | `if let Some(x) = opt { x } else { default }` | "Use this value or fall back" |
-| `opt.unwrap_or_else(\|\| expensive())` | `if let Some(x) = opt { x } else { expensive() }` | Same, but default is lazy |
-| `opt.map(f)` | `match opt { Some(x) => Some(f(x)), None => None }` | "Transform the inside, propagate absence" |
-| `opt.and_then(f)` | `match opt { Some(x) => f(x), None => None }` | "Chain fallible operations" (flatmap) |
-| `opt.filter(\|x\| pred(x))` | `match opt { Some(x) if pred(&x) => Some(x), _ => None }` | "Keep only if it passes" |
-| `opt.zip(other)` | `if let (Some(a), Some(b)) = (opt, other) { Some((a,b)) } else { None }` | "Both or neither" |
-| `opt.or(fallback)` | `if opt.is_some() { opt } else { fallback }` | "First available" |
-| `opt.or_else(\|\| try_another())` | `if opt.is_some() { opt } else { try_another() }` | "Try alternatives in order" |
-| `opt.map_or(default, f)` | `if let Some(x) = opt { f(x) } else { default }` | "Transform or default" — one-liner |
-| `opt.map_or_else(default_fn, f)` | `if let Some(x) = opt { f(x) } else { default_fn() }` | Same, both sides are closures |
-| `opt?` | `match opt { Some(x) => x, None => return None }` | "Propagate absence upward" |
+| `opt.unwrap_or(default)` | `if let Some(x) = opt { x } else { default }` | 「この値を使用するか、フォールバックする」 |
+| `opt.unwrap_or_else(\|\| expensive())` | `if let Some(x) = opt { x } else { expensive() }` | 同上、ただしデフォルト値は遅延評価 |
+| `opt.map(f)` | `match opt { Some(x) => Some(f(x)), None => None }` | 「中身を変換し、値がない状態はそのまま伝播する」 |
+| `opt.and_then(f)` | `match opt { Some(x) => f(x), None => None }` | 「失敗する可能性のある操作を連鎖させる」（フラットマップ） |
+| `opt.filter(\|x\| pred(x))` | `match opt { Some(x) if pred(&x) => Some(x), _ => None }` | 「条件をパスした場合のみ残す」 |
+| `opt.zip(other)` | `if let (Some(a), Some(b)) = (opt, other) { Some((a,b)) } else { None }` | 「両方揃っているか、さもなくば None」 |
+| `opt.or(fallback)` | `if opt.is_some() { opt } else { fallback }` | 「最初に利用可能なもの」 |
+| `opt.or_else(\|\| try_another())` | `if opt.is_some() { opt } else { try_another() }` | 「代替案を順番に試す」 |
+| `opt.map_or(default, f)` | `if let Some(x) = opt { f(x) } else { default }` | 「変換するか、さもなくばデフォルト値」— 1行で表現 |
+| `opt.map_or_else(default_fn, f)` | `if let Some(x) = opt { f(x) } else { default_fn() }` | 同上、両側がクロージャ |
+| `opt?` | `match opt { Some(x) => x, None => return None }` | 「値が存在しない状態を呼び出し元へ伝播する」 |
 
-### The Result combinator family
+### Result コンビネータファミリー
 
-The same pattern applies to `Result<T, E>`:
+同じパターンが `Result<T, E>` にも当てはまります：
 
-| You write... | Instead of... | What it communicates |
+| 書くべきコード... | これの代わりに... | 伝達する意図 |
 |---|---|---|
-| `res.map(f)` | `match res { Ok(x) => Ok(f(x)), Err(e) => Err(e) }` | Transform the success path |
-| `res.map_err(f)` | `match res { Ok(x) => Ok(x), Err(e) => Err(f(e)) }` | Transform the error |
-| `res.and_then(f)` | `match res { Ok(x) => f(x), Err(e) => Err(e) }` | Chain fallible operations |
-| `res.unwrap_or_else(\|e\| default(e))` | `match res { Ok(x) => x, Err(e) => default(e) }` | Recover from error |
-| `res.ok()` | `match res { Ok(x) => Some(x), Err(_) => None }` | "I don't care about the error" |
-| `res?` | `match res { Ok(x) => x, Err(e) => return Err(e.into()) }` | Propagate errors upward |
+| `res.map(f)` | `match res { Ok(x) => Ok(f(x)), Err(e) => Err(e) }` | 成功パスを変換する |
+| `res.map_err(f)` | `match res { Ok(x) => Ok(x), Err(e) => Err(f(e)) }` | エラーを変換する |
+| `res.and_then(f)` | `match res { Ok(x) => f(x), Err(e) => Err(e) }` | 失敗する可能性のある操作を連鎖させる |
+| `res.unwrap_or_else(\|e\| default(e))` | `match res { Ok(x) => x, Err(e) => default(e) }` | エラーから回復する |
+| `res.ok()` | `match res { Ok(x) => Some(x), Err(_) => None }` | 「エラーの詳細は無視する」 |
+| `res?` | `match res { Ok(x) => x, Err(e) => return Err(e.into()) }` | エラーを呼び出し元へ伝播する |
 
-### When `if let` IS better
+### `if let` が真に優れている場合
 
-The combinators lose when:
+コンビネータが適さないのは次のような場合です：
 
-- **You need multiple statements in the `Some` branch.** A map closure with 5 lines is worse than an `if let` with 5 lines.
-- **The control flow is the point.** `if let Some(connection) = pool.try_get() { /* use it */ } else { /* log, retry, alert */ }` — the two branches are genuinely different code paths, not a transform-or-default.
-- **Side effects dominate.** If both branches do I/O with different error handling, the combinator version obscures the important differences.
+- **`Some` 分岐内で複数の文が必要な場合。** 5行の map クロージャは、5行の `if let` よりも読みにくくなります。
+- **制御フローそのものが目的である場合。** `if let Some(connection) = pool.try_get() { /* 使用する */ } else { /* ログ記録、リトライ、アラート */ }` — 2つの分岐は「変換かデフォルトか」ではなく、根本的に異なる実行パスです。
+- **副作用が支配的である場合。** 両方の分岐が異なるエラーハンドリングを伴う I/O を実行する場合、コンビネータバージョンは重要な差異を覆い隠してしまいます。
 
-**Rule of thumb:** If the `else` branch produces the *same type* as the `Some` branch and the bodies are short expressions, use a combinator. If the branches do fundamentally different things, use `if let` or `match`.
+**経験則:** `else` 分岐が `Some` 分岐と*同じ型*を生成し、ブロックの中身が短い式である場合は、コンビネータを使用してください。各分岐が根本的に異なる処理を行う場合は、`if let` または `match` を使用してください。
 
 ---
 
-## 8.2 Bool Combinators: `.then()` and `.then_some()`
+## 8.2 Bool コンビネータ: `.then()` と `.then_some()`
 
-Another pattern that's more common than it should be:
+必要以上に頻繁に見られるもう一つのパターンです：
 
 ```rust
 let label = if is_admin {
@@ -102,28 +102,28 @@ let label = if is_admin {
 };
 ```
 
-Rust 1.62+ gives you:
+Rust 1.62 以降では次のように書けます：
 
 ```rust
 let label = is_admin.then_some("ADMIN");
 ```
 
-Or with a computed value:
+あるいは計算が必要な値の場合：
 
 ```rust
 let permissions = is_admin.then(|| compute_admin_permissions());
 ```
 
-This is especially powerful in chains:
+これはチェーンの中で特に威力を発揮します：
 
 ```rust
-// Imperative
+// 命令型
 let mut tags = Vec::new();
 if user.is_admin { tags.push("admin"); }
 if user.is_verified { tags.push("verified"); }
 if user.score > 100 { tags.push("power-user"); }
 
-// Functional
+// 関数型
 let tags: Vec<&str> = [
     user.is_admin.then_some("admin"),
     user.is_verified.then_some("verified"),
@@ -134,20 +134,20 @@ let tags: Vec<&str> = [
 .collect();
 ```
 
-The functional version makes the pattern explicit: "build a list from conditional elements." The imperative version makes you read each `if` to confirm they all do the same thing (push a tag).
+関数型バージョンはパターンを明確にします: 「条件付き要素からリストを構築する」。命令型バージョンでは、各 `if` を読んでそれらがすべて同じこと（タグの追加）を行っているか確認する必要があります。
 
 ---
 
-## 8.3 Iterator Chains vs. Loops: The Decision Framework
+## 8.3 イテレータチェーン vs ループ: 意思決定フレームワーク
 
-Ch 7 showed the mechanics. This section builds the judgment.
+第7章ではメカニズムを学びました。本節ではその判断基準を構築します。
 
-### When iterators win
+### イテレータが勝る場合
 
-**Data pipelines** — transforming a collection through a series of steps:
+**データパイプライン** — 一連のステップを通じてコレクションを変換する場合：
 
 ```rust
-// Imperative: 8 lines, 2 mutable variables
+// 命令型: 8行、2つの可変変数
 let mut results = Vec::new();
 for item in inventory {
     if item.category == Category::Server {
@@ -159,7 +159,7 @@ for item in inventory {
     }
 }
 
-// Functional: 6 lines, 0 mutable variables, one pipeline
+// 関数型: 6行、可変変数ゼロ、単一のパイプライン
 let results: Vec<_> = inventory.iter()
     .filter(|item| item.category == Category::Server)
     .filter_map(|item| item.last_temperature().map(|t| (item.id, t)))
@@ -167,16 +167,16 @@ let results: Vec<_> = inventory.iter()
     .collect();
 ```
 
-The functional version wins because:
-- Each filter is independently readable
-- No `mut` — the data flows in one direction
-- You can add/remove/reorder pipeline stages without restructuring
-- LLVM inlines iterator adapters to the same machine code as the loop
+関数型バージョンが勝る理由：
+- 各フィルタが独立して読みやすい
+- `mut` がない — データが一方向に流れる
+- 構造を作り変えることなく、パイプラインステージを追加・削除・並べ替えできる
+- LLVM はイテレータアダプタをループと同じ機械語コードにインライン化する
 
-**Aggregation** — computing a single value from a collection:
+**集約** — コレクションから単一の値を計算する場合：
 
 ```rust
-// Imperative
+// 命令型
 let mut total_power = 0.0;
 let mut count = 0;
 for server in fleet {
@@ -185,48 +185,48 @@ for server in fleet {
 }
 let avg = total_power / count as f64;
 
-// Functional
+// 関数型
 let (total_power, count) = fleet.iter()
     .map(|s| s.power_draw())
     .fold((0.0, 0usize), |(sum, n), p| (sum + p, n + 1));
 let avg = total_power / count as f64;
 ```
 
-Or even simpler if you just need the sum:
+合計だけが必要な場合はさらにシンプルです：
 
 ```rust
 let total: f64 = fleet.iter().map(|s| s.power_draw()).sum();
 ```
 
-### When loops win
+### ループが勝る場合
 
-**Early exit with complex state:**
+**複雑な状態を伴う早期終了:**
 
 ```rust
-// This is clear and direct
+// 明確で直接的
 let mut best_candidate = None;
 for server in fleet {
     let score = evaluate(server);
     if score > threshold {
         if server.is_available() {
             best_candidate = Some(server);
-            break; // Found one — stop immediately
+            break; // 見つかった — 直ちに停止
         }
     }
 }
 
-// The functional version is strained
+// 関数型バージョンはやや不自然
 let best_candidate = fleet.iter()
     .filter(|s| evaluate(s) > threshold)
     .find(|s| s.is_available());
 ```
 
-Wait — that functional version is actually pretty clean. Let's try a case where it genuinely loses:
+少し待ってください — この関数型バージョンは実際にはかなり綺麗です。今度は明確に不利になるケースを見てみましょう：
 
-**Building multiple outputs simultaneously:**
+**複数の出力を同時に構築する場合:**
 
 ```rust
-// Imperative: clear, each branch does something different
+// 命令型: 明確であり、各分岐が異なる処理を行う
 let mut warnings = Vec::new();
 let mut errors = Vec::new();
 let mut stats = Stats::default();
@@ -248,7 +248,7 @@ for event in log_stream {
     }
 }
 
-// Functional version: forced, awkward, nobody wants to read this
+// 関数型バージョン: 無理があり不格好で、誰も読みたくない
 let (warnings, errors, stats) = log_stream.iter().fold(
     (Vec::new(), Vec::new(), Stats::default()),
     |(mut w, mut e, mut s), event| {
@@ -265,15 +265,15 @@ let (warnings, errors, stats) = log_stream.iter().fold(
 );
 ```
 
-The fold version is *longer*, *harder to read*, and has mutation anyway (the `mut` deconstructed accumulators). The loop wins because:
-- Multiple outputs being built in parallel
-- Side effects (alerting) mixed into the logic
-- Branch bodies are statements, not expressions
+この fold バージョンは*より長く*、*読みにくく*、しかも結局ミューテーションが存在します（パターンマッチで分解された `mut` アキュムレータ）。ループが勝る理由は以下の通りです：
+- 複数の出力が並行して構築されている
+- ロジックの中に副作用（アラート送信）が混ざっている
+- 分岐の本体が式ではなく文である
 
-**State machines with I/O:**
+**I/O を伴う状態機械:**
 
 ```rust
-// A parser that reads tokens — the loop IS the algorithm
+// トークンを読み取るパーサー — ループそのものがアルゴリズム
 let mut state = ParseState::Start;
 loop {
     let token = lexer.next_token()?;
@@ -287,29 +287,29 @@ loop {
             Token::Ident(name) => ParseState::GotName(k, name),
             _ => return Err(ParseError::ExpectedIdentifier),
         },
-        // ...more states
+        // ...その他の状態
     };
 }
 ```
 
-No functional equivalent is cleaner. The loop with `match state` is the natural expression of a state machine.
+これよりクリーンな関数型の同等物は存在しません。`match state` を伴うループこそが、状態機械の最も自然な表現です。
 
-### The decision flowchart
+### 意思決定フローチャート
 
 ```mermaid
 flowchart TB
-    START{What are you doing?}
+    START{何をしようとしていますか？}
 
-    START -->|"Transforming a collection<br/>into another collection"| PIPE[Use iterator chain]
-    START -->|"Computing a single value<br/>from a collection"| AGG{How complex?}
-    START -->|"Multiple outputs from<br/>one pass"| LOOP[Use a for loop]
-    START -->|"State machine with<br/>I/O or side effects"| LOOP
-    START -->|"One Option/Result<br/>transform + default"| COMB[Use combinators]
+    START -->|"コレクションを別のコレクションへ変換する"| PIPE[イテレータチェーンを使用]
+    START -->|"コレクションから単一の値を計算する"| AGG{どのくらい複雑ですか？}
+    START -->|"1回の走査から複数の出力を生成する"| LOOP[for ループを使用]
+    START -->|"I/O や副作用を伴う状態機械"| LOOP
+    START -->|"単一の Option/Result の変換 + デフォルト値"| COMB[コンビネータを使用]
 
-    AGG -->|"Sum, count, min, max"| BUILTIN["Use .sum(), .count(),<br/>.min(), .max()"]
-    AGG -->|"Custom accumulation"| FOLD{Accumulator has mutation<br/>or side effects?}
-    FOLD -->|"No"| FOLDF["Use .fold()"]
-    FOLD -->|"Yes"| LOOP
+    AGG -->|"合計、個数、最小値、最大値"| BUILTIN[".sum(), .count(),<br/>.min(), .max() を使用"]
+    AGG -->|"独自の集計"| FOLD{アキュムレータに可変性や<br/>副作用がありますか？}
+    FOLD -->|"いいえ"| FOLDF[".fold() を使用"]
+    FOLD -->|"はい"| LOOP
 
     style PIPE fill:#d4efdf,stroke:#27ae60,color:#000
     style COMB fill:#d4efdf,stroke:#27ae60,color:#000
@@ -318,10 +318,9 @@ flowchart TB
     style LOOP fill:#fef9e7,stroke:#f1c40f,color:#000
 ```
 
-### Sidebar: Scoped mutability — imperative inside, functional outside
+### サイドバー: スコープ付き可変性 — 内側は命令型、外側は関数型
 
-Rust blocks are expressions. This lets you confine mutation to a construction phase and
-bind the result immutably:
+Rust のブロックは式です。これにより、ミューテーションを構築フェーズのみに閉じ込め、結果を不変としてバインドできます：
 
 ```rust
 use rand::random;
@@ -331,17 +330,16 @@ let samples = {
     while buf.len() < 10 {
         let reading: f64 = random();
         buf.push(reading);
-        if random::<u8>() % 3 == 0 { break; } // randomly stop early
+        if random::<u8>() % 3 == 0 { break; } // ランダムに早期停止
     }
     buf
 };
-// samples is immutable — contains between 1 and 10 elements
+// samples は不変 — 1〜10個の要素を含む
 ```
 
-The inner `buf` is mutable only inside the block. Once the block yields, the outer binding
-`samples` is immutable and the compiler will reject any later `samples.push(...)`.
+内側の `buf` はブロック内でのみ可変です。ブロックが値を返すと、外側のバインディング `samples` は不変となり、コンパイラはそれ以降のいかなる `samples.push(...)` も拒絶します。
 
-**Why not an iterator chain?** You might try:
+**なぜイテレータチェーンにしないのか？** 次のように試みるかもしれません：
 
 ```rust
 let samples: Vec<f64> = std::iter::from_fn(|| Some(random()))
@@ -350,33 +348,26 @@ let samples: Vec<f64> = std::iter::from_fn(|| Some(random()))
     .collect();
 ```
 
-But `take_while` *excludes* the element that fails the predicate, producing anywhere from
-zero to ten elements instead of the guaranteed-at-least-one the imperative version provides. You can work around it with `scan` or `chain`, but the imperative version
-is clearer.
+しかし、`take_while` は述語に一致しなかった要素を*除外*してしまうため、命令型バージョンが保証する「最低1要素」ではなく、0〜10個の要素を生成してしまいます。`scan` や `chain` で回避することはできますが、命令型バージョンの方が明確です。
 
-**When scoped mutability genuinely wins:**
+**スコープ付き可変性が真に優れている場面:**
 
-| Scenario | Why iterators struggle |
+| シナリオ | イテレータが苦戦する理由 |
 |---|---|
-| **Sort-then-freeze** (`sort_unstable()` + `dedup()`) | Both return `()` — no chainable output (itertools offers `.sorted().dedup()` if available) |
-| **Stateful termination** (stop on a condition unrelated to the data) | `take_while` drops the boundary element |
-| **Multi-step struct population** (field-by-field from different sources) | No natural single pipeline |
+| **ソートして凍結** (`sort_unstable()` + `dedup()`) | どちらも `()` を返す — 連鎖可能な出力がない（itertools が利用可能なら `.sorted().dedup()` が使える） |
+| **ステートフルな終了条件**（データとは無関係な条件での停止） | `take_while` は境界要素をドロップしてしまう |
+| **複数ステップにわたる構造体の構築**（異なるソースからフィールドごとに設定） | 単一の自然なパイプラインが存在しない |
 
-**Honest calibration:** For most collection-building tasks, iterator chains or
-[itertools](https://docs.rs/itertools) are preferred. Reach for scoped mutability when the
-construction logic has branching, early exit, or in-place mutation that doesn't map to a
-single pipeline. The pattern's real value is teaching that *mutation scope can be smaller
-than variable lifetime* — a Rust fundamental that surprises developers coming from
-C++, C#, and Python.
+**率直な評価:** ほとんどのコレクション構築タスクでは、イテレータチェーンまたは [itertools](https://docs.rs/itertools) が推奨されます。構築ロジックに分岐、早期終了、あるいは単一のパイプラインにマップできないインプレース変更が含まれる場合に、スコープ付き可変性を採用してください。このパターンの真の価値は、*ミューテーションのスコープを変数のライフタイムよりも小さくできる*ことを学べる点にあります — これは C++、C#、Python から移行してきた開発者にとって新鮮な Rust の基本概念です。
 
 ---
 
-## 8.4 The `?` Operator: Where Functional Meets Imperative
+## 8.4 `?` 演算子: 関数型と命令型の出会う場所
 
-The `?` operator is Rust's most elegant synthesis of both styles. It's essentially `.and_then()` combined with early return:
+`?` 演算子は、両スタイルの最もエレガントな統合です。本質的には `.and_then()` と早期リターンの組み合わせです：
 
 ```rust
-// This chain of and_then...
+// この and_then のチェーンは...
 fn load_config() -> Result<Config, Error> {
     read_file("config.toml")
         .and_then(|contents| parse_toml(&contents))
@@ -384,7 +375,7 @@ fn load_config() -> Result<Config, Error> {
         .and_then(|valid| Config::from_validated(valid))
 }
 
-// ...is exactly equivalent to this
+// ...これとまったく等価です
 fn load_config() -> Result<Config, Error> {
     let contents = read_file("config.toml")?;
     let table = parse_toml(&contents)?;
@@ -393,90 +384,90 @@ fn load_config() -> Result<Config, Error> {
 }
 ```
 
-Both are functional in spirit (they propagate errors automatically) but the `?` version gives you named intermediate variables, which matter when:
+どちらも精神的には関数型（エラーを自動的に伝播する）ですが、`?` バージョンでは名前付きの中間変数が得られます。これは以下のような場合に重要です：
 
-- You need to use `contents` again later
-- You want to add `.context("while parsing config")?` per step
-- You're debugging and want to inspect intermediate values
+- 後で `contents` を再度使用する必要がある場合
+- 各ステップに `.context("while parsing config")?` などを追加したい場合
+- デバッグ時に中間値をインスペクトしたい場合
 
-**The anti-pattern:** long `.and_then()` chains when `?` is available. If every closure in the chain is `|x| next_step(x)`, you've reinvented `?` without the readability.
+**アンチパターン:** `?` が使用できる状況での長い `.and_then()` チェーン。チェーン内のすべてのクロージャが `|x| next_step(x)` であるなら、可読性を損なったまま `?` を再発明しているに過ぎません。
 
-**When `.and_then()` IS better than `?`:**
+**`.and_then()` が `?` よりも適している場合:**
 
 ```rust
-// Transforming inside an Option, without early return
+// 早期リターンせずに、Option の内部で変換を行う場合
 let port: Option<u16> = config.get("port")
     .and_then(|v| v.parse::<u16>().ok())
     .filter(|&p| p > 0 && p < 65535);
 ```
 
-You can't use `?` here because there's no enclosing function to return from — you're building an `Option`, not propagating it.
+ここではリターン対象となる外側の関数が存在しないため、`?` は使用できません — エラーを伝播するのではなく、`Option` を構築しているからです。
 
 ---
 
-## 8.5 Collection Building: `collect()` vs. Push Loops
+## 8.5 コレクションの構築: `collect()` vs. Push ループ
 
-`collect()` is more powerful than most developers realize:
+`collect()` は多くの開発者が認識している以上に強力です：
 
-### Collecting into a Result
+### Result への collect
 
 ```rust
-// Imperative: parse a list, fail on first error
+// 命令型: リストをパースし、最初のエラーで失敗する
 let mut numbers = Vec::new();
 for s in input_strings {
     let n: i64 = s.parse().map_err(|_| Error::BadInput(s.clone()))?;
     numbers.push(n);
 }
 
-// Functional: collect into Result<Vec<_>, _>
+// 関数型: Result<Vec<_>, _> に collect する
 let numbers: Vec<i64> = input_strings.iter()
     .map(|s| s.parse::<i64>().map_err(|_| Error::BadInput(s.clone())))
     .collect::<Result<_, _>>()?;
 ```
 
-The `collect::<Result<Vec<_>, _>>()` trick works because `Result` implements `FromIterator`. It short-circuits on the first `Err`, just like the loop with `?`.
+`collect::<Result<Vec<_>, _>>()` のテクニックが機能するのは、`Result` が `FromIterator` を実装しているためです。`?` を伴うループと同様に、最初の `Err` でショートサーキットします。
 
-### Collecting into a HashMap
+### HashMap への collect
 
 ```rust
-// Imperative
+// 命令型
 let mut index = HashMap::new();
 for server in fleet {
     index.insert(server.id.clone(), server);
 }
 
-// Functional
+// 関数型
 let index: HashMap<_, _> = fleet.into_iter()
     .map(|s| (s.id.clone(), s))
     .collect();
 ```
 
-### Collecting into a String
+### String への collect
 
 ```rust
-// Imperative
+// 命令型
 let mut csv = String::new();
 for (i, field) in fields.iter().enumerate() {
     if i > 0 { csv.push(','); }
     csv.push_str(field);
 }
 
-// Functional
+// 関数型
 let csv = fields.join(",");
 
-// Or for more complex formatting:
+// より複雑なフォーマットの場合:
 let csv: String = fields.iter()
     .map(|f| format!("\"{f}\""))
     .collect::<Vec<_>>()
     .join(",");
 ```
 
-### When the loop version wins
+### ループ版が勝る場合
 
-`collect()` allocates a new collection. If you're *modifying in place*, the loop is both clearer and more efficient:
+`collect()` は新しいコレクションを割り当てます。*インプレース（破壊的）に変更*している場合は、ループの方が明確かつ効率的です：
 
 ```rust
-// In-place update — no functional equivalent that's better
+// インプレース更新 — これより優れた関数型の同等物は存在しない
 for server in &mut fleet {
     if server.needs_refresh() {
         server.refresh_telemetry()?;
@@ -484,18 +475,18 @@ for server in &mut fleet {
 }
 ```
 
-The functional version would require `.iter_mut().for_each(|s| { ... })`, which is just a loop with extra syntax.
+関数型で書こうとすると `.iter_mut().for_each(|s| { ... })` が必要になりますが、これは構文が無駄に増えたループに過ぎません。
 
 ---
 
-## 8.6 Pattern Matching as Function Dispatch
+## 8.6 関数ディスパッチとしてのパターンマッチング
 
-Rust's `match` is a functional construct that most developers use imperatively. Here's the functional lens:
+Rust の `match` は関数型の構成要素ですが、多くの開発者は命令型のように使用しています。以下は関数型の視点です：
 
-### Match as a lookup table
+### ルックアップテーブルとしての match
 
 ```rust
-// Imperative thinking: "check each case"
+// 命令型の発想: 「各ケースをチェックする」
 fn status_message(code: StatusCode) -> &'static str {
     if code == StatusCode::OK { "Success" }
     else if code == StatusCode::NOT_FOUND { "Not found" }
@@ -503,7 +494,7 @@ fn status_message(code: StatusCode) -> &'static str {
     else { "Unknown" }
 }
 
-// Functional thinking: "map from domain to range"
+// 関数型の発想: 「定義域から値域への写像」
 fn status_message(code: StatusCode) -> &'static str {
     match code {
         StatusCode::OK => "Success",
@@ -514,12 +505,12 @@ fn status_message(code: StatusCode) -> &'static str {
 }
 ```
 
-The `match` version isn't just style — the compiler verifies exhaustiveness. Add a new variant, and every `match` that doesn't handle it becomes a compile error. The `if/else` chain silently falls through to the default.
+`match` バージョンは単なるスタイルの問題ではありません — コンパイラが網羅性を検証してくれます。新しいバリアントを追加すると、それを処理していないすべての `match` がコンパイルエラーになります。`if/else` チェーンでは静かにデフォルトケースにフォールスルーしてしまいます。
 
-### Match + destructuring as a pipeline
+### パイプラインとしての match + 分解
 
 ```rust
-// Parsing a command — each arm extracts and transforms
+// コマンドの解析 — 各アームが抽出と変換を行う
 fn execute(cmd: Command) -> Result<Response, Error> {
     match cmd {
         Command::Get { key } => db.get(&key).map(Response::Value),
@@ -533,16 +524,16 @@ fn execute(cmd: Command) -> Result<Response, Error> {
 }
 ```
 
-Each arm is an expression that returns the same type. This is pattern matching as function dispatch — the `match` arms are essentially a function table indexed by the enum variant.
+各アームは同じ型を返す式になっています。これは関数ディスパッチとしてのパターンマッチングです — `match` の各アームは本質的に列挙型のバリアントによってインデックス付けされた関数テーブルです。
 
 ---
 
-## 8.7 Chaining Methods on Custom Types
+## 8.7 カスタム型に対するメソッドチェーン
 
-The functional style extends beyond standard library types. Builder patterns and fluent APIs are functional programming in disguise:
+関数型スタイルは標準ライブラリの型にとどまりません。ビルダーパターンや流れるような API（Fluent API）は、変装した関数型プログラミングです：
 
 ```rust
-// This is a combinator chain over your own type
+// これは独自の型に対するコンビネータチェーンです
 let query = QueryBuilder::new("servers")
     .filter("status", Eq, "active")
     .filter("rack", In, &["A1", "A2", "B1"])
@@ -551,47 +542,47 @@ let query = QueryBuilder::new("servers")
     .build();
 ```
 
-**The key insight:** if your type has methods that take `self` and return `Self` (or a transformed type), you've built a combinator. The same functional/imperative judgment applies:
+**重要な洞察:** 自分の型が `self` を受け取って `Self`（または変換された型）を返すメソッドを持っているなら、コンビネータを構築したことになります。ここでも同じ関数型 / 命令型の判断が適用されます：
 
 ```rust
-// Good: chainable because each step is a simple transform
+// 良い例: 各ステップが単純な変換であるためチェーン可能
 let config = Config::default()
     .with_timeout(Duration::from_secs(30))
     .with_retries(3)
     .with_tls(true);
 
-// Bad: chainable but the chain is doing too many unrelated things
+// 悪い例: チェーン可能だが、1つのチェーンが無関係な処理を詰め込みすぎている
 let result = processor
     .load_data(path)?       // I/O
-    .validate()             // Pure
-    .transform(rule_set)    // Pure
+    .validate()             // 純粋関数
+    .transform(rule_set)    // 純粋関数
     .save_to_disk(output)?  // I/O
-    .notify_downstream()?;  // Side effect
+    .notify_downstream()?;  // 副作用
 
-// Better: separate the pure pipeline from the I/O bookends
+// より良い設計: 純粋なパイプラインと I/O の前後処理を分離する
 let data = load_data(path)?;
 let processed = data.validate().transform(rule_set);
 save_to_disk(output, &processed)?;
 notify_downstream()?;
 ```
 
-The chain fails when it mixes pure transforms with I/O. The reader can't tell which calls might fail, which have side effects, and where the actual data transformations happen.
+純粋な変換と I/O が混在するとチェーンは破綻します。読み手にはどの呼び出しが失敗する可能性があり、どれが副作用を持ち、どこで実際のデータ変換が行われているかが判断できなくなります。
 
 ---
 
-## 8.8 Performance: They're the Same
+## 8.8 パフォーマンス: 実はどちらも同じ
 
-A common misconception: "functional style is slower because of all the closures and allocations."
+よくある誤解: 「関数型スタイルはクロージャやアロケーションが多くて遅い」。
 
-In Rust, **iterator chains compile to the same machine code as hand-written loops.** LLVM inlines the closure calls, eliminates the iterator adapter structs, and often produces identical assembly. This is called *zero-cost abstraction* and it's not aspirational — it's measured.
+Rust において、**イテレータチェーンは手書きのループと同じ機械語コードにコンパイルされます。** LLVM はクロージャの呼び出しをインライン化し、イテレータアダプタ構造体を排除して、しばしば同一のアセンブリを生成します。これは*ゼロコスト抽象化（Zero-cost abstractions）*と呼ばれ、単なる理想ではなく測定された事実です。
 
 ```rust
-// These produce identical assembly on release builds:
+// これらはリリースビルドで同一のアセンブリを生成します:
 
-// Functional
+// 関数型
 let sum: i64 = (0..1000).filter(|n| n % 2 == 0).map(|n| n * n).sum();
 
-// Imperative
+// 命令型
 let mut sum: i64 = 0;
 for n in 0..1000 {
     if n % 2 == 0 {
@@ -600,35 +591,35 @@ for n in 0..1000 {
 }
 ```
 
-**The one exception:** `.collect()` allocates. If you're chaining `.map().collect().iter().map().collect()` with intermediate collections, you're paying for allocations the loop version avoids. The fix: eliminate intermediate collects by chaining adapters directly, or use a loop if you need the intermediate collections for other reasons.
+**唯一の例外:** `.collect()` はメモリを割り当てます。もし `.map().collect().iter().map().collect()` のように中間コレクションをチェーンしているなら、ループバージョンでは回避できるメモリ割り当てのコストを支払っています。解決策: アダプタを直接チェーンして中間の collect を排除するか、他の理由で中間コレクションが必要な場合はループを使用してください。
 
 ---
 
-## 8.9 The Taste Test: A Catalog of Transformations
+## 8.9 テイストテスト: 変換処理のカタログ
 
-Here's a reference table for the most common "I wrote 6 lines but there's a one-liner" patterns:
+よくある「6行書いたけれど、実は1行で書ける」パターンのリファレンステーブルです：
 
-| Imperative pattern | Functional equivalent | When to prefer functional |
+| 命令型パターン | 関数型の同等表現 | 関数型を優先すべき場合 |
 |---|---|---|
-| `if let Some(x) = opt { f(x) } else { default }` | `opt.map_or(default, f)` | Short expressions on both sides |
-| `if let Some(x) = opt { Some(g(x)) } else { None }` | `opt.map(g)` | Always — this is what `map` is for |
-| `if condition { Some(x) } else { None }` | `condition.then_some(x)` | Always |
-| `if condition { Some(compute()) } else { None }` | `condition.then(compute)` | Always |
-| `match opt { Some(x) if pred(x) => Some(x), _ => None }` | `opt.filter(pred)` | Always |
-| `for x in iter { if pred(x) { result.push(f(x)); } }` | `iter.filter(pred).map(f).collect()` | When the pipeline is readable in one screen |
-| `if a.is_some() && b.is_some() { Some((a?, b?)) }` | `a.zip(b)` | Always — `.zip()` is exactly this |
-| `match (a, b) { (Some(x), Some(y)) => x + y, _ => 0 }` | `a.zip(b).map(\|(x,y)\| x + y).unwrap_or(0)` | Judgment call — depends on complexity |
-| `iter.map(f).collect::<Vec<_>>()[0]` | `iter.map(f).next().unwrap()` | Don't allocate a Vec for one element |
-| `let mut v = vec; v.sort(); v` | `{ let mut v = vec; v.sort(); v }` | Rust doesn't have a `.sorted()` in std (use itertools) |
+| `if let Some(x) = opt { f(x) } else { default }` | `opt.map_or(default, f)` | 両側が短い式である場合 |
+| `if let Some(x) = opt { Some(g(x)) } else { None }` | `opt.map(g)` | 常に — これこそが `map` の存在理由 |
+| `if condition { Some(x) } else { None }` | `condition.then_some(x)` | 常に |
+| `if condition { Some(compute()) } else { None }` | `condition.then(compute)` | 常に |
+| `match opt { Some(x) if pred(x) => Some(x), _ => None }` | `opt.filter(pred)` | 常に |
+| `for x in iter { if pred(x) { result.push(f(x)); } }` | `iter.filter(pred).map(f).collect()` | パイプラインが1画面で読める場合 |
+| `if a.is_some() && b.is_some() { Some((a?, b?)) }` | `a.zip(b)` | 常に — `.zip()` はまさにこのためのもの |
+| `match (a, b) { (Some(x), Some(y)) => x + y, _ => 0 }` | `a.zip(b).map(\|(x,y)\| x + y).unwrap_or(0)` | 状況判断 — 複雑さによる |
+| `iter.map(f).collect::<Vec<_>>()[0]` | `iter.map(f).next().unwrap()` | 1要素のために Vec をアロケートしない |
+| `let mut v = vec; v.sort(); v` | `{ let mut v = vec; v.sort(); v }` | Rust 標準には `.sorted()` がない（itertools を使用） |
 
 ---
 
-## 8.10 The Anti-Patterns
+## 8.10 アンチパターン
 
-### Over-functionalizing: the 5-deep chain nobody can read
+### 過剰な関数型化: 誰にも読めない5階層のチェーン
 
 ```rust
-// This is not elegant. This is a puzzle.
+// これはエレガントではありません。パズルです。
 let result = data.iter()
     .filter_map(|x| x.metadata.as_ref())
     .flat_map(|m| m.tags.iter())
@@ -642,7 +633,7 @@ let result = data.iter()
     .collect::<Vec<_>>();
 ```
 
-When a chain exceeds ~4 adapters, break it up with named intermediate variables or extract a helper:
+チェーンのアダプタ数が4つを超えるような場合は、名前付き中間変数で分割するか、ヘルパー関数に抽出してください：
 
 ```rust
 let env_tags = data.iter()
@@ -657,10 +648,10 @@ let allowed: Vec<_> = env_tags
     .collect();
 ```
 
-### Under-functionalizing: the C-style loop that Rust has a word for
+### 不足した関数型化: Rust に専用の名前がある C スタイルのループ
 
 ```rust
-// This is just .any()
+// これは単なる .any() です
 let mut found = false;
 for item in &list {
     if item.is_expired() {
@@ -669,12 +660,12 @@ for item in &list {
     }
 }
 
-// Write this instead
+// 代わりにこう書きましょう
 let found = list.iter().any(|item| item.is_expired());
 ```
 
 ```rust
-// This is just .find()
+// これは単なる .find() です
 let mut target = None;
 for server in &fleet {
     if server.id == target_id {
@@ -683,12 +674,12 @@ for server in &fleet {
     }
 }
 
-// Write this instead
+// 代わりにこう書きましょう
 let target = fleet.iter().find(|s| s.id == target_id);
 ```
 
 ```rust
-// This is just .all()
+// これは単なる .all() です
 let mut all_healthy = true;
 for server in &fleet {
     if !server.is_healthy() {
@@ -697,31 +688,31 @@ for server in &fleet {
     }
 }
 
-// Write this instead
+// 代わりにこう書きましょう
 let all_healthy = fleet.iter().all(|s| s.is_healthy());
 ```
 
-The standard library has these for a reason. Learn the vocabulary and the patterns become obvious.
+標準ライブラリにこれらが用意されているのには理由があります。語彙を身につければ、パターンはおのずと明白になります。
 
 ---
 
-## Key Takeaways
+## 重要なポイント
 
-> - **Option and Result are one-element collections.** Their combinators (`.map()`, `.and_then()`, `.unwrap_or_else()`, `.filter()`, `.zip()`) replace most `if let` / `match` boilerplate.
-> - **Use `bool::then_some()`** — it replaces `if cond { Some(x) } else { None }` in every case.
-> - **Iterator chains win for data pipelines** — filter/map/collect with zero mutable state. They compile to the same machine code as loops.
-> - **Loops win for multi-output state machines** — when you're building multiple collections, doing I/O in branches, or managing a state transition.
-> - **The `?` operator is the best of both worlds** — functional error propagation with imperative readability.
-> - **Break chains at ~4 adapters** — use named intermediates for readability. Over-functionalizing is as bad as under-functionalizing.
-> - **Learn the standard-library vocabulary** — `.any()`, `.all()`, `.find()`, `.position()`, `.sum()`, `.min_by_key()` — each one replaces a multi-line loop with a single intent-revealing call.
+> - **Option と Result は1要素のコレクションです。** それらのコンビネータ（`.map()`、`.and_then()`、`.unwrap_or_else()`、`.filter()`、`.zip()`）は、大半の `if let` / `match` のボイラープレートを置き換えます。
+> - **`bool::then_some()` を活用しましょう** — `if cond { Some(x) } else { None }` をあらゆる場面で置き換えられます。
+> - **データパイプラインにはイテレータチェーンが勝ります** — 可変状態ゼロでの filter / map / collect。ループと同じ機械語コードにコンパイルされます。
+> - **複数出力の状態機械にはループが勝ります** — 複数のコレクションを構築したり、分岐内で I/O を実行したり、状態遷移を管理したりする場合です。
+> - **`?` 演算子は両スタイルの最良の部分を併せ持ちます** — 命令型の可読性を備えた関数型のエラー伝播。
+> - **約4つ以上のアダプタチェーンは分割しましょう** — 可読性のために名前付き中間変数を使用してください。過剰な関数型化は、不足した関数型化と同じくらい有害です。
+> - **標準ライブラリの語彙を学びましょう** — `.any()`、`.all()`、`.find()`、`.position()`、`.sum()`、`.min_by_key()` — それぞれが複数行のループを意図を明示した単一の呼び出しに置き換えます。
 
-> **See also:** [Ch 7](ch07-closures-and-higher-order-functions.md) for closure mechanics and the `Fn` trait hierarchy. [Ch 10](ch10-error-handling-patterns.md) for error combinator patterns. [Ch 15](ch15-crate-architecture-and-api-design.md) for fluent API design.
+> **関連項目:** クロージャの仕組みと `Fn` トレイト階層については [第7章](ch07-closures-and-higher-order-functions.md) を参照してください。エラーコンビネータパターンについては [第10章](ch10-error-handling-patterns.md) を参照してください。流れるような API 設計については [第15章](ch15-crate-architecture-and-api-design.md) を参照してください。
 
 ---
 
-### Exercise: Refactoring Imperative to Functional ★★ (~30 min)
+### 演習: 命令型から関数型へのリファクタリング ★★（約30分）
 
-Refactor the following function from imperative to functional style. Then identify one place where the functional version is *worse* and explain why.
+以下の関数を命令型スタイルから関数型スタイルにリファクタリングしてください。その後、関数型バージョンの方が*劣っている*箇所を1つ特定し、その理由を説明してください。
 
 ```rust
 fn summarize_fleet(fleet: &[Server]) -> FleetSummary {
@@ -754,9 +745,9 @@ fn summarize_fleet(fleet: &[Server]) -> FleetSummary {
 ```
 
 <details>
-<summary>🔑 Solution</summary>
+<summary>🔑 解答例</summary>
 
-The `total_power` and `max_temp` are clean functional rewrites:
+`total_power` と `max_temp` はクリーンな関数型への書き換えが可能です：
 
 ```rust
 fn summarize_fleet(fleet: &[Server]) -> FleetSummary {
@@ -767,9 +758,9 @@ fn summarize_fleet(fleet: &[Server]) -> FleetSummary {
         .map(|s| s.max_temperature())
         .fold(f64::NEG_INFINITY, f64::max);
 
-    // But the three-way partition is BETTER as a loop.
-    // Functional version would require three separate passes
-    // or an awkward fold with three mutable accumulators.
+    // しかし、3方向の振り分け（パーティション）はループの方が優れています。
+    // 関数型バージョンでは3回の独立した走査が必要になるか、
+    // 3つの可変アキュムレータを持つ不格好な fold になってしまいます。
     let mut healthy = Vec::new();
     let mut degraded = Vec::new();
     let mut failed = Vec::new();
@@ -786,7 +777,7 @@ fn summarize_fleet(fleet: &[Server]) -> FleetSummary {
 }
 ```
 
-**Why the loop is better for the three-way partition:** A functional version would either require three `.filter().collect()` passes (3x iteration), or a `.fold()` with three `mut Vec` accumulators inside a tuple — which is just the loop rewritten with worse syntax. The imperative single-pass loop is clearer, more efficient, and easier to extend.
+**なぜ3方向の振り分けにおいてループの方が優れているのか:** 関数型バージョンでは、3回の `.filter().collect()` パス（3倍のイテレーション）を行うか、タプル内に3つの `mut Vec` アキュムレータを持つ `.fold()` を使用する必要があります — しかしそれはループをより悪化した構文で書き直しただけに過ぎません。命令型の1パスのループの方がより明確で効率的であり、拡張も容易です。
 
 </details>
 

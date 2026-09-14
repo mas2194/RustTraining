@@ -1,28 +1,28 @@
-# 2. Traits In Depth 🟡
+# 2. トレイトを極める 🟡
 
-> **What you'll learn:**
-> - Associated types vs generic parameters — and when to use each
-> - GATs, blanket impls, marker traits, and dyn compatibility rules
-> - How vtables and fat pointers work under the hood
-> - Extension traits, enum dispatch, and typed command patterns
+> **学べること:**
+> - 関連型 vs ジェネリック型パラメータ — それぞれの使い分けと設計基準
+> - GAT（総称関連型）、ブランケット実装、マーカートレイト、および dyn 互換性（旧オブジェクト安全性）ルール
+> - 内部構造としての vtable（仮想関数テーブル）とファットポインタの仕組み
+> - 拡張トレイト、Enumディスパッチ、型付きコマンドパターン
 
-## Associated Types vs Generic Parameters
+## 関連型 vs ジェネリック型パラメータ
 
-Both let a trait work with different types, but they serve different purposes:
+どちらもトレイトを異なる型と連携させるための仕組みですが、その目的は異なります：
 
 ```rust
-// --- ASSOCIATED TYPE: One implementation per type ---
+// --- 関連型（ASSOCIATED TYPE）: 1つの型に対して実装は1つだけ ---
 trait Iterator {
-    type Item; // Each iterator produces exactly ONE kind of item
+    type Item; // 各イテレータが生成する要素の種類は厳密に「1つ」
 
     fn next(&mut self) -> Option<Self::Item>;
 }
 
-// A custom iterator that always yields i32 — there's no choice
+// 常に i32 を返すカスタムイテレータ — 選択の余地はありません
 struct Counter { max: i32, current: i32 }
 
 impl Iterator for Counter {
-    type Item = i32; // Exactly one Item type per implementation
+    type Item = i32; // 実装ごとに Item 型はただ1つ決まる
     fn next(&mut self) -> Option<i32> {
         if self.current < self.max {
             self.current += 1;
@@ -33,12 +33,12 @@ impl Iterator for Counter {
     }
 }
 
-// --- GENERIC PARAMETER: Multiple implementations per type ---
+// --- ジェネリックパラメータ（GENERIC PARAMETER）: 1つの型に対して複数の実装が可能 ---
 trait Convert<T> {
     fn convert(&self) -> T;
 }
 
-// A single type can implement Convert for MANY target types:
+// 単一の型が、多くの変換先型に対して Convert を実装できます:
 impl Convert<f64> for i32 {
     fn convert(&self) -> f64 { *self as f64 }
 }
@@ -47,23 +47,23 @@ impl Convert<String> for i32 {
 }
 ```
 
-**When to use which**:
+**使い分けの基準**:
 
-| Use | When |
-|-----|------|
-| **Associated type** | There's exactly ONE natural output/result per implementing type. `Iterator::Item`, `Deref::Target`, `Add::Output` |
-| **Generic parameter** | A type can meaningfully implement the trait for MANY different types. `From<T>`, `AsRef<T>`, `PartialEq<Rhs>` |
+| 選択 | 使うべき場面 |
+|------|--------------|
+| **関連型** | 実装する型に対して、自然な出力/結果が厳密に「1つ」だけ存在する場合。<br>`Iterator::Item`、`Deref::Target`、`Add::Output` |
+| **ジェネリックパラメータ** | ある型が、多くの異なる型に対してそのトレイトを有意義に実装できる場合。<br>`From<T>`、`AsRef<T>`、`PartialEq<Rhs>` |
 
-**Intuition**: If it makes sense to ask "what is the `Item` of this iterator?", use associated type. If it makes sense to ask "can this convert to `f64`? to `String`? to `bool`?", use a generic parameter.
+**直感的な判断方法**: 「このイテレータの `Item` は何か？」と問うのが自然であれば、関連型を使います。「これは `f64` に変換できるか？ `String` に変換できるか？ `bool` に変換できるか？」と問うのが自然であれば、ジェネリックパラメータを使います。
 
 ```rust
-// Real-world example: std::ops::Add
+// 標準ライブラリの実例: std::ops::Add
 trait Add<Rhs = Self> {
-    type Output; // Associated type — addition has ONE result type
+    type Output; // 関連型 — 加算の結果となる型は1つ
     fn add(self, rhs: Rhs) -> Self::Output;
 }
 
-// Rhs is a generic parameter — you can add different types to Meters:
+// Rhs はジェネリックパラメータ — Meters に対して異なる単位を加算可能:
 struct Meters(f64);
 struct Centimeters(f64);
 
@@ -77,26 +77,25 @@ impl Add<Centimeters> for Meters {
 }
 ```
 
-### Generic Associated Types (GATs)
+### Generic Associated Types（GAT: 総称関連型）
 
-Since Rust 1.65, associated types can have generic parameters of their own.
-This enables **lending iterators** — iterators that return references tied to
-the iterator rather than to the underlying collection:
+Rust 1.65以降、関連型自体にジェネリックパラメータを持たせることができるようになりました。
+これにより、**Lending Iterator（貸し出しイテレータ）** — 元のコレクションではなくイテレータ自体の借用に紐づく参照を返すイテレータ — が表現可能になりました：
 
 ```rust
-// Without GATs — impossible to express a lending iterator:
+// GAT なしでは、貸し出しイテレータを表現できませんでした:
 // trait LendingIterator {
-//     type Item<'a>;  // ← This was rejected before 1.65
+//     type Item<'a>;  // ← 1.65 より前はコンパイルエラー
 // }
 
-// With GATs (Rust 1.65+):
+// GAT あり (Rust 1.65+):
 trait LendingIterator {
     type Item<'a> where Self: 'a;
 
     fn next(&mut self) -> Option<Self::Item<'_>>;
 }
 
-// Example: an iterator that yields overlapping windows
+// 例: 重複するウィンドウを順番に返すイテレータ
 struct WindowIter<'data> {
     data: &'data [u8],
     pos: usize,
@@ -118,13 +117,12 @@ impl<'data> LendingIterator for WindowIter<'data> {
 }
 ```
 
-> **When you need GATs**: Lending iterators, streaming parsers, or any trait
-> where the associated type's lifetime depends on the `&self` borrow.
-> For most code, plain associated types are sufficient.
+> **GATが必要となる場面**: Lending Iterator、ストリーミングパーサー、または関連型のライフタイムが `&self` の借用に依存する任意のトレイト。
+> 一般的なコードでは、通常の関連型で十分です。
 
-### Supertraits and Trait Hierarchies
+### スーパートレイトとトレイト階層
 
-Traits can require other traits as prerequisites, forming hierarchies:
+トレイトは他のトレイトを前提条件として要求でき、これによって階層構造を形成します：
 
 ```mermaid
 graph BT
@@ -157,20 +155,20 @@ graph BT
     style Ord fill:#fef9e7,stroke:#f1c40f,color:#000
 ```
 
-> Arrows point from subtrait to supertrait: implementing `Error` requires `Display` + `Debug`.
+> 矢印はサブトレイトからスーパートレイトを指しています: `Error` を実装するには `Display` と `Debug` の両方が必要です。
 
-A trait can require that implementors also implement other traits:
+トレイトは、実装者に対して他のトレイトの実装を義務付けることができます：
 
 ```rust
 use std::fmt;
 
-// Display is a supertrait of Error
+// Display と Debug は Error のスーパートレイト
 trait Error: fmt::Display + fmt::Debug {
     fn source(&self) -> Option<&(dyn Error + 'static)> { None }
 }
-// Any type implementing Error MUST also implement Display and Debug
+// Error を実装する型はすべて、必ず Display と Debug も実装しなければならない
 
-// Build your own hierarchies:
+// 独自の階層を構築する例:
 trait Identifiable {
     fn id(&self) -> u64;
 }
@@ -179,12 +177,12 @@ trait Timestamped {
     fn created_at(&self) -> chrono::DateTime<chrono::Utc>;
 }
 
-// Entity requires both:
+// Entity は両方を要求する:
 trait Entity: Identifiable + Timestamped {
     fn is_active(&self) -> bool;
 }
 
-// Implementing Entity forces you to implement all three:
+// Entity を実装するには、3つすべての実装が必要:
 struct User { id: u64, name: String, created: chrono::DateTime<chrono::Utc> }
 
 impl Identifiable for User {
@@ -198,55 +196,53 @@ impl Entity for User {
 }
 ```
 
-### Blanket Implementations
+### ブランケット実装（Blanket Implementations）
 
-Implement a trait for ALL types that satisfy some bound:
+特定の境界を満たす「すべての型」に対して一括でトレイトを実装します：
 
 ```rust
-// std does this: any type that implements Display automatically gets ToString
+// 標準ライブラリの実例: Display を実装しているすべての型は自動的に ToString を獲得する
 impl<T: fmt::Display> ToString for T {
     fn to_string(&self) -> String {
         format!("{self}")
     }
 }
-// Now i32, &str, your custom types — anything with Display — gets to_string() for free.
+// これにより、i32、&str、独自のカスタム型など、Display を実装するすべての型で to_string() が使えます。
 
-// Your own blanket impl:
+// 独自のブランケット実装:
 trait Loggable {
     fn log(&self);
 }
 
-// Every Debug type is automatically Loggable:
+// Debug を実装するすべての型は自動的に Loggable になる:
 impl<T: std::fmt::Debug> Loggable for T {
     fn log(&self) {
         eprintln!("[LOG] {self:?}");
     }
 }
 
-// Now ANY Debug type has .log():
+// これで任意の Debug 型に対して .log() が呼び出せます:
 // 42.log();              // [LOG] 42
 // "hello".log();         // [LOG] "hello"
 // vec![1, 2, 3].log();   // [LOG] [1, 2, 3]
 ```
 
-> **Caution**: Blanket impls are powerful but irreversible — you can't add a
-> more specific impl for a type that's already covered by a blanket impl
-> (orphan rules + coherence). Design them carefully.
+> **注意**: ブランケット実装は強力ですが後戻りができません — すでにブランケット実装でカバーされている型に対して、より特化した個別実装を追加することはできません（孤児ルールとコヒーレンス制約による）。慎重に設計してください。
 
-### Marker Traits
+### マーカートレイト（Marker Traits）
 
-Traits with no methods — they mark a type as having some property:
+メソッドを持たないトレイトであり、型が特定の性質を備えていることを印付け（マーク）します：
 
 ```rust
-// Standard library marker traits:
-// Send    — safe to transfer between threads
-// Sync    — safe to share (&T) between threads
-// Unpin   — safe to move after pinning
-// Sized   — has a known size at compile time
-// Copy    — can be duplicated with memcpy
+// 標準ライブラリのマーカートレイト:
+// Send    — スレッド間での所有権の転送が安全
+// Sync    — 複数スレッド間での参照の共有（&T）が安全
+// Unpin   — ピン留め（pin）された後も移動が可能で安全
+// Sized   — コンパイル時にサイズが既知
+// Copy    — memcpy によるビット単位の複製が可能
 
-// Your own marker trait:
-/// Marker: this sensor has been factory-calibrated
+// 独自のマーカートレイト:
+/// マーカー: このセンサは工場出荷時にキャリブレーション済みであることを示す
 trait Calibrated {}
 
 struct RawSensor { reading: f64 }
@@ -254,208 +250,180 @@ struct CalibratedSensor { reading: f64 }
 
 impl Calibrated for CalibratedSensor {}
 
-// Only calibrated sensors can be used in production:
+// キャリブレーション済みのセンサのみが本番環境で使用可能:
 fn record_measurement<S: Calibrated>(sensor: &S) {
     // ...
 }
-// record_measurement(&RawSensor { reading: 0.0 }); // ❌ Compile error
+// record_measurement(&RawSensor { reading: 0.0 }); // ❌ コンパイルエラー
 // record_measurement(&CalibratedSensor { reading: 0.0 }); // ✅
 ```
 
-This connects directly to the **type-state pattern** in Chapter 3.
+これは第3章で解説する**型状態（Type-State）パターン**に直結する概念です。
 
-### Dyn Compatibility (formerly "Object Safety")
+### Dyn互換性（旧称「オブジェクト安全性」）
 
-> **A note on the name**: this was called *object safety* until Rust 1.84. The
-> term was misleading on both halves — Rust has no "objects" in the OOP sense, and
-> nothing here is about memory safety. The question is simply "can this trait be
-> used as `dyn Trait`?". The compiler now says `the trait 'X' is not dyn
-> compatible` (still error `E0038`), but most existing articles, crate docs and
-> Stack Overflow answers you'll find still say "object safe" — same concept.
+> **名称に関する注記**: この概念はRust 1.84まで「オブジェクト安全性（object safety）」と呼ばれていました。この用語は、Rustにオブジェクト指向的な「オブジェクト」が存在しないこと、またメモリ安全性そのものの話ではないことから、誤解を招きやすいものでした。要するに「そのトレイトを `dyn Trait` として使用できるか？」という問題です。現在のコンパイラは `the trait 'X' is not dyn compatible`（エラーコード `E0038`）と出力しますが、既存の記事やドキュメント、Stack Overflowの回答などでは依然として「object safe」と表記されていることが多いため、同じ概念だと理解してください。
 
-Not every trait can be used as `dyn Trait`. A trait is **dyn compatible** only if:
+すべてのトレイトが `dyn Trait` として使えるわけではありません。トレイトが **dyn互換（dyn compatible）** であるためには、以下の条件を満たす必要があります：
 
-1. **`Sized` must not be a supertrait** — i.e. the trait must not require `Self: Sized`
-2. **No generic type parameters** on methods — lifetime parameters *are* allowed,
-   since they're erased before codegen and need no extra vtable slot
-3. **No use of `Self`** anywhere in a method signature except in the type of the
-   receiver — this covers parameters as well as return types
-4. **Every associated function must be dispatchable or opted out.** A dispatchable
-   method needs a receiver of type `&self`, `&mut self`, `self: Box<Self>`,
-   `self: Rc<Self>`, `self: Arc<Self>`, or `self: Pin<P>` where `P` is one of
-   those. Anything else — including a bare `fn create() -> Self` — must carry
-   `where Self: Sized` to be excluded from the vtable
-5. **All supertraits must themselves be dyn compatible** — the property is inherited
-6. **No associated constants**, and **no associated types with generics** (GATs).
-   Plain associated types are fine, but must be pinned down at the use site:
-   `dyn Iterator<Item = u32>`, never a bare `dyn Iterator`
-7. **No opaque return types** on dispatchable methods — neither `async fn` (which
-   hides a `Future` type) nor return-position `impl Trait`
+1. **`Sized` がスーパートレイトであってはならない** — すなわち、トレイトが `Self: Sized` を要求してはならない
+2. メソッドに**ジェネリック型パラメータが存在しないこと** — ライフタイムパラメータはコード生成前に消去され、余分なvtableスロットを必要としないため許可されます
+3. レシーバの型を除き、メソッドシグネチャのいかなる場所にも **`Self` が出現しないこと** — 引数および戻り値の両方に適用されます
+4. **すべての関連関数がディスパッチ可能であるか、あるいはオプトアウトされていること。** ディスパッチ可能なメソッドは、`&self`、`&mut self`、`self: Box<Self>`、`self: Rc<Self>`、`self: Arc<Self>`、または `self: Pin<P>`（`P` は前述のいずれか）の型のレシーバを持つ必要があります。それ以外のもの — レシーバのない `fn create() -> Self` など — は、`where Self: Sized` を付与してvtableから除外する必要があります
+5. **すべてのスーパートレイト自身がdyn互換であること** — この性質は継承されます
+6. **関連定数を持たないこと**、および**ジェネリクスを持つ関連型（GAT）を持たないこと**。通常の関連型は問題ありませんが、使用時に `dyn Iterator<Item = u32>` のように型を具体的に指定する必要があり、単なる `dyn Iterator` は不可です
+7. ディスパッチ可能なメソッドの戻り値型が**不透明型（opaque type）でないこと** — `async fn`（裏で `Future` 型を隠蔽する）も、戻り値位置の `impl Trait` も不可です
 
 ```rust
-// ✅ Dyn compatible — can be used as dyn Drawable
+// ✅ dyn互換 — dyn Drawable として使用可能
 trait Drawable {
     fn draw(&self);
     fn bounding_box(&self) -> (f64, f64, f64, f64);
 }
 
-let shapes: Vec<Box<dyn Drawable>> = vec![/* ... */]; // ✅ Works
+let shapes: Vec<Box<dyn Drawable>> = vec![/* ... */]; // ✅ 動作する
 
-// ❌ NOT dyn compatible — mentions Self outside the receiver
+// ❌ dyn互換ではない — レシーバ以外の場所で Self を参照している
 trait Cloneable {
     fn clone_self(&self) -> Self;
     //                      ^^^^ "...because method `clone_self` references
     //                            the `Self` type in its return type"
 }
-// let items: Vec<Box<dyn Cloneable>> = ...; // ❌ Compile error
+// let items: Vec<Box<dyn Cloneable>> = ...; // ❌ コンパイルエラー
 
-// ❌ Same rule, argument position — this is why PartialEq isn't dyn compatible
+// ❌ 同じルールが引数位置にも適用 — PartialEq が dyn互換でないのはこのため
 trait Comparable {
     fn equals(&self, other: &Self) -> bool;
     //                       ^^^^ "...references the `Self` type in this parameter"
 }
 
-// ⚠️ Wrapping in Box does NOT help — Box<Self> still names Self
+// ⚠️ Box でラップしても解決しない — Box<Self> も依然として Self を指している
 trait Spawner {
-    fn spawn(&self) -> Box<Self>; // ❌ Still not dyn compatible
+    fn spawn(&self) -> Box<Self>; // ❌ やはり dyn互換ではない
 }
 
-// ✅ Return Box<dyn Trait> instead — that's a concrete type, not Self.
-// This is the standard "clone through a trait object" idiom:
+// ✅ 代わりに Box<dyn Trait> を返す — これは Self ではなく具象型です。
+// これはトレイトオブジェクト経由でクローンを行う標準的なイディオムです:
 trait CloneableDyn {
     fn clone_box(&self) -> Box<dyn CloneableDyn>;
 }
 
-// ❌ NOT dyn compatible — generic method
+// ❌ dyn互換ではない — ジェネリックメソッド
 trait Converter {
     fn convert<T>(&self) -> T;
-    //        ^^^ The vtable can't contain infinite monomorphizations
+    //        ^^^ vtable は無限の単相化コピーを保持できない
 }
 
-// ✅ Dyn compatible — a generic LIFETIME is fine, only type params are barred
+// ✅ dyn互換 — ジェネリックライフタイムは問題なし。禁止されているのは型パラメータのみ
 trait Tokenizer {
     fn first_token<'a>(&self, input: &'a str) -> &'a str;
-    //            ^^^^ One vtable slot is enough: lifetimes are erased
+    //            ^^^^ ライフタイムは消去されるため、1つの vtable スロットで十分
 }
 
-// ❌ NOT dyn compatible — associated function with no receiver
+// ❌ dyn互換ではない — レシーバを持たない関連関数
 trait Factory {
     fn create() -> Self;
     // "...because associated function `create` has no `self` parameter"
 }
 
-// ✅ Same function, opted out of the vtable — the trait is dyn compatible again
+// ✅ 同じ関数を vtable からオプトアウト（除外）する — トレイトは再び dyn互換になる
 trait FactoryFixed {
-    fn describe(&self) -> String;      // dispatchable
-    fn create() -> Self where Self: Sized; // excluded from the vtable
+    fn describe(&self) -> String;          // ディスパッチ可能
+    fn create() -> Self where Self: Sized; // vtable から除外される
 }
 
-// ❌ NOT dyn compatible — inherited from a supertrait that isn't.
-//    Nothing is wrong with Derived itself; the compiler points at Base::make.
+// ❌ dyn互換ではない — dyn互換でないスーパートレイトから継承している。
+//    Derived 自体に問題はなくとも、コンパイラは Base::make を指摘します。
 trait Base {
     fn make() -> Self;
 }
 trait Derived: Base {
     fn show(&self);
 }
-// let d: &dyn Derived = ...; // ❌ Compile error, blamed on `Base::make`
+// let d: &dyn Derived = ...; // ❌ コンパイルエラー（Base::make が原因）
 
-// ❌ NOT dyn compatible — an associated const has no vtable representation
+// ❌ dyn互換ではない — 関連定数は vtable で表現できない
 trait Sensor {
     const MAX: f64;
     //    ^^^ "...because it contains associated const `MAX`"
     fn read(&self) -> f64;
 }
-// Workaround: make it a method — `fn max_reading(&self) -> f64`. Note there is
-// NO `where Self: Sized` escape hatch here; `const MAX: f64 where Self: Sized;`
-// isn't even accepted syntax on stable (generic const items are unstable).
+// 回避策: メソッドにする — `fn max_reading(&self) -> f64`。なお、ここには
+// `where Self: Sized` のような逃げ道はありません。安定版（stable）では
+// `const MAX: f64 where Self: Sized;` という構文自体が受理されません。
 
-// ❌ NOT dyn compatible — a GAT is a family of types, not one type
+// ❌ dyn互換ではない — GAT は単一の型ではなく型の族（family）である
 trait LendingIterator {
     type Item<'a> where Self: 'a;
     //   ^^^^ "...because it contains generic associated type `Item`"
     fn next(&mut self) -> Option<Self::Item<'_>>;
 }
-// This is the same LendingIterator from the GATs section above: the price of
-// a lending iterator is that `dyn LendingIterator` can never exist.
+// これは上述の GAT の節の LendingIterator と同じです:
+// 貸し出しイテレータの代償として、`dyn LendingIterator` は存在できません。
 
-// ❌ NOT dyn compatible — opaque return type (RPITIT)
+// ❌ dyn互換ではない — 不透明な戻り値型 (RPITIT)
 trait Container {
     fn items(&self) -> impl Iterator<Item = u32>;
     //                 ^^^^ "...references an `impl Trait` type in its return type"
 }
 
-// ❌ NOT dyn compatible — `async fn` is the same problem with sugar on top
+// ❌ dyn互換ではない — `async fn` も糖衣構文の裏で同じ問題を抱えている
 trait DataStore {
     async fn get(&self, key: &str) -> Option<String>;
     // "...because method `get` is `async`"
 }
-// Workaround for both: erase the type yourself and return a concrete boxed
-// trait object — `Box<dyn Iterator<Item = u32> + '_>` and
-// `Pin<Box<dyn Future<Output = Option<String>> + '_>>` are ordinary types,
-// so they get ordinary vtable slots.
+// 両者の回避策: 自分で型消去を行い、具象の boxed トレイトオブジェクトを返す —
+// `Box<dyn Iterator<Item = u32> + '_>` や
+// `Pin<Box<dyn Future<Output = Option<String>> + '_>>` は通常の型であるため、
+// 通常の vtable スロットを獲得できます。
 
-// ⚠️ `self` by value is NOT a dispatchable receiver — it implies
-//    `where Self: Sized`. The trait stays dyn compatible, but the method
-//    simply isn't in the vtable and can't be called through `dyn Trait`:
+// ⚠️ 値渡しの `self` はディスパッチ可能なレシーバではない — 暗黙に
+//    `where Self: Sized` を意味する。トレイト自体は dyn互換のままですが、
+//    そのメソッドは vtable に含まれず、`dyn Trait` 経由では呼び出せません:
 trait Consume {
-    fn describe(&self) -> String; // in the vtable
-    fn consume(self) -> String;   // implicitly `where Self: Sized`
+    fn describe(&self) -> String; // vtable に含まれる
+    fn consume(self) -> String;   // 暗黙に `where Self: Sized`
 }
-// let t: &dyn Consume = &token;  // ✅ the trait object is fine
-// boxed.consume();               // ❌ error[E0161]: cannot move a value
-//                                //    of type `dyn Consume`
+// let t: &dyn Consume = &token;  // ✅ トレイトオブジェクト自体は有効
+// boxed.consume();               // ❌ error[E0161]: cannot move a value of type `dyn Consume`
 ```
 
-**Workarounds**:
+**回避策**:
 
 ```rust
-// Add `where Self: Sized` to exclude a method from the vtable:
+// メソッドを vtable から除外するために `where Self: Sized` を追加:
 trait MyTrait {
-    fn regular_method(&self); // Included in vtable
+    fn regular_method(&self); // vtable に含まれる
 
     fn generic_method<T>(&self) -> T
     where
-        Self: Sized; // Excluded from vtable — can't be called via dyn MyTrait
+        Self: Sized; // vtable から除外 — dyn MyTrait 経由では呼び出せない
 }
 
-// Now dyn MyTrait is valid, but generic_method can only be called
-// when the concrete type is known.
+// これで dyn MyTrait は有効になりますが、generic_method は
+// 具象型が判明している場合にのみ呼び出せます。
 ```
 
-> **Rule of thumb**: If you plan to use `dyn Trait`, keep methods simple — no
-> generic type parameters, no `Self` outside the receiver, and no `Sized`
-> **supertrait**. Note the asymmetry: `trait Widget: Sized` is fatal, while
-> `where Self: Sized` on an individual method is the sanctioned opt-out shown
-> above. When in doubt, try `let _: Box<dyn YourTrait>;` and let the compiler
-> tell you.
+> **経験則**: `dyn Trait` を使う予定があるなら、メソッドをシンプルに保ちましょう — ジェネリック型パラメータを使わず、レシーバ以外で `Self` を使わず、スーパートレイトに `Sized` を指定しないことです。非対称性に注意してください：`trait Widget: Sized` は致命的（dyn互換にならない）ですが、個々のメソッドに対する `where Self: Sized` は上記のように公式に認められたオプトアウト手段です。迷ったときは `let _: Box<dyn YourTrait>;` と書いてコンパイラに尋ねてみましょう。
 
-> **Why `AsyncFn` isn't dyn compatible**: the Reference lists `AsyncFn`,
-> `AsyncFnMut` and `AsyncFnOnce` as a separate rule, but the compiler shows it's
-> really a corollary of the GAT rule above — it blames
-> `AsyncFnMut::CallRefFuture<'a>`, a generic associated type in the std
-> definition. Plain `Fn`/`FnMut`/`FnOnce` have no such member and are dyn
-> compatible, which is why `Box<dyn Fn(u32) -> u32>` works fine.
+> **なぜ `AsyncFn` は dyn互換ではないのか**: Rust Reference では `AsyncFn`、`AsyncFnMut`、`AsyncFnOnce` を独立したルールとして挙げていますが、コンパイラのエラーを見ると実際には上記の GAT ルールの系（帰結）であることがわかります。標準ライブラリの定義にある総称関連型 `AsyncFnMut::CallRefFuture<'a>` が原因と指摘されます。一方、通常の `Fn`/`FnMut`/`FnOnce` にはそのようなメンバーが存在しないため dyn互換であり、`Box<dyn Fn(u32) -> u32>` は問題なく動作します。
 
-> **See also**: the RPITIT section below uses `-> impl Trait` in a trait
-> definition — convenient, but it costs the trait its dyn compatibility.
-> [Async Book — Ch 10](../async-book/ch10-async-traits.html) covers the
-> `async fn` half and the `Pin<Box<dyn Future>>` workaround in depth.
+> **参照**: 下記の RPITIT のセクションではトレイト定義で `-> impl Trait` を使用しています。これは便利ですが、トレイトの dyn互換性を損ないます。[Async Book — 第10章](../async-book/ch10-async-traits.html) では、`async fn` 側の問題と `Pin<Box<dyn Future>>` による回避策を詳しく扱っています。
 
-### Trait Objects Under the Hood — vtables and Fat Pointers
+### トレイトオブジェクトの内部構造 — vtable とファットポインタ
 
-A `&dyn Trait` (or `Box<dyn Trait>`) is a **fat pointer** — two machine words:
+`&dyn Trait`（または `Box<dyn Trait>`）は**ファットポインタ（fat pointer）**であり、2マシンワードのサイズを持ちます：
 
 ```text
 ┌──────────────────────────────────────────────────┐
-│  &dyn Drawable (on 64-bit: 16 bytes total)       │
+│  &dyn Drawable (64ビット環境では合計16バイト)    │
 ├──────────────┬───────────────────────────────────┤
 │  data_ptr    │  vtable_ptr                       │
-│  (8 bytes)   │  (8 bytes)                        │
+│  (8バイト)   │  (8バイト)                        │
 │  ↓           │  ↓                                │
 │  ┌─────────┐ │  ┌──────────────────────────────┐ │
-│  │ Circle  │ │  │ vtable for <Circle as        │ │
-│  │ {       │ │  │           Drawable>          │ │
+│  │ Circle  │ │  │ <Circle as Drawable> の      │ │
+│  │ {       │ │  │ vtable                       │ │
 │  │  r: 5.0 │ │  │                              │ │
 │  │ }       │ │  │  drop_in_place: 0x7f...a0    │ │
 │  └─────────┘ │  │  size:           8           │ │
@@ -466,16 +434,13 @@ A `&dyn Trait` (or `Box<dyn Trait>`) is a **fat pointer** — two machine words:
 └──────────────┴───────────────────────────────────┘
 ```
 
-**How a vtable call works** (e.g., `shape.draw()`):
+**vtable経由の呼び出しの流れ**（例: `shape.draw()`）:
 
-1. Load `vtable_ptr` from the fat pointer (second word)
-2. Index into the vtable to find the `draw` function pointer
-3. Call it, passing `data_ptr` as the `self` argument
+1. ファットポインタから `vtable_ptr` を読み出す（2番目のワード）
+2. vtable をインデックス参照して `draw` 関数のポインタを見つける
+3. `data_ptr` を `self` 引数として渡し、関数を呼び出す
 
-This is similar to C++ virtual dispatch in cost (one pointer indirection
-per call), but Rust stores the vtable pointer in the fat pointer rather
-than inside the object — so a plain `Circle` on the stack carries no
-vtable pointer at all.
+これはコスト面では C++ の仮想関数ディスパッチと類似しています（呼び出しごとに1回のポインタ間接参照）。ただし Rust では、vtable ポインタをオブジェクトの内部ではなくファットポインタ側に保持するため、スタック上にある通常の `Circle` は vtable ポインタを一切持ちません。
 
 ```rust
 trait Drawable {
@@ -486,14 +451,14 @@ trait Drawable {
 struct Circle { radius: f64 }
 
 impl Drawable for Circle {
-    fn draw(&self) { println!("Drawing circle r={}", self.radius); }
+    fn draw(&self) { println!("円を描画 r={}", self.radius); }
     fn area(&self) -> f64 { std::f64::consts::PI * self.radius * self.radius }
 }
 
 struct Square { side: f64 }
 
 impl Drawable for Square {
-    fn draw(&self) { println!("Drawing square s={}", self.side); }
+    fn draw(&self) { println!("正方形を描画 s={}", self.side); }
     fn area(&self) -> f64 { self.side * self.side }
 }
 
@@ -503,48 +468,45 @@ fn main() {
         Box::new(Square { side: 3.0 }),
     ];
 
-    // Each element is a fat pointer: (data_ptr, vtable_ptr)
-    // The vtable for Circle and Square are DIFFERENT
+    // 各要素はファットポインタ: (data_ptr, vtable_ptr)
+    // Circle と Square の vtable は「異なります」
     for shape in &shapes {
-        shape.draw();  // vtable dispatch → Circle::draw or Square::draw
-        println!("  area = {:.2}", shape.area());
+        shape.draw();  // vtableディスパッチ → Circle::draw または Square::draw
+        println!("  面積 = {:.2}", shape.area());
     }
 
-    // Size comparison:
+    // サイズの比較:
     println!("size_of::<&Circle>()        = {}", size_of::<&Circle>());
-    // → 8 bytes (one pointer — the compiler knows the type)
+    // → 8バイト（ポインタ1つ分 — コンパイラが具象型を知っている）
     println!("size_of::<&dyn Drawable>()  = {}", size_of::<&dyn Drawable>());
-    // → 16 bytes (data_ptr + vtable_ptr)
+    // → 16バイト（data_ptr + vtable_ptr）
 }
 ```
 
-**Performance cost model**:
+**パフォーマンスコストの比較**:
 
-| Aspect | Static dispatch (`impl Trait` / generics) | Dynamic dispatch (`dyn Trait`) |
-|--------|------------------------------------------|-------------------------------|
-| Call overhead | Zero — inlined by LLVM | One pointer indirection per call |
-| Inlining | ✅ Compiler can inline | ❌ Opaque function pointer |
-| Binary size | Larger (one copy per type) | Smaller (one shared function) |
-| Pointer size | Thin (1 word) | Fat (2 words) |
-| Heterogeneous collections | ❌ | ✅ `Vec<Box<dyn Trait>>` |
+| 観点 | 静的ディスパッチ (`impl Trait` / ジェネリクス) | 動的ディスパッチ (`dyn Trait`) |
+|------|----------------------------------------------|-------------------------------|
+| 呼び出しオーバーヘッド | ゼロ — LLVMによってインライン化可能 | 呼び出しごとに1回のポインタ間接参照 |
+| インライン化 | ✅ コンパイラがインライン化可能 | ❌ 不透明な関数ポインタ |
+| バイナリサイズ | 肥大化しやすい（型ごとに1コピー） | 小さい（共有された1つの関数） |
+| ポインタサイズ | 通常のポインタ（1ワード） | ファットポインタ（2ワード） |
+| 異種型の混在コレクション | ❌ 不可 | ✅ `Vec<Box<dyn Trait>>` で可能 |
 
-> **When vtable cost matters**: In tight loops calling a trait method millions
-> of times, the indirection and inability to inline can be significant (2-10×
-> slower). For cold paths, configuration, or plugin architectures, the
-> flexibility of `dyn Trait` is worth the small cost.
+> **vtableのコストが問題になるケース**: トレイトメソッドを数百万回呼び出すようなタイトなループでは、間接参照やインライン化阻害によるオーバーヘッドが顕著になることがあります（2〜10倍遅くなることも）。一方、コールドパス、設定管理、プラグインアーキテクチャなどでは、`dyn Trait` のもたらす柔軟性はわずかなコストに見合う価値があります。
 
-### Higher-Ranked Trait Bounds (HRTBs)
+### 高階トレイト境界（HRTB: Higher-Ranked Trait Bounds）
 
-Sometimes you need a function that works with references of *any* lifetime, not a specific one. This is where `for<'a>` syntax appears:
+特定のライフタイムではなく、*あらゆる*ライフタイムの参照に対して機能する関数が必要になる場合があります。ここで登場するのが `for<'a>` 構文です：
 
 ```rust
-// Problem: this function needs a closure that can process
-// references with ANY lifetime, not just one specific lifetime.
+// 課題: この関数は、特定の1つのライフタイムだけでなく、
+// 「任意の」ライフタイムを持つ参照を処理できるクロージャを必要としています。
 
-// ❌ This is too restrictive — 'a is fixed by the caller:
+// ❌ これでは制約が強すぎる — 'a が呼び出し側によって固定されてしまう:
 // fn apply<'a, F: Fn(&'a str) -> &'a str>(f: F, data: &'a str) -> &'a str
 
-// ✅ HRTB: F must work for ALL possible lifetimes:
+// ✅ HRTB: F は起こり得る「すべての」ライフタイムに対して機能しなければならない:
 fn apply<F>(f: F, data: &str) -> &str
 where
     F: for<'a> Fn(&'a str) -> &'a str,
@@ -558,16 +520,16 @@ fn main() {
 }
 ```
 
-**When you encounter HRTBs**:
-- `Fn(&T) -> &U` traits — the compiler infers `for<'a>` automatically in most cases
-- Custom trait implementations that must work across different borrows
-- Deserialization with `serde`: `for<'de> Deserialize<'de>`
+**HRTBに遭遇するケース**:
+- `Fn(&T) -> &U` トレイト — ほとんどの場合、コンパイラが自動的に `for<'a>` を推論します
+- 異なる借用期間にまたがって機能しなければならないカスタムトレイト実装
+- `serde` を用いたデシリアライズ: `for<'de> Deserialize<'de>`
 
 ```rust,ignore
-// serde's DeserializeOwned is defined as:
+// serde の DeserializeOwned は次のように定義されています:
 // trait DeserializeOwned: for<'de> Deserialize<'de> {}
-// Meaning: "can be deserialized from data with ANY lifetime"
-// (i.e., the result doesn't borrow from the input)
+// 意味: 「任意のライフタイムを持つデータからデシリアライズ可能」
+// （すなわち、結果が入力データのライフタイムを借用しない）
 
 use serde::de::DeserializeOwned;
 
@@ -576,54 +538,51 @@ fn parse_json<T: DeserializeOwned>(input: &str) -> T {
 }
 ```
 
-> **Practical advice**: You'll rarely write `for<'a>` yourself. It mostly appears
-> in trait bounds on closure parameters, where the compiler handles it implicitly.
-> But recognizing it in error messages ("expected a `for<'a> Fn(&'a ...)` bound")
-> helps you understand what the compiler is asking for.
+> **実践的アドバイス**: 自分で明示的に `for<'a>` を書く機会は多くありません。主にクロージャ引数のトレイト境界に現れ、コンパイラが暗黙的に処理してくれます。しかしエラーメッセージ（「`for<'a> Fn(&'a ...)` の境界が期待されています」など）で見かけたときに、コンパイラが何を求めているのかを理解する上で重要です。
 
-### `impl Trait` — Argument Position vs Return Position
+### `impl Trait` — 引数位置 vs 戻り値位置
 
-`impl Trait` appears in two positions with **different semantics**:
+`impl Trait` は2つの位置に出現し、**それぞれ意味が異なります**：
 
 ```rust
-// --- Argument-Position impl Trait (APIT) ---
-// "Caller chooses the type" — syntactic sugar for a generic parameter
+// --- 引数位置の impl Trait (APIT) ---
+// 「呼び出し側が型を選ぶ」 — ジェネリックパラメータの糖衣構文
 fn print_all(items: impl Iterator<Item = i32>) {
     for item in items { println!("{item}"); }
 }
-// Equivalent to:
+// 次と等価:
 fn print_all_verbose<I: Iterator<Item = i32>>(items: I) {
     for item in items { println!("{item}"); }
 }
-// Caller decides: print_all(vec![1,2,3].into_iter())
-//                 print_all(0..10)
+// 呼び出し側が型を決定: print_all(vec![1,2,3].into_iter())
+//                     print_all(0..10)
 
-// --- Return-Position impl Trait (RPIT) ---
-// "Callee chooses the type" — the function picks one concrete type
+// --- 戻り値位置の impl Trait (RPIT) ---
+// 「関数（実装）側が型を選ぶ」 — 関数が1つの具象型を選択して返す
 fn evens(limit: i32) -> impl Iterator<Item = i32> {
     (0..limit).filter(|x| x % 2 == 0)
-    // The concrete type is Filter<Range<i32>, Closure>
-    // but the caller only sees "some Iterator<Item = i32>"
+    // 実際の具象型は Filter<Range<i32>, Closure> ですが、
+    // 呼び出し側には「何らかの Iterator<Item = i32>」としか見えません
 }
 ```
 
-**Key difference**:
+**重要な違い**:
 
-| | APIT (`fn foo(x: impl T)`) | RPIT (`fn foo() -> impl T`) |
+| 項目 | APIT (`fn foo(x: impl T)`) | RPIT (`fn foo() -> impl T`) |
 |---|---|---|
-| Who picks the type? | Caller | Callee (function body) |
-| Monomorphized? | Yes — one copy per type | Yes — one concrete type |
-| Turbofish? | No (`foo::<X>()` not allowed) | N/A |
-| Equivalent to | `fn foo<X: T>(x: X)` | Existential type |
+| 誰が型を選ぶか？ | 呼び出し側 | 関数自身（関数の実装コード） |
+| 単相化されるか？ | はい — 型ごとに1つのコピー | はい — 1つの具象型 |
+| ターボフィッシュ（Turbofish） | 不可（`foo::<X>()` は使えない） | 該当なし |
+| 何と等価か | `fn foo<X: T>(x: X)` | 存在型（Existential type） |
 
-#### RPIT in Trait Definitions (RPITIT)
+#### トレイト定義における RPIT（RPITIT）
 
-Since Rust 1.75, you can use `-> impl Trait` directly in trait definitions:
+Rust 1.75以降、トレイトのメソッド定義において `-> impl Trait` を直接記述できるようになりました：
 
 ```rust
 trait Container {
     fn items(&self) -> impl Iterator<Item = &str>;
-    //                 ^^^^ Each implementor returns its own concrete type
+    //                 ^^^^ 実装ごとに独自の具象型を返せる
 }
 
 struct CsvRow {
@@ -645,58 +604,53 @@ impl Container for FixedFields {
 }
 ```
 
-> **Before Rust 1.75**, you had to use `Box<dyn Iterator>` or an associated
-> type to achieve this in traits. RPITIT removes the allocation.
+> **Rust 1.75 より前**は、これをトレイト内で実現するには `Box<dyn Iterator>` を使うか、関連型を定義する必要がありました。RPITIT により不要なヒープ割り当てを排除できます。
 >
-> **But it costs dyn compatibility**: `-> impl Trait` is an opaque return type,
-> so `dyn Container` is rejected (see [Dyn Compatibility](#dyn-compatibility-formerly-object-safety),
-> rule 7). If you need the trait object, keep returning
-> `Box<dyn Iterator<Item = &str> + '_>` and pay the allocation.
+> **ただし dyn互換性は失われます**: `-> impl Trait` は不透明な戻り値型であるため、`dyn Container` は拒絶されます（[dyn互換性](#dyn互換性旧称オブジェクト安全性)のルール7を参照）。トレイトオブジェクトが必要な場合は、ヒープ割り当てのコストを受け入れて `Box<dyn Iterator<Item = &str> + '_>` を返す設計を維持してください。
 
-#### `impl Trait` vs `dyn Trait` — Decision Guide
+#### `impl Trait` vs `dyn Trait` — 意思決定ガイド
 
 ```text
-Do you know the concrete type at compile time?
-├── YES → Use impl Trait or generics (zero cost, inlinable)
-└── NO  → Do you need a heterogeneous collection?
-     ├── YES → Use dyn Trait (Box<dyn T>, &dyn T)
-     └── NO  → Do you need the SAME trait object across an API boundary?
-          ├── YES → Use dyn Trait
-          └── NO  → Use generics / impl Trait
+コンパイル時に具象型が判明しているか？
+├── はい → impl Trait またはジェネリクスを使用（ゼロコスト、インライン化可能）
+└── いいえ → 異種型の混在コレクションが必要か？
+     ├── はい → dyn Trait（Box<dyn T>, &dyn T）を使用
+     └── いいえ → APIの境界を越えて「同一の」トレイトオブジェクトを共有する必要があるか？
+          ├── はい → dyn Trait を使用
+          └── いいえ → ジェネリクス / impl Trait を使用
 ```
 
-| Feature | `impl Trait` | `dyn Trait` |
-|---------|-------------|------------|
-| Dispatch | Static (monomorphized) | Dynamic (vtable) |
-| Performance | Best — inlinable | One indirection per call |
-| Heterogeneous collections | ❌ | ✅ |
-| Binary size per type | One copy each | Shared code |
-| Trait must be dyn compatible? | No | Yes |
-| Works in trait definitions | ✅ (Rust 1.75+) | Always |
+| 機能 | `impl Trait` | `dyn Trait` |
+|------|-------------|------------|
+| ディスパッチ | 静的（単相化） | 動的（vtable） |
+| パフォーマンス | 最高（インライン化可能） | 呼び出しごとに1回の間接参照 |
+| 異種型の混在コレクション | ❌ | ✅ |
+| 型ごとのバイナリサイズ | 型ごとに1コピー | 共有コード |
+| トレイトの dyn互換性が必要か | 不要 | 必要 |
+| トレイト定義内での利用 | ✅ (Rust 1.75+) | 常に可能 |
 
 ***
 
-## Type Erasure with `Any` and `TypeId`
+## `Any` と `TypeId` による型消去
 
-Sometimes you need to store values of *unknown* types and downcast them later — a pattern
-familiar from `void*` in C or `object` in C#. Rust provides this through `std::any::Any`:
+C言語の `void*` や C# の `object` のように、*未知*の型の値を保存し、後からダウンキャストしたい場合があります。Rust では `std::any::Any` を通じてこれを提供します：
 
 ```rust
 use std::any::Any;
 
-// Store heterogeneous values:
+// 異種型の値を保存・ログ出力する:
 fn log_value(value: &dyn Any) {
     if let Some(s) = value.downcast_ref::<String>() {
         println!("String: {s}");
     } else if let Some(n) = value.downcast_ref::<i32>() {
         println!("i32: {n}");
     } else {
-        // TypeId lets you inspect the type at runtime:
-        println!("Unknown type: {:?}", value.type_id());
+        // TypeId により実行時に型を検査可能:
+        println!("未知の型: {:?}", value.type_id());
     }
 }
 
-// Useful for plugin systems, event buses, or ECS-style architectures:
+// プラグインシステム、イベントバス、ECS風アーキテクチャに有用:
 struct AnyMap(std::collections::HashMap<std::any::TypeId, Box<dyn Any + Send>>);
 
 impl AnyMap {
@@ -719,51 +673,45 @@ fn main() {
 
     assert_eq!(map.get::<i32>(), Some(&42));
     assert_eq!(map.get::<String>().map(|s| s.as_str()), Some("hello"));
-    assert_eq!(map.get::<f64>(), None); // Never inserted
+    assert_eq!(map.get::<f64>(), None); // 挿入されていない
 }
 ```
 
-> **When to use `Any`**: Plugin/extension systems, type-indexed maps (`typemap`),
-> error downcasting (`anyhow::Error::downcast_ref`). Prefer generics or trait
-> objects when the set of types is known at compile time — `Any` is a last resort
-> that trades compile-time safety for flexibility.
+> **`Any` を使うべき場面**: プラグイン/拡張システム、型をインデックスとするマップ（`typemap`）、エラーのダウンキャスト（`anyhow::Error::downcast_ref`）。型の集合がコンパイル時に分かっている場合はジェネリクスやトレイトオブジェクトを優先してください — `Any` はコンパイル時の安全性を柔軟性と引き換えにする最後の手段です。
 
 ***
 
-## Extension Traits — Adding Methods to Types You Don't Own
+## 拡張トレイト（Extension Traits） — 所有していない型へのメソッド追加
 
-Rust's orphan rule prevents you from implementing a foreign trait on a foreign type.
-Extension traits are the standard workaround: define a **new trait** in your crate whose
-methods have a blanket implementation for any type that meets a bound. The caller imports
-the trait and the new methods appear on existing types.
+Rustの孤児ルール（orphan rule）により、外部クレートの型に対して外部クレートのトレイトを実装することはできません。
+拡張トレイトはこの制約に対する標準的な回避策です：自作クレート内で**新しいトレイト**を定義し、ある境界を満たすすべての型に対してそのトレイトをブランケット実装します。呼び出し側がそのトレイトを `use` でインポートすれば、既存の型に新しいメソッドが生えたように見えます。
 
-This pattern is pervasive in the Rust ecosystem: `itertools::Itertools`, `futures::StreamExt`,
-`tokio::io::AsyncReadExt`, `tower::ServiceExt`.
+このパターンは Rust エコシステム全体で広く使われています：`itertools::Itertools`、`futures::StreamExt`、`tokio::io::AsyncReadExt`、`tower::ServiceExt` など。
 
-### The Problem
+### 課題
 
 ```rust
-// We want to add a .mean() method to all iterators that yield f64.
-// But Iterator is defined in std and f64 is a primitive — orphan rule prevents:
+// f64 を生成するすべてのイテレータに .mean() メソッドを追加したい。
+// しかし Iterator は std で定義され、f64 はプリミティブであるため、孤児ルールに阻まれる:
 //
-// impl<I: Iterator<Item = f64>> I {   // ❌ Cannot add inherent methods to a foreign type
+// impl<I: Iterator<Item = f64>> I {   // ❌ 外部の型に固有メソッドを追加することはできない
 //     fn mean(self) -> f64 { ... }
 // }
 ```
 
-### The Solution: An Extension Trait
+### 解決策: 拡張トレイト
 
 ```rust
-/// Extension methods for iterators over numeric values.
+/// 数値を生成するイテレータのための拡張メソッド
 pub trait IteratorExt: Iterator {
-    /// Computes the arithmetic mean. Returns `None` for empty iterators.
+    /// 算術平均を計算する。空のイテレータの場合は `None` を返す。
     fn mean(self) -> Option<f64>
     where
         Self: Sized,
         Self::Item: Into<f64>;
 }
 
-// Blanket implementation — automatically applies to ALL iterators
+// ブランケット実装 — 条件を満たすすべてのイテレータに自動的に適用される
 impl<I: Iterator> IteratorExt for I {
     fn mean(self) -> Option<f64>
     where
@@ -780,19 +728,19 @@ impl<I: Iterator> IteratorExt for I {
     }
 }
 
-// Usage — just import the trait:
-use crate::IteratorExt;  // One import and the method appears on all iterators
+// 使用法 — トレイトをインポートするだけ:
+use crate::IteratorExt;  // インポートするだけで、すべてのイテレータにメソッドが現れる
 
 fn analyze_temperatures(readings: &[f64]) -> Option<f64> {
-    readings.iter().copied().mean()  // .mean() is now available!
+    readings.iter().copied().mean()  // .mean() が利用可能！
 }
 
 fn analyze_sensor_data(data: &[i32]) -> Option<f64> {
-    data.iter().copied().mean()  // Works on i32 too (i32: Into<f64>)
+    data.iter().copied().mean()  // i32 でも動作する (i32: Into<f64>)
 }
 ```
 
-### Real-World Example: Diagnostic Result Extensions
+### 実践例: 診断結果（Diagnostic Result）の拡張
 
 ```rust
 use std::collections::HashMap;
@@ -803,7 +751,7 @@ struct DiagResult {
     message: String,
 }
 
-/// Extension trait for Vec<DiagResult> — adds domain-specific analysis methods.
+/// Vec<DiagResult> のための拡張トレイト — ドメイン固有の集計メソッドを追加
 pub trait DiagResultsExt {
     fn passed_count(&self) -> usize;
     fn failed_count(&self) -> usize;
@@ -833,49 +781,47 @@ impl DiagResultsExt for Vec<DiagResult> {
     }
 }
 
-// Now any Vec<DiagResult> has these methods:
+// これで任意の Vec<DiagResult> がこれらのメソッドを持つようになる:
 fn report(results: Vec<DiagResult>) {
     if !results.overall_pass() {
         let failures = results.failures_by_component();
         for (component, fails) in &failures {
-            eprintln!("{component}: {} failures", fails.len());
+            eprintln!("{component}: {} 件の失敗", fails.len());
         }
     }
 }
 ```
 
-### Naming Convention
+### 命名規則
 
-The Rust ecosystem uses a consistent `Ext` suffix:
+Rust エコシステムでは一貫して `Ext` 接尾辞を使用します：
 
-| Crate | Extension Trait | Extends |
-|-------|----------------|---------|
+| クレート | 拡張トレイト | 拡張対象 |
+|----------|--------------|----------|
 | `itertools` | `Itertools` | `Iterator` |
 | `futures` | `StreamExt`, `FutureExt` | `Stream`, `Future` |
 | `tokio` | `AsyncReadExt`, `AsyncWriteExt` | `AsyncRead`, `AsyncWrite` |
 | `tower` | `ServiceExt` | `Service` |
-| `bytes` | `BufMut` (partial) | `&mut [u8]` |
-| Your crate | `DiagResultsExt` | `Vec<DiagResult>` |
+| `bytes` | `BufMut`（一部） | `&mut [u8]` |
+| 自作クレート | `DiagResultsExt` | `Vec<DiagResult>` |
 
-### When to Use
+### 使い分け
 
-| Situation | Use Extension Trait? |
-|-----------|:---:|
-| Adding convenience methods to a foreign type | ✅ |
-| Grouping domain-specific logic on generic collections | ✅ |
-| The method needs access to private fields | ❌ (use a wrapper/newtype) |
-| The method logically belongs on a new type you control | ❌ (just add it to your type) |
-| You want the method available without any import | ❌ (inherent methods only) |
+| 状況 | 拡張トレイトを使うべきか？ |
+|------|:---:|
+| 外部の型に便利なメソッドを追加したい | ✅ |
+| ジェネリックなコレクションにドメイン固有のロジックを集約したい | ✅ |
+| メソッドが型のプライベートフィールドにアクセスする必要がある | ❌（ラッパー/ニュータイプを使用） |
+| メソッドが自分が管理している新しい型に論理的に属している | ❌（その型の固有メソッドとして追加する） |
+| トレイトのインポートなしでメソッドを使えるようにしたい | ❌（固有メソッドのみ可能） |
 
 ***
 
-## Enum Dispatch — Static Polymorphism Without `dyn`
+## Enumディスパッチ — `dyn` なしの静的ポリモーフィズム
 
-When you have a **closed set** of types implementing a trait, you can replace `dyn Trait`
-with an enum whose variants hold the concrete types. This eliminates the vtable indirection
-and heap allocation while preserving the same caller-facing interface.
+トレイトを実装する型の集合が**クローズド（既知・有限）**である場合、`dyn Trait` の代わりに具象型をバリアントとして保持する enum を使用できます。これにより、呼び出し側のインターフェースを維持したまま、vtableの間接参照やヒープ割り当てを完全に排除できます。
 
-### The Problem with `dyn Trait`
+### `dyn Trait` の問題点
 
 ```rust
 trait Sensor {
@@ -893,25 +839,25 @@ impl Sensor for Gps {
 }
 impl Sensor for Thermometer {
     fn read(&self) -> f64 { self.temp_c }
-    fn name(&self) -> &str { "Thermometer" }
+    fn name(&self) -> &str { "温度計" }
 }
 impl Sensor for Accelerometer {
     fn read(&self) -> f64 { self.g_force }
-    fn name(&self) -> &str { "Accelerometer" }
+    fn name(&self) -> &str { "加速度計" }
 }
 
-// Heterogeneous collection with dyn — works, but has costs:
+// dyn を使った異種コレクション — 動作するがコストがある:
 fn read_all_dyn(sensors: &[Box<dyn Sensor>]) -> Vec<f64> {
     sensors.iter().map(|s| s.read()).collect()
-    // Each .read() goes through a vtable indirection
-    // Each Box allocates on the heap
+    // 各 .read() は vtable 間接参照を経由する
+    // 各 Box はヒープ割り当てを行う
 }
 ```
 
-### The Enum Dispatch Solution
+### Enumディスパッチによる解決策
 
 ```rust
-// Replace the trait object with an enum:
+// トレイトオブジェクトを列挙型（enum）に置き換える:
 enum AnySensor {
     Gps(Gps),
     Thermometer(Thermometer),
@@ -936,10 +882,10 @@ impl AnySensor {
     }
 }
 
-// Now: no heap allocation, no vtable, stored inline
+// ヒープ割り当てなし、vtableなし、インラインにメモリ配置:
 fn read_all(sensors: &[AnySensor]) -> Vec<f64> {
     sensors.iter().map(|s| s.read()).collect()
-    // Each .read() is a match branch — compiler can inline everything
+    // 各 .read() は match 分岐 — コンパイラがすべてインライン化可能
 }
 
 fn main() {
@@ -955,9 +901,9 @@ fn main() {
 }
 ```
 
-### Implement the Trait on the Enum
+### Enum自体にトレイトを実装する
 
-For interoperability, you can implement the original trait on the enum itself:
+相互運用性を高めるため、Enum自体に元のトレイトを実装することができます：
 
 ```rust
 impl Sensor for AnySensor {
@@ -978,15 +924,15 @@ impl Sensor for AnySensor {
     }
 }
 
-// Now AnySensor works anywhere a Sensor is expected via generics:
+// これで AnySensor は、ジェネリクス経由で Sensor が期待される任意の場所で利用可能になります:
 fn report<S: Sensor>(s: &S) {
     println!("{}: {:.2}", s.name(), s.read());
 }
 ```
 
-### Reducing Boilerplate with a Macro
+### マクロによるボイラープレートの削減
 
-The match-arm delegation is repetitive. A macro eliminates it:
+match アームの委譲コードは冗長になりがちです。マクロを使えばこれを簡潔に記述できます：
 
 ```rust
 macro_rules! dispatch_sensor {
@@ -1005,7 +951,7 @@ impl Sensor for AnySensor {
 }
 ```
 
-For larger projects, the `enum_dispatch` crate automates this entirely:
+規模の大きいプロジェクトでは、`enum_dispatch` クレートを使用することでこの処理を完全に自動化できます：
 
 ```rust
 use enum_dispatch::enum_dispatch;
@@ -1022,68 +968,62 @@ enum AnySensor {
     Thermometer,
     Accelerometer,
 }
-// All delegation code is generated automatically.
+// すべての委譲コードが自動生成される
 ```
 
-### `dyn Trait` vs Enum Dispatch — Decision Guide
+### `dyn Trait` vs Enumディスパッチ — 意思決定ガイド
 
 ```text
-Is the set of types closed (known at compile time)?
-├── YES → Prefer enum dispatch (faster, no heap allocation)
-│         ├── Few variants (< ~20)?     → Manual enum
-│         └── Many variants or growing? → enum_dispatch crate
-└── NO  → Must use dyn Trait (plugins, user-provided types)
+型の集合はクローズド（コンパイル時に判明している）か？
+├── はい → Enumディスパッチを優先（高速、ヒープ割り当てなし）
+│         ├── バリアントが少数（20未満）？     → 手動で enum を定義
+│         └── バリアントが多数、または増加予定？ → enum_dispatch クレート
+└── いいえ → dyn Trait を使う必要がある（プラグイン、ユーザー提供の型）
 ```
 
-| Property | `dyn Trait` | Enum Dispatch |
-|----------|:-----------:|:-------------:|
-| Dispatch cost | Vtable indirection (~2ns) | Branch prediction (~0.3ns) |
-| Heap allocation | Usually (Box) | None (inline) |
-| Cache-friendly | No (pointer chasing) | Yes (contiguous) |
-| Open to new types | ✅ (anyone can impl) | ❌ (closed set) |
-| Code size | Shared | One copy per variant |
-| Trait must be dyn compatible | Yes | No |
-| Adding a variant | No code changes | Update enum + match arms |
+| 特性 | `dyn Trait` | Enumディスパッチ |
+|------|:-----------:|:---------------:|
+| ディスパッチコスト | vtable間接参照（約2ns） | 分岐予測（約0.3ns） |
+| ヒープ割り当て | 通常あり（Box） | なし（インライン） |
+| キャッシュ効率 | 低い（ポインタ追跡） | 高い（連続配置） |
+| 新しい型へのオープン性 | ✅（誰でも実装可能） | ❌（クローズドな集合） |
+| コードサイズ | 共有 | バリアントごとにコピー |
+| トレイトの dyn互換性 | 必要 | 不要 |
+| バリアントの追加 | 既存コードの変更不要 | enum と match アームの更新が必要 |
 
-### When to Use Enum Dispatch
+### Enumディスパッチの適用シナリオ
 
-| Scenario | Recommendation |
-|----------|---------------|
-| Diagnostic test types (CPU, GPU, NIC, Memory, ...) | ✅ Enum dispatch — closed set, known at compile time |
-| Bus protocols (SPI, I2C, UART, ...) | ✅ Enum dispatch or Config trait |
-| Plugin system (user loads .so at runtime) | ❌ Use `dyn Trait` |
-| 2-3 variants | ✅ Manual enum dispatch |
-| 10+ variants with many methods | ✅ `enum_dispatch` crate |
-| Performance-critical inner loop | ✅ Enum dispatch (eliminates vtable) |
+| シナリオ | 推奨方針 |
+|----------|----------|
+| 診断テストの種類（CPU、GPU、NIC、メモリなど） | ✅ Enumディスパッチ — クローズドであり、コンパイル時に既知 |
+| バスプロトコル（SPI、I2C、UARTなど） | ✅ Enumディスパッチ または 設定トレイト |
+| プラグインシステム（実行時に .so をロード） | ❌ `dyn Trait` を使用 |
+| 2〜3個のバリアント | ✅ 手動での Enumディスパッチ |
+| 10個以上のバリアントと多数のメソッド | ✅ `enum_dispatch` クレート |
+| パフォーマンスが極めて重要なインナーループ | ✅ Enumディスパッチ（vtableを排除） |
 
 ***
 
-## Capability Mixins — Associated Types as Zero-Cost Composition
+## ケイパビリティ・ミックスイン — ゼロコスト合成としての関連型
 
-Ruby developers compose behaviour with **mixins** — `include SomeModule` injects methods
-into a class.  Rust traits with **associated types + default methods + blanket impls**
-produce the same result, except:
+Ruby開発者は**ミックスイン（mixin）**を用いて振る舞いを合成します（`include SomeModule` でクラスにメソッドを注入）。Rustのトレイトにおいて、**関連型 + デフォルトメソッド + ブランケット実装**を組み合わせることで、これと同じ合成を実現できます。しかも以下の利点があります：
 
-* Everything resolves at **compile time** — no method-missing surprises
-* Each associated type is a **knob** that changes what the default methods produce
-* The compiler **monomorphises** each combination — zero vtable overhead
+* すべてが**コンパイル時**に解決される — `method_missing` のような実行時の予期せぬエラーがない
+* 各関連型が「調整ノブ」となり、デフォルトメソッドが生成する振る舞いをカスタマイズできる
+* コンパイラが各組み合わせを**単相化**する — vtable オーバーヘッドはゼロ
 
-### The Problem: Cross-Cutting Bus Dependencies
+### 課題: 横断的なハードウェアバスの依存関係
 
-Hardware diagnostic routines share common operations — read an IPMI sensor, toggle a
-GPIO rail, sample a temperature over SPI — but different diagnostics need different
-combinations.  Inheritance hierarchies don't exist in Rust.  Passing every bus handle
-as a function argument creates unwieldy signatures.  We need a way to **mix in** bus
-capabilities à la carte.
+ハードウェアの診断ルーチンには共通の操作（IPMIセンサの読み取り、GPIOレールの切り替え、SPI経由の温度サンプリングなど）が多く存在します。しかし、診断の種類によって必要な組み合わせは異なります。Rustには継承階層が存在せず、すべてのバスハンドルを関数の引数として渡し回すとシグネチャが肥大化します。必要なバスのケイパビリティ（機能）をアラカルト形式で**ミックスイン**する手段が求められます。
 
-### Step 1 — Define "Ingredient" Traits
+### ステップ 1 — 「構成要素（Ingredient）」トレイトの定義
 
-Each ingredient provides one hardware capability via an associated type:
+各構成要素は、関連型を通じて1つのハードウェア機能を提供します：
 
 ```rust
 use std::io;
 
-// ── Bus abstractions (traits the hardware team provides) ──────────
+// ── バス抽象化（ハードウェアチームが提供するトレイト） ──────────
 pub trait SpiBus {
     fn spi_transfer(&self, tx: &[u8], rx: &mut [u8]) -> io::Result<()>;
 }
@@ -1104,7 +1044,7 @@ pub trait IpmiBmc {
     fn read_sensor(&self, sensor_id: u8) -> io::Result<f64>;
 }
 
-// ── Ingredient traits — one per bus, carries an associated type ───
+// ── 構成要素トレイト — バスごとに1つ、関連型を保持 ───
 pub trait HasSpi {
     type Spi: SpiBus;
     fn spi(&self) -> &Self::Spi;
@@ -1126,52 +1066,51 @@ pub trait HasIpmi {
 }
 ```
 
-Each ingredient is tiny, generic, and testable in isolation.
+各構成要素は非常に小さく、ジェネリックであり、単体でテスト可能です。
 
-### Step 2 — Define "Mixin" Traits
+### ステップ 2 — 「ミックスイン」トレイトの定義
 
-A mixin trait declares its required ingredients as supertraits, then provides all
-its methods via **defaults** — implementors get them for free:
+ミックスイントレイトは、必要な構成要素をスーパートレイトとして宣言し、すべてのメソッドを**デフォルト実装**として提供します — 実装側はこれらを無償で獲得できます：
 
 ```rust
-/// Mixin: fan diagnostics — needs I2C (tachometer) + GPIO (PWM enable)
+/// ミックスイン: ファン診断 — I2C（タコメータ） + GPIO（PWM有効化）が必要
 pub trait FanDiagMixin: HasI2c + HasGpio {
-    /// Read fan RPM from the tachometer IC over I2C.
+    /// I2C経由でタコメータICからファンの回転数（RPM）を読み取る
     fn read_fan_rpm(&self, fan_id: u8) -> io::Result<u32> {
         let mut buf = [0u8; 2];
         self.i2c().i2c_read(0x48 + fan_id, 0x00, &mut buf)?;
-        Ok(u16::from_be_bytes(buf) as u32 * 60) // tach counts → RPM
+        Ok(u16::from_be_bytes(buf) as u32 * 60) // カウント値 → RPM 変換
     }
 
-    /// Enable or disable the fan PWM output via GPIO.
+    /// GPIO経由でファンPWM出力を有効化/無効化する
     fn set_fan_pwm(&self, enable: bool) -> io::Result<()> {
         if enable { self.gpio().set_high() }
         else      { self.gpio().set_low() }
     }
 
-    /// Full fan health check — read RPM + verify within threshold.
+    /// ファン健全性チェック — RPMを読み取り閾値内か検証する
     fn check_fan_health(&self, fan_id: u8, min_rpm: u32) -> io::Result<bool> {
         let rpm = self.read_fan_rpm(fan_id)?;
         Ok(rpm >= min_rpm)
     }
 }
 
-/// Mixin: temperature monitoring — needs SPI (thermocouple ADC) + IPMI (BMC sensors)
+/// ミックスイン: 温度監視 — SPI（熱電対ADC） + IPMI（BMCセンサ）が必要
 pub trait TempMonitorMixin: HasSpi + HasIpmi {
-    /// Read a thermocouple via the SPI ADC (e.g. MAX31855).
+    /// SPI ADC（MAX31855など）経由で熱電対の値を読み取る
     fn read_thermocouple(&self) -> io::Result<f64> {
         let mut rx = [0u8; 4];
         self.spi().spi_transfer(&[0x00; 4], &mut rx)?;
-        let raw = i32::from_be_bytes(rx) >> 18; // 14-bit signed
+        let raw = i32::from_be_bytes(rx) >> 18; // 14ビット符号付き
         Ok(raw as f64 * 0.25)
     }
 
-    /// Read a BMC-managed temperature sensor via IPMI.
+    /// IPMI経由でBMC管理下の温度センサを読み取る
     fn read_bmc_temp(&self, sensor_id: u8) -> io::Result<f64> {
         self.ipmi().read_sensor(sensor_id)
     }
 
-    /// Cross-validate: thermocouple vs BMC must agree within delta.
+    /// 相互検証: 熱電対とBMCセンサの値が許容誤差（delta）内に収まっているか確認する
     fn validate_temps(&self, sensor_id: u8, max_delta: f64) -> io::Result<bool> {
         let tc = self.read_thermocouple()?;
         let bmc = self.read_bmc_temp(sensor_id)?;
@@ -1179,29 +1118,29 @@ pub trait TempMonitorMixin: HasSpi + HasIpmi {
     }
 }
 
-/// Mixin: power sequencing — needs GPIO (rail enable) + IPMI (event logging)
+/// ミックスイン: 電源シーケンス — GPIO（レール有効化） + IPMI（イベントログ）が必要
 pub trait PowerSeqMixin: HasGpio + HasIpmi {
-    /// Assert the power-good GPIO and verify via IPMI sensor.
+    /// Power-Good GPIO をアサートし、IPMIセンサで検証する
     fn enable_power_rail(&self, sensor_id: u8) -> io::Result<bool> {
         self.gpio().set_high()?;
         std::thread::sleep(std::time::Duration::from_millis(50));
         let voltage = self.ipmi().read_sensor(sensor_id)?;
-        Ok(voltage > 0.8) // above 80% nominal = good
+        Ok(voltage > 0.8) // 公称値の80%以上なら正常
     }
 
-    /// De-assert power and log shutdown via IPMI OEM command.
+    /// 電源を遮断し、IPMI OEMコマンド経由でシャットダウンを記録する
     fn disable_power_rail(&self) -> io::Result<()> {
         self.gpio().set_low()?;
-        // Log OEM "power rail disabled" event to BMC
+        // BMCに OEM "power rail disabled" イベントを記録
         self.ipmi().raw_command(0x2E, 0x01, &[0x00, 0x01])?;
         Ok(())
     }
 }
 ```
 
-### Step 3 — Blanket Impls Make It Truly "Mixin"
+### ステップ 3 — ブランケット実装による「完全自動ミックスイン」
 
-The magic line — provide the ingredients, get the methods:
+必要な構成要素を実装するだけで、自動的にメソッド群が付与されます：
 
 ```rust
 impl<T: HasI2c + HasGpio>  FanDiagMixin    for T {}
@@ -1209,13 +1148,12 @@ impl<T: HasSpi  + HasIpmi>  TempMonitorMixin for T {}
 impl<T: HasGpio + HasIpmi>  PowerSeqMixin   for T {}
 ```
 
-Any struct that implements the right ingredient traits **automatically** gains every
-mixin method — no boilerplate, no forwarding, no inheritance.
+適切な構成要素トレイトを実装した構造体は、ボイラープレートや転送メソッド、継承を書くことなく、**自動的に**すべてのミックスインメソッドを獲得します。
 
-### Step 4 — Wire Up Production
+### ステップ 4 — 本番環境への接続
 
 ```rust
-// ── Concrete bus implementations (Linux platform) ────────────────
+// ── 具象バス実装（Linuxプラットフォーム） ────────────────
 struct LinuxSpi  { dev: String }
 struct LinuxI2c  { dev: String }
 struct SysfsGpio { pin: u32 }
@@ -1223,13 +1161,13 @@ struct IpmiTool  { timeout_secs: u32 }
 
 impl SpiBus for LinuxSpi {
     fn spi_transfer(&self, _tx: &[u8], _rx: &mut [u8]) -> io::Result<()> {
-        // spidev ioctl — omitted for brevity
+        // spidev ioctl — 簡略化のため省略
         Ok(())
     }
 }
 impl I2cBus for LinuxI2c {
     fn i2c_read(&self, _addr: u8, _reg: u8, _buf: &mut [u8]) -> io::Result<()> {
-        // i2c-dev ioctl — omitted for brevity
+        // i2c-dev ioctl — 簡略化のため省略
         Ok(())
     }
     fn i2c_write(&self, _addr: u8, _reg: u8, _data: &[u8]) -> io::Result<()> { Ok(()) }
@@ -1241,13 +1179,13 @@ impl GpioPin for SysfsGpio {
 }
 impl IpmiBmc for IpmiTool {
     fn raw_command(&self, _nf: u8, _cmd: u8, _data: &[u8]) -> io::Result<Vec<u8>> {
-        // shells out to ipmitool — omitted for brevity
+        // ipmitool 呼び出し — 簡略化のため省略
         Ok(vec![])
     }
     fn read_sensor(&self, _id: u8) -> io::Result<f64> { Ok(25.0) }
 }
 
-// ── Production platform — all four buses ─────────────────────────
+// ── 本番用プラットフォーム — 4つのバスすべてを統合 ─────────────────────────
 struct DiagPlatform {
     spi:  LinuxSpi,
     i2c:  LinuxI2c,
@@ -1260,17 +1198,17 @@ impl HasI2c  for DiagPlatform { type I2c  = LinuxI2c;  fn i2c(&self)  -> &LinuxI
 impl HasGpio for DiagPlatform { type Gpio = SysfsGpio; fn gpio(&self) -> &SysfsGpio { &self.gpio } }
 impl HasIpmi for DiagPlatform { type Ipmi = IpmiTool;  fn ipmi(&self) -> &IpmiTool  { &self.ipmi } }
 
-// DiagPlatform now has ALL mixin methods:
+// DiagPlatform はすべてのミックスインメソッドを使用可能:
 fn production_diagnostics(platform: &DiagPlatform) -> io::Result<()> {
-    let rpm = platform.read_fan_rpm(0)?;       // from FanDiagMixin
-    let tc  = platform.read_thermocouple()?;   // from TempMonitorMixin
-    let ok  = platform.enable_power_rail(42)?;  // from PowerSeqMixin
-    println!("Fan: {rpm} RPM, Temp: {tc}°C, Power: {ok}");
+    let rpm = platform.read_fan_rpm(0)?;       // FanDiagMixin より
+    let tc  = platform.read_thermocouple()?;   // TempMonitorMixin より
+    let ok  = platform.enable_power_rail(42)?;  // PowerSeqMixin より
+    println!("ファン: {rpm} RPM, 温度: {tc}°C, 電源: {ok}");
     Ok(())
 }
 ```
 
-### Step 5 — Test With Mocks (No Hardware Required)
+### ステップ 5 — モックを用いたテスト（実機ハードウェア不要）
 
 ```rust
 #[cfg(test)]
@@ -1285,7 +1223,7 @@ mod tests {
 
     impl SpiBus for MockSpi {
         fn spi_transfer(&self, _tx: &[u8], rx: &mut [u8]) -> io::Result<()> {
-            // Encode mock temp as MAX31855 format
+            // モックの温度を MAX31855 形式にエンコード
             let raw = ((self.temp.get() / 0.25) as i32) << 18;
             rx.copy_from_slice(&raw.to_be_bytes());
             Ok(())
@@ -1309,14 +1247,14 @@ mod tests {
         fn read_sensor(&self, _: u8) -> io::Result<f64> { Ok(self.sensor_val.get()) }
     }
 
-    // ── Partial platform: only fan-related buses ─────────────────
+    // ── 部分的プラットフォーム: ファン関連のバスのみ ─────────────────
     struct FanTestRig {
         i2c:  MockI2c,
         gpio: MockGpio,
     }
     impl HasI2c  for FanTestRig { type I2c  = MockI2c;  fn i2c(&self)  -> &MockI2c  { &self.i2c  } }
     impl HasGpio for FanTestRig { type Gpio = MockGpio; fn gpio(&self) -> &MockGpio { &self.gpio } }
-    // FanTestRig gets FanDiagMixin but NOT TempMonitorMixin or PowerSeqMixin
+    // FanTestRig は FanDiagMixin を獲得するが、TempMonitorMixin や PowerSeqMixin は獲得しない
 
     #[test]
     fn fan_health_check_passes_above_threshold() {
@@ -1338,35 +1276,32 @@ mod tests {
 }
 ```
 
-Notice that `FanTestRig` only implements `HasI2c + HasGpio` — it gets `FanDiagMixin`
-automatically, but the compiler **refuses** `rig.read_thermocouple()` because `HasSpi`
-is not satisfied.  This is mixin scoping enforced at compile time.
+`FanTestRig` は `HasI2c + HasGpio` のみを実装しているため、自動的に `FanDiagMixin` は獲得しますが、`HasSpi` が満たされていないため、コンパイラは `rig.read_thermocouple()` の呼び出しを**拒絶**します。これがコンパイル時に強制されるミックスインのスコープ制御です。
 
-### Conditional Methods — Beyond What Ruby Can Do
+### 条件付きメソッド — Rubyの先を行く機能
 
-Add `where` bounds to individual default methods.  The method only **exists** when
-the associated type satisfies the extra bound:
+個別のデフォルトメソッドに `where` 境界を追加できます。そのメソッドは、関連型が追加の境界を満たしている場合にのみ**存在**します：
 
 ```rust
-/// Marker trait for DMA-capable SPI controllers
+/// DMA対応 SPIコントローラのマーカートレイト
 pub trait DmaCapable: SpiBus {
     fn dma_transfer(&self, tx: &[u8], rx: &mut [u8]) -> io::Result<()>;
 }
 
-/// Marker trait for interrupt-capable GPIO pins
+/// 割り込み対応 GPIOピンのマーカートレイト
 pub trait InterruptCapable: GpioPin {
     fn wait_for_edge(&self, timeout_ms: u32) -> io::Result<bool>;
 }
 
 pub trait AdvancedDiagMixin: HasSpi + HasGpio {
-    // Always available
+    // 常に利用可能
     fn basic_probe(&self) -> io::Result<bool> {
         let mut rx = [0u8; 1];
         self.spi().spi_transfer(&[0xFF], &mut rx)?;
         Ok(rx[0] != 0x00)
     }
 
-    // Only exists when the SPI controller supports DMA
+    // SPIコントローラが DMA をサポートしている場合にのみ存在
     fn bulk_sensor_read(&self, buf: &mut [u8]) -> io::Result<()>
     where
         Self::Spi: DmaCapable,
@@ -1374,7 +1309,7 @@ pub trait AdvancedDiagMixin: HasSpi + HasGpio {
         self.spi().dma_transfer(&vec![0x00; buf.len()], buf)
     }
 
-    // Only exists when the GPIO pin supports interrupts
+    // GPIOピンが割り込みをサポートしている場合にのみ存在
     fn wait_for_fault_signal(&self, timeout_ms: u32) -> io::Result<bool>
     where
         Self::Gpio: InterruptCapable,
@@ -1386,13 +1321,11 @@ pub trait AdvancedDiagMixin: HasSpi + HasGpio {
 impl<T: HasSpi + HasGpio> AdvancedDiagMixin for T {}
 ```
 
-If your platform's SPI doesn't support DMA, calling `bulk_sensor_read()` is a
-**compile error**, not a runtime crash.  Ruby's `respond_to?` check is the closest
-equivalent — but it happens at deploy time, not compile time.
+プラットフォームのSPIがDMAに対応していない場合、`bulk_sensor_read()` を呼び出すと実行時クラッシュではなく**コンパイルエラー**になります。Ruby の `respond_to?` によるチェックに似ていますが、判定は実行時ではなくコンパイル時に行われます。
 
-### Composability: Stacking Mixins
+### 合成性: ミックスインの積み重ね
 
-Multiple mixins can share the same ingredient — no diamond problem:
+複数のミックスインが同じ構成要素を共有できます — 多重継承のような菱形継承問題（diamond problem）は発生しません：
 
 ```text
 ┌─────────────┐    ┌───────────┐    ┌──────────────┐
@@ -1407,60 +1340,51 @@ Multiple mixins can share the same ingredient — no diamond problem:
            └───────────────────────────┘
 ```
 
-`DiagPlatform` implements `HasGpio` **once**, and both `FanDiagMixin` and
-`PowerSeqMixin` use the same `self.gpio()`.  In Ruby, this would be two modules
-both calling `self.gpio_pin` — but if they expected different pin numbers, you'd
-discover the conflict at runtime.  In Rust, you can disambiguate at the type level.
+`DiagPlatform` は `HasGpio` を**1回**だけ実装し、`FanDiagMixin` と `PowerSeqMixin` の双方が同じ `self.gpio()` を使用します。Ruby では2つのモジュールが共に `self.gpio_pin` を呼び出すことになりますが、異なるピン番号を期待していた場合は実行時まで衝突がわかりません。Rust では型レベルで曖昧さを排除できます。
 
-### Comparison: Ruby Mixins vs Rust Capability Mixins
+### 比較: Rubyのミックスイン vs Rustのケイパビリティ・ミックスイン
 
-| Dimension | Ruby Mixins | Rust Capability Mixins |
-|-----------|-------------|------------------------|
-| Dispatch | Runtime (method table lookup) | Compile-time (monomorphised) |
-| Safe composition | MRO linearisation hides conflicts | Compiler rejects ambiguity |
-| Conditional methods | `respond_to?` at runtime | `where` bounds at compile time |
-| Overhead | Method dispatch + GC | Zero-cost (inlined) |
-| Testability | Stub/mock via metaprogramming | Generic over mock types |
-| Adding new buses | `include` at runtime | Add ingredient trait, recompile |
-| Runtime flexibility | `extend`, `prepend`, open classes | None (fully static) |
+| 観点 | Rubyのミックスイン | Rustのケイパビリティ・ミックスイン |
+|------|-------------------|-----------------------------------|
+| ディスパッチ | 実行時（メソッドテーブルの探索） | コンパイル時（単相化） |
+| 安全な合成 | MRO（探索順序）の線形化が競合を隠蔽 | コンパイラが曖昧さを拒絶 |
+| 条件付きメソッド | 実行時に `respond_to?` | コンパイル時に `where` 境界 |
+| オーバーヘッド | メソッド呼び出し + GC | ゼロコスト（インライン化） |
+| テスタビリティ | メタプログラミングによるスタブ/モック | モック型に対するジェネリクス |
+| 新しいバスの追加 | 実行時に `include` | 構成要素トレイトを追加して再コンパイル |
+| 実行時の柔軟性 | `extend`、`prepend`、オープンクラス | なし（完全に静的） |
 
-### When to Use Capability Mixins
+### ケイパビリティ・ミックスインの使いどころ
 
-| Scenario | Use Mixins? |
-|----------|:-----------:|
-| Multiple diagnostics share bus-reading logic | ✅ |
-| Test harness needs different bus subsets | ✅ (partial ingredient structs) |
-| Methods only valid for certain bus capabilities (DMA, IRQ) | ✅ (conditional `where` bounds) |
-| You need runtime module loading (plugins) | ❌ (use `dyn Trait` or enum dispatch) |
-| Single struct with one bus — no sharing needed | ❌ (keep it simple) |
-| Cross-crate ingredients with coherence issues | ⚠️ (use newtype wrappers) |
+| シナリオ | ミックスインを使うべきか？ |
+|----------|:---:|
+| 複数の診断ルーチンでバス読み取りロジックを共有する | ✅ |
+| テストハーネスでバスの異なる部分集合が必要 | ✅（部分的な構成要素構造体） |
+| 特定のバス機能（DMA、IRQ）でのみ有効なメソッド | ✅（条件付き `where` 境界） |
+| 実行時のモジュール動的読み込みが必要（プラグイン） | ❌（`dyn Trait` または Enumディスパッチ） |
+| 1つのバスしか持たない単一構造体 — 共有不要 | ❌（シンプルに保つ） |
+| クレート境界を跨ぎ、コヒーレンス制約（孤児ルール）に抵触する | ⚠️（ニュータイプラッパーを使用） |
 
-> **Key Takeaways — Capability Mixins**
+> **重要ポイント — ケイパビリティ・ミックスイン**
 >
-> 1. **Ingredient trait** = associated type + accessor method (e.g., `HasSpi`)
-> 2. **Mixin trait** = supertrait bounds on ingredients + default method bodies
-> 3. **Blanket impl** = `impl<T: HasX + HasY> Mixin for T {}` — auto-injects methods
-> 4. **Conditional methods** = `where Self::Spi: DmaCapable` on individual defaults
-> 5. **Partial platforms** = test structs that only impl the needed ingredients
-> 6. **No runtime cost** — the compiler generates specialised code for each platform type
+> 1. **構成要素トレイト** = 関連型 + アクセサメソッド（例: `HasSpi`）
+> 2. **ミックスイントレイト** = 構成要素に対するスーパートレイト境界 + デフォルトメソッド本体
+> 3. **ブランケット実装** = `impl<T: HasX + HasY> Mixin for T {}` — メソッドの自動注入
+> 4. **条件付きメソッド** = 個別のデフォルトメソッドに対する `where Self::Spi: DmaCapable`
+> 5. **部分プラットフォーム** = 必要な構成要素のみを実装したテスト用構造体
+> 6. **実行時コストゼロ** — コンパイラがプラットフォーム型ごとに特殊化されたコードを生成
 
 ***
 
-## Typed Commands — GADT-Style Return Type Safety
+## 型付きコマンド — GADTスタイルの戻り値型安全性
 
-In Haskell, **Generalised Algebraic Data Types (GADTs)** let each constructor of a
-data type refine the type parameter — so `Expr Int` and `Expr Bool` are enforced by
-the type checker.  Rust has no direct GADT syntax, but **traits with associated types**
-achieve the same guarantee: the command type **determines** the response type, and
-mixing them up is a compile error.
+Haskellでは、**一般化代数データ型（GADT: Generalised Algebraic Data Types）**を用いることで、データ型の各コンストラクタが型パラメータを精密化（refine）できます。これにより `Expr Int` や `Expr Bool` が型チェッカーによって厳格に強制されます。Rustには直接的なGADT構文はありませんが、**関連型を持つトレイト**によって同様の保証を実現できます。コマンド型がレスポンスの型を**一意に決定**し、それらを混同することはコンパイルエラーとなります。
 
-This pattern is particularly powerful for hardware diagnostics, where IPMI commands,
-register reads, and sensor queries each return different physical quantities that
-should never be confused.
+このパターンはハードウェア診断において特に強力です。IPMIコマンド、レジスタ読み取り、センサクエリはそれぞれ異なる物理量を返し、決して取り違えてはならないからです。
 
-### The Problem: The Untyped `Vec<u8>` Swamp
+### 課題: 型付けされていない `Vec<u8>` の沼
 
-Most C/C++ IPMI stacks — and naïve Rust ports — use raw bytes everywhere:
+C/C++ の多くの IPMI スタック — そして安易に移植された Rust コード — では、至る所で生のバイト列が使用されます：
 
 ```rust
 use std::io;
@@ -1469,53 +1393,52 @@ struct BmcConnectionUntyped { timeout_secs: u32 }
 
 impl BmcConnectionUntyped {
     fn raw_command(&self, net_fn: u8, cmd: u8, data: &[u8]) -> io::Result<Vec<u8>> {
-        // ... shells out to ipmitool ...
-        Ok(vec![0x00, 0x19, 0x00]) // stub
+        // ... ipmitool を呼び出す ...
+        Ok(vec![0x00, 0x19, 0x00]) // スタブ
     }
 }
 
 fn diagnose_thermal_untyped(bmc: &BmcConnectionUntyped) -> io::Result<()> {
-    // Read CPU temperature — sensor ID 0x20
+    // CPU温度の読み取り — センサID 0x20
     let raw = bmc.raw_command(0x04, 0x2D, &[0x20])?;
-    let cpu_temp = raw[0] as f64;  // 🤞 hope byte 0 is the reading
+    let cpu_temp = raw[0] as f64;  // 🤞 バイト0が測定値であることを祈る
 
-    // Read fan speed — sensor ID 0x30
+    // ファン速度の読み取り — センサID 0x30
     let raw = bmc.raw_command(0x04, 0x2D, &[0x30])?;
-    let fan_rpm = raw[0] as u32;  // 🐛 BUG: fan speed is 2 bytes LE
+    let fan_rpm = raw[0] as u32;  // 🐛 バグ: ファン速度はリトルエンディアンの2バイト
 
-    // Read inlet voltage — sensor ID 0x40
+    // 入力電圧の読み取り — センサID 0x40
     let raw = bmc.raw_command(0x04, 0x2D, &[0x40])?;
-    let voltage = raw[0] as f64;  // 🐛 BUG: need to divide by 1000
+    let voltage = raw[0] as f64;  // 🐛 バグ: 1000 で割る必要がある（mV → V）
 
-    // 🐛 Comparing °C to RPM — compiles, but nonsensical
+    // 🐛 °C と RPM を比較 — コンパイルは通るが意味不明
     if cpu_temp > fan_rpm as f64 {
-        println!("uh oh");
+        println!("問題が発生しました");
     }
 
-    // 🐛 Passing Volts as temperature — compiles fine
+    // 🐛 電圧を温度として渡している — 警告なくコンパイルが通ってしまう
     log_temp_untyped(voltage);
     log_volts_untyped(cpu_temp);
 
     Ok(())
 }
 
-fn log_temp_untyped(t: f64)  { println!("Temp: {t}°C"); }
-fn log_volts_untyped(v: f64) { println!("Voltage: {v}V"); }
+fn log_temp_untyped(t: f64)  { println!("温度: {t}°C"); }
+fn log_volts_untyped(v: f64) { println!("電圧: {v}V"); }
 ```
 
-**Every reading is `f64`** — the compiler has no idea that one is a temperature, another
-is RPM, another is voltage.  Four distinct bugs compile without warning:
+**すべての測定値が `f64`** になってしまっています — コンパイラは、ある値が温度であり、別の値がRPMであり、また別の値が電圧であることを知り得ません。以下の4つの異なるバグが、何のエラーも警告もなくコンパイルを通ってしまいます：
 
-| # | Bug | Consequence | Discovered |
-|---|-----|-------------|------------|
-| 1 | Fan RPM parsed as 1 byte instead of 2 | Reads 25 RPM instead of 6400 | Production, 3 AM fan-failure flood |
-| 2 | Voltage not divided by 1000 | 12000V instead of 12.0V | Threshold check flags every PSU |
-| 3 | Comparing °C to RPM | Meaningless boolean | Possibly never |
-| 4 | Voltage passed to `log_temp_untyped()` | Silent data corruption in logs | 6 months later, reading history |
+| # | バグの内容 | 影響 | 発覚のタイミング |
+|---|------------|------|------------------|
+| 1 | ファン回転数を2バイトではなく1バイトとしてパース | 6400 RPM のはずが 25 RPM と誤読 | 本番運用中、午前3時のファン異常アラート乱発 |
+| 2 | 電圧を1000で割り忘れた | 12.0V のはずが 12000V となる | 閾値判定で全電源ユニット（PSU）が異常判定 |
+| 3 | °C と RPM を比較している | 無意味な真偽値判定 | おそらく永遠に気づかれない |
+| 4 | 電圧を `log_temp_untyped()` に渡した | ログ内の暗黙的なデータ破損 | 半年後、過去のログを調査した時 |
 
-### The Solution: Typed Commands via Associated Types
+### 解決策: 関連型を用いた型付きコマンド
 
-#### Step 1 — Domain newtypes
+#### ステップ 1 — ドメイン固有のニュータイプ（Newtype）
 
 ```rust
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
@@ -1531,59 +1454,59 @@ struct Volts(f64);
 struct Watts(f64);
 ```
 
-#### Step 2 — The command trait (the GADT equivalent)
+#### ステップ 2 — コマンドトレイト（GADTに相当）
 
-The associated type `Response` is the key — it binds each command to its return type:
+関連型 `Response` が鍵となります — 各コマンドをその戻り値型と強固に結びつけます：
 
 ```rust
 trait IpmiCmd {
-    /// The GADT "index" — determines what execute() returns.
+    /// GADT の「型インデックス」 — execute() が何を返すかを決定する
     type Response;
 
     fn net_fn(&self) -> u8;
     fn cmd_byte(&self) -> u8;
     fn payload(&self) -> Vec<u8>;
 
-    /// Parsing is encapsulated HERE — each command knows its own byte layout.
+    /// パース処理は「ここ」にカプセル化される — 各コマンドが自身のバイトレイアウトを熟知している
     fn parse_response(&self, raw: &[u8]) -> io::Result<Self::Response>;
 }
 ```
 
-#### Step 3 — One struct per command, parsing written once
+#### ステップ 3 — コマンドごとに構造体を定義し、パース処理を一度だけ記述
 
 ```rust
 struct ReadTemp { sensor_id: u8 }
 impl IpmiCmd for ReadTemp {
-    type Response = Celsius;  // ← "this command returns a temperature"
+    type Response = Celsius;  // ← 「このコマンドは温度を返す」
     fn net_fn(&self) -> u8 { 0x04 }
     fn cmd_byte(&self) -> u8 { 0x2D }
     fn payload(&self) -> Vec<u8> { vec![self.sensor_id] }
     fn parse_response(&self, raw: &[u8]) -> io::Result<Celsius> {
-        // Signed byte per IPMI SDR — written once, tested once
+        // IPMI SDR 仕様に基づく符号付きバイト — 記述もテストも一度きり
         Ok(Celsius(raw[0] as i8 as f64))
     }
 }
 
 struct ReadFanSpeed { fan_id: u8 }
 impl IpmiCmd for ReadFanSpeed {
-    type Response = Rpm;     // ← "this command returns RPM"
+    type Response = Rpm;     // ← 「このコマンドは RPM を返す」
     fn net_fn(&self) -> u8 { 0x04 }
     fn cmd_byte(&self) -> u8 { 0x2D }
     fn payload(&self) -> Vec<u8> { vec![self.fan_id] }
     fn parse_response(&self, raw: &[u8]) -> io::Result<Rpm> {
-        // 2-byte LE — the correct layout, encoded once
+        // 2バイトリトルエンディアン — 正しいレイアウトを一度だけ定義
         Ok(Rpm(u16::from_le_bytes([raw[0], raw[1]]) as u32))
     }
 }
 
 struct ReadVoltage { rail: u8 }
 impl IpmiCmd for ReadVoltage {
-    type Response = Volts;   // ← "this command returns voltage"
+    type Response = Volts;   // ← 「このコマンドは電圧を返す」
     fn net_fn(&self) -> u8 { 0x04 }
     fn cmd_byte(&self) -> u8 { 0x2D }
     fn payload(&self) -> Vec<u8> { vec![self.rail] }
     fn parse_response(&self, raw: &[u8]) -> io::Result<Volts> {
-        // Millivolts → Volts, always correct
+        // ミリボルト → ボルト変換、常に正確
         Ok(Volts(u16::from_le_bytes([raw[0], raw[1]]) as f64 / 1000.0))
     }
 }
@@ -1600,25 +1523,25 @@ impl IpmiCmd for ReadFru {
 }
 ```
 
-#### Step 4 — The executor (zero `dyn`, monomorphised)
+#### ステップ 4 — 実行エンジン（エグゼキュータ: `dyn` なし、単相化）
 
 ```rust
 struct BmcConnection { timeout_secs: u32 }
 
 impl BmcConnection {
-    /// Generic over any command — compiler generates one version per command type.
+    /// 任意のコマンドに対してジェネリック — コンパイラがコマンド型ごとに1つのバージョンを生成
     fn execute<C: IpmiCmd>(&self, cmd: &C) -> io::Result<C::Response> {
         let raw = self.raw_send(cmd.net_fn(), cmd.cmd_byte(), &cmd.payload())?;
         cmd.parse_response(&raw)
     }
 
     fn raw_send(&self, _nf: u8, _cmd: u8, _data: &[u8]) -> io::Result<Vec<u8>> {
-        Ok(vec![0x19, 0x00]) // stub — real impl calls ipmitool
+        Ok(vec![0x19, 0x00]) // スタブ — 実際の実装では ipmitool を呼び出す
     }
 }
 ```
 
-#### Step 5 — Caller code: all four bugs become compile errors
+#### ステップ 5 — 呼び出し側コード: 4つのバグすべてがコンパイルエラーになる
 
 ```rust
 fn diagnose_thermal(bmc: &BmcConnection) -> io::Result<()> {
@@ -1626,41 +1549,40 @@ fn diagnose_thermal(bmc: &BmcConnection) -> io::Result<()> {
     let fan_rpm:  Rpm     = bmc.execute(&ReadFanSpeed { fan_id: 0x30 })?;
     let voltage:  Volts   = bmc.execute(&ReadVoltage { rail: 0x40 })?;
 
-    // Bug #1 — IMPOSSIBLE: parsing lives in ReadFanSpeed::parse_response
-    // Bug #2 — IMPOSSIBLE: scaling lives in ReadVoltage::parse_response
+    // バグ #1 — 発生不可能: パース処理は ReadFanSpeed::parse_response に隠蔽
+    // バグ #2 — 発生不可能: スケール変換は ReadVoltage::parse_response に隠蔽
 
-    // Bug #3 — COMPILE ERROR:
+    // バグ #3 — コンパイルエラー:
     // if cpu_temp > fan_rpm { }
     //    ^^^^^^^^   ^^^^^^^
-    //    Celsius    Rpm      → "mismatched types" ❌
+    //    Celsius    Rpm      → 型の不一致（mismatched types） ❌
 
-    // Bug #4 — COMPILE ERROR:
+    // バグ #4 — コンパイルエラー:
     // log_temperature(voltage);
-    //                 ^^^^^^^  Volts, expected Celsius ❌
+    //                 ^^^^^^^  Volts が渡されたが、Celsius が期待されている ❌
 
-    // Only correct comparisons compile:
+    // 正しい比較のみがコンパイルを通る:
     if cpu_temp > Celsius(85.0) {
-        println!("CPU overheating: {:?}", cpu_temp);
+        println!("CPUが過熱しています: {:?}", cpu_temp);
     }
     if fan_rpm < Rpm(4000) {
-        println!("Fan too slow: {:?}", fan_rpm);
+        println!("ファンの回転数が低すぎます: {:?}", fan_rpm);
     }
 
     Ok(())
 }
 
-fn log_temperature(t: Celsius) { println!("Temp: {:?}", t); }
-fn log_voltage(v: Volts)       { println!("Voltage: {:?}", v); }
+fn log_temperature(t: Celsius) { println!("温度: {:?}", t); }
+fn log_voltage(v: Volts)       { println!("電圧: {:?}", v); }
 ```
 
-### Macro DSL for Diagnostic Scripts
+### 診断スクリプト用マクロDSL
 
-For large diagnostic routines that run many commands in sequence, a macro gives
-concise declarative syntax while preserving full type safety:
+多数のコマンドを連続して実行する大規模な診断ルーチンでは、マクロを使用することで完全な型安全性を維持しながら簡潔な宣言的構文を実現できます：
 
 ```rust
-/// Execute a series of typed IPMI commands, returning a tuple of results.
-/// Each element of the tuple has the command's own Response type.
+/// 一連の型付き IPMI コマンドを実行し、結果のタプルを返す。
+/// タプルの各要素は、各コマンド固有の Response 型を持つ。
 macro_rules! diag_script {
     ($bmc:expr; $($cmd:expr),+ $(,)?) => {{
         ( $( $bmc.execute(&$cmd)?, )+ )
@@ -1668,7 +1590,7 @@ macro_rules! diag_script {
 }
 
 fn full_pre_flight(bmc: &BmcConnection) -> io::Result<()> {
-    // Expands to: (Celsius, Rpm, Volts, String) — every type tracked
+    // 展開後: (Celsius, Rpm, Volts, String) — すべての型が厳格に追跡される
     let (temp, rpm, volts, board_pn) = diag_script!(bmc;
         ReadTemp     { sensor_id: 0x20 },
         ReadFanSpeed { fan_id:    0x30 },
@@ -1676,26 +1598,23 @@ fn full_pre_flight(bmc: &BmcConnection) -> io::Result<()> {
         ReadFru      { fru_id:    0x00 },
     );
 
-    println!("Board: {:?}", board_pn);
-    println!("CPU: {:?}, Fan: {:?}, 12V: {:?}", temp, rpm, volts);
+    println!("ボード型番: {:?}", board_pn);
+    println!("CPU: {:?}, ファン: {:?}, 12V: {:?}", temp, rpm, volts);
 
-    // Type-safe threshold checks:
-    assert!(temp  < Celsius(95.0), "CPU too hot");
-    assert!(rpm   > Rpm(3000),     "Fan too slow");
-    assert!(volts > Volts(11.4),   "12V rail sagging");
+    // 型安全な閾値チェック:
+    assert!(temp  < Celsius(95.0), "CPUの温度が高すぎます");
+    assert!(rpm   > Rpm(3000),     "ファンの回転数が遅すぎます");
+    assert!(volts > Volts(11.4),   "12Vレールの電圧が低下しています");
 
     Ok(())
 }
 ```
 
-The macro is just syntactic sugar — the tuple type `(Celsius, Rpm, Volts, String)` is
-fully inferred by the compiler.  Swap two commands and the destructuring breaks at
-compile time, not at runtime.
+このマクロは単なる糖衣構文です — タプル型 `(Celsius, Rpm, Volts, String)` はコンパイラによって完全に推論されます。2つのコマンドの順序を入れ替えると、実行時ではなくコンパイル時にパターンマッチの分解がエラーになります。
 
-### Enum Dispatch for Heterogeneous Command Lists
+### 異種コマンドリストのためのEnumディスパッチ
 
-When you need a `Vec` of mixed commands (e.g., a configurable script loaded from JSON),
-use enum dispatch to stay `dyn`-free:
+JSONから読み込んだ設定可能なスクリプトなど、異なるコマンドが混在した `Vec` が必要な場合は、Enumディスパッチを用いることで `dyn` を使わずに実装できます：
 
 ```rust
 enum AnyReading {
@@ -1723,16 +1642,15 @@ impl AnyCmd {
     }
 }
 
-/// Dynamic diagnostic script — commands loaded at runtime
+/// 動的診断スクリプト — 実行時に読み込まれるコマンド群
 fn run_script(bmc: &BmcConnection, script: &[AnyCmd]) -> io::Result<Vec<AnyReading>> {
     script.iter().map(|cmd| cmd.execute(bmc)).collect()
 }
 ```
 
-You lose per-element type tracking (everything is `AnyReading`), but you gain
-runtime flexibility — and the parsing is still encapsulated in each `IpmiCmd` impl.
+要素ごとの個別型の追跡は失われますが（すべて `AnyReading` に包まれる）、実行時の柔軟性が得られ、かつパース処理自体は各 `IpmiCmd` 実装の中に綺麗にカプセル化されたままです。
 
-### Testing Typed Commands
+### 型付きコマンドのテスト
 
 ```rust
 #[cfg(test)]
@@ -1745,9 +1663,9 @@ mod tests {
 
     impl StubBmc {
         fn execute<C: IpmiCmd>(&self, cmd: &C) -> io::Result<C::Response> {
-            let key = cmd.payload()[0]; // sensor ID as key
+            let key = cmd.payload()[0]; // センサIDをキーとする
             let raw = self.responses.get(&key)
-                .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "no stub"))?;
+                .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "スタブデータがありません"))?;
             cmd.parse_response(raw)
         }
     }
@@ -1755,7 +1673,7 @@ mod tests {
     #[test]
     fn read_temp_parses_signed_byte() {
         let bmc = StubBmc {
-            responses: [( 0x20, vec![0xE7] )].into() // -25 as i8 = 0xE7
+            responses: [( 0x20, vec![0xE7] )].into() // i8 としての -25 = 0xE7
         };
         let temp = bmc.execute(&ReadTemp { sensor_id: 0x20 }).unwrap();
         assert_eq!(temp, Celsius(-25.0));
@@ -1781,14 +1699,12 @@ mod tests {
 }
 ```
 
-Each command's parsing is tested independently.  If `ReadFanSpeed` changes from 2-byte
-LE to 4-byte BE in a new IPMI spec revision, you update **one** `parse_response` and
-the test catches regressions.
+各コマンドのパース処理は完全に独立してテストできます。もし IPMI 仕様の改定により `ReadFanSpeed` が「2バイトLE」から「4バイトBE」に変更されたとしても、更新すべき `parse_response` は**1箇所**だけであり、既存のテストがリグレッションを確実に捕捉します。
 
-### How This Maps to Haskell GADTs
+### HaskellのGADTとの対応関係
 
 ```text
-Haskell GADT                         Rust Equivalent
+Haskell GADT                         Rustの対応機能
 ────────────────                     ───────────────────────
 data Cmd a where                     trait IpmiCmd {
   ReadTemp :: SensorId -> Cmd Temp       type Response;
@@ -1798,56 +1714,54 @@ data Cmd a where                     trait IpmiCmd {
 eval :: Cmd a -> IO a                fn execute<C: IpmiCmd>(&self, cmd: &C)
                                          -> io::Result<C::Response>
 
-Type refinement in case branches     Monomorphisation: compiler generates
-                                     execute::<ReadTemp>() → returns Celsius
-                                     execute::<ReadFanSpeed>() → returns Rpm
+case 分岐における型の精密化         単相化: コンパイラが以下を生成
+                                     execute::<ReadTemp>() → Celsius を返す
+                                     execute::<ReadFanSpeed>() → Rpm を返す
 ```
 
-Both guarantee: **the command determines the return type**.  Rust achieves it through
-generic monomorphisation instead of type-level case analysis — same safety, zero
-runtime cost.
+どちらも**コマンドが戻り値の型を一意に決定する**ことを保証します。Rust はこれを型レベルの case 分析ではなくジェネリクスの単相化によって達成しており、同等の安全性を実行時コストゼロで実現しています。
 
-### Before vs After Summary
+### 導入前後の比較まとめ
 
-| Dimension | Untyped (`Vec<u8>`) | Typed Commands |
-|-----------|:---:|:---:|
-| Lines per sensor | ~3 (duplicated at every call site) | ~15 (written and tested once) |
-| Parsing errors possible | At every call site | In one `parse_response` impl |
-| Unit confusion bugs | Unlimited | Zero (compile error) |
-| Adding a new sensor | Touch N files, copy-paste parsing | Add 1 struct + 1 impl |
-| Runtime cost | — | Identical (monomorphised) |
-| IDE autocomplete | `f64` everywhere | `Celsius`, `Rpm`, `Volts` — self-documenting |
-| Code review burden | Must verify every raw byte parse | Verify one `parse_response` per sensor |
-| Macro DSL | N/A | `diag_script!(bmc; ReadTemp{..}, ReadFan{..})` → `(Celsius, Rpm)` |
-| Dynamic scripts | Manual dispatch | `AnyCmd` enum — still `dyn`-free |
+| 比較項目 | 型なし (`Vec<u8>`) | 型付きコマンド |
+|----------|:---:|:---:|
+| センサあたりの行数 | 約3行（呼び出し箇所ごとに重複） | 約15行（1回書いて1回テスト） |
+| パースエラー発生の可能性 | 全ての呼び出し箇所 | 単一の `parse_response` 実装内のみ |
+| 単位混同バグ | 無限に発生し得る | ゼロ（コンパイルエラー） |
+| 新規センサの追加 | N個のファイルを修正、パースをコピペ | 構造体1つ + impl 1つを追加 |
+| 実行時オーバーヘッド | — | 同等（単相化される） |
+| IDEオートコンプリート | 至る所に `f64` | `Celsius`、`Rpm`、`Volts` — 自己文書化 |
+| コードレビューの負担 | 生バイトパースを毎回検証 | センサごとに1つの `parse_response` を検証 |
+| マクロDSL | 不可 | `diag_script!(bmc; ReadTemp{..}, ReadFan{..})` → `(Celsius, Rpm)` |
+| 動的スクリプト | 手動ディスパッチ | `AnyCmd` 列挙型 — それでも `dyn` 不要 |
 
-### When to Use Typed Commands
+### 型付きコマンドの使いどころ
 
-| Scenario | Recommendation |
-|----------|:--------------:|
-| IPMI sensor reads with distinct physical units | ✅ Typed commands |
-| Register map with different-width fields | ✅ Typed commands |
-| Network protocol messages (request → response) | ✅ Typed commands |
-| Single command type with one return format | ❌ Overkill — just return the type directly |
-| Prototyping / exploring an unknown device | ❌ Raw bytes first, type later |
-| Plugin system where commands aren't known at compile time | ⚠️ Use `AnyCmd` enum dispatch |
+| シナリオ | 推奨方針 |
+|----------|:--------:|
+| 物理単位が明確に異なる IPMI センサ読み取り | ✅ 型付きコマンド |
+| フィールド幅が異なるレジスタマップ | ✅ 型付きコマンド |
+| ネットワークプロトコルメッセージ（リクエスト → レスポンス） | ✅ 型付きコマンド |
+| 戻り値フォーマットが1種類しかない単一コマンド型 | ❌ オーバースペック — 直接戻り値型を返せばよい |
+| 未知のデバイスに対するプロトタイピング/初期調査 | ❌ まずは生バイト列で、後から型付けする |
+| コマンドがコンパイル時に確定しないプラグインシステム | ⚠️ `AnyCmd` による Enumディスパッチを検討 |
 
-> **Key Takeaways — Traits**
-> - Associated types = one impl per type; generic parameters = many impls per type
-> - GATs unlock lending iterators and async-in-traits patterns
-> - Use enum dispatch for closed sets (fast); `dyn Trait` for open sets (flexible)
-> - `Any` + `TypeId` is the escape hatch when compile-time types are unknown
+> **重要ポイント — トレイト**
+> - 関連型 = 型ごとに1つの実装。ジェネリックパラメータ = 型ごとに複数の実装
+> - GAT により、Lending Iterator やトレイト内非同期処理のパターンが実現可能に
+> - クローズドな型の集合には Enumディスパッチ（高速）を、オープンな型の集合には `dyn Trait`（柔軟）を使用する
+> - コンパイル時に型が不明な場合の脱出ハッチとして `Any` + `TypeId` がある
 
-> **See also:** [Ch 1 — Generics](ch01-generics-the-full-picture.md) for monomorphization and when generics cause code bloat. [Ch 3 — Newtype & Type-State](ch03-the-newtype-and-type-state-patterns.md) for using traits with the config trait pattern.
+> **参照:** 単相化およびジェネリクスによるコード膨張については [第1章 — ジェネリクス](ch01-generics-the-full-picture.md) を参照してください。設定トレイトパターンとトレイトの活用については [第3章 — ニュータイプと型状態](ch03-the-newtype-and-type-state-patterns.md) を参照してください。
 
 ---
 
-### Exercise: Repository with Associated Types ★★★ (~40 min)
+### 演習問題: 関連型を持つリポジトリ ★★★（目安: 約40分）
 
-Design a `Repository` trait with associated `Error`, `Id`, and `Item` types. Implement it for an in-memory store and demonstrate compile-time type safety.
+関連型 `Error`、`Id`、`Item` を持つ `Repository` トレイトを設計してください。これをインメモリのデータストアに対して実装し、コンパイル時の型安全性を実証してください。
 
 <details>
-<summary>🔑 Solution</summary>
+<summary>🔑 解答例</summary>
 
 ```rust
 use std::collections::HashMap;
@@ -1906,9 +1820,9 @@ where
     R::Id: std::fmt::Debug,
 {
     let id = repo.insert(item)?;
-    println!("Inserted with id: {id:?}");
+    println!("IDで挿入完了: {id:?}");
     let retrieved = repo.get(&id)?;
-    println!("Retrieved: {retrieved:?}");
+    println!("取得結果: {retrieved:?}");
     Ok(())
 }
 

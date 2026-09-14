@@ -1,32 +1,29 @@
-# Tricks from the Trenches 🟡
+# 実戦現場のノウハウ・裏技集 🟡
 
-> **What you'll learn:**
-> - Battle-tested patterns that don't fit neatly into one chapter
-> - Common pitfalls and their fixes — from CI flake to binary bloat
-> - Quick-win techniques you can apply to any Rust project today
+> **学べること:**
+> - 単一の章には収まりきらない、実践で鍛え抜かれたパターン集
+> - よくある落とし穴とその解決策 — CI のフレーキネスからバイナリ肥大化まで
+> - 今すぐあらゆる Rust プロジェクトに適用できる即効性の高いテクニック
 >
-> **Cross-references:** Every chapter in this book — these tricks cut across all topics
+> **関連リンク:** 本書のすべての章 — ここに挙げるテクニックはすべてのトピックを横断します
 
-This chapter collects engineering patterns that come up repeatedly in
-production Rust codebases. Each trick is self-contained — read them in
-any order.
+本章では、本番環境の Rust コードベースで繰り返し遭遇するエンジニアリングパターンを集約しました。各 Tips は独立しているため、どの順番から読んでも構いません。
 
 ---
 
-### 1. The `deny(warnings)` Trap
+### 1. `deny(warnings)` の罠
 
-**Problem**: `#![deny(warnings)]` in source code breaks builds when Clippy
-adds new lints — your code that compiled yesterday fails today.
+**問題**: ソースコード内に `#![deny(warnings)]` を記述していると、Clippy が新しいリントを追加した際にビルドが壊れます — 昨日までコンパイルできていたコードが突然失敗するようになります。
 
-**Fix**: Use `CARGO_ENCODED_RUSTFLAGS` in CI instead of a source-level attribute:
+**解決策**: ソースレベルの属性ではなく、CI で `CARGO_ENCODED_RUSTFLAGS` を使用します：
 
 ```yaml
-# CI: treat warnings as errors without touching source
+# CI: ソースコードに手を加えずに警告をエラーとして扱う
 env:
   CARGO_ENCODED_RUSTFLAGS: "-Dwarnings"
 ```
 
-Or use `[workspace.lints]` for finer control:
+あるいは、より細かな制御のために `[workspace.lints]` を使用します：
 
 ```toml
 # Cargo.toml
@@ -38,33 +35,30 @@ all = { level = "deny", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
 ```
 
-> See [Compile-Time Tools, Workspace Lints](ch08-compile-time-and-developer-tools.md) for the full pattern.
+> 完全なパターンについては [コンパイル時ツール、ワークスペースのリント](ch08-compile-time-and-developer-tools.md) を参照してください。
 
 ---
 
-### 2. Compile Once, Test Everywhere
+### 2. 1 回のコンパイルで、すべてのテストを実行
 
-**Problem**: `cargo test` recompiles when switching between `--lib`, `--doc`,
-and `--test` because they use different profiles.
+**問題**: `cargo test` は `--lib`, `--doc`, `--test` の間で切り替えるたびに異なるプロファイルを使用するため、再コンパイルが発生します。
 
-**Fix**: Use `cargo nextest` for unit/integration tests and run doc-tests
-separately:
+**解決策**: 単体テスト・統合テストには `cargo nextest` を使用し、ドキュメントテストは個別に実行します：
 
 ```bash
-cargo nextest run --workspace        # Fast: parallel, cached
-cargo test --workspace --doc         # Doc-tests (nextest can't run these)
+cargo nextest run --workspace        # 高速: 並列実行、キャッシュ
+cargo test --workspace --doc         # ドキュメントテスト (nextest では実行不可)
 ```
 
-> See [Compile-Time Tools](ch08-compile-time-and-developer-tools.md) for `cargo-nextest` setup.
+> `cargo-nextest` のセットアップについては [コンパイル時ツール](ch08-compile-time-and-developer-tools.md) を参照してください。
 
 ---
 
-### 3. Feature Flag Hygiene
+### 3. フィーチャフラグの衛生管理
 
-**Problem**: A library crate has `default = ["std"]` but nobody tests
-`--no-default-features`. One day an embedded user reports it doesn't compile.
+**問題**: ライブラリクレートで `default = ["std"]` としているのに、誰も `--no-default-features` をテストしていません。ある日組み込み環境のユーザーからコンパイルできないと報告されます。
 
-**Fix**: Add `cargo-hack` to CI:
+**解決策**: CI に `cargo-hack` を追加します：
 
 ```yaml
 - name: Feature matrix
@@ -74,57 +68,52 @@ cargo test --workspace --doc         # Doc-tests (nextest can't run these)
     cargo check --all-features
 ```
 
-> See [`no_std` and Feature Verification](ch09-no-std-and-feature-verification.md) for the full pattern.
+> 完全なパターンについては [`no_std` とフィーチャの検証](ch09-no-std-and-feature-verification.md) を参照してください。
 
 ---
 
-### 4. The Lock File Debate — Commit or Ignore?
+### 4. ロックファイルの議論 — コミットすべきか無視すべきか？
 
-**Rule of thumb:**
+**目安:**
 
-| Crate Type | Commit `Cargo.lock`? | Why |
-|------------|---------------------|-----|
-| Binary / application | **Yes** | Reproducible builds |
-| Library | **No** (`.gitignore`) | Let downstream choose versions |
-| Workspace with both | **Yes** | Binary wins |
+| クレートの種類 | `Cargo.lock` をコミットする？ | 理由 |
+|----------------|------------------------------|------|
+| バイナリ / アプリケーション | **はい** | ビルドの再現性を担保するため |
+| ライブラリ | **いいえ** (`.gitignore` に追加) | 下流の利用者にバージョン選択を委ねるため |
+| 両方を含むワークスペース | **はい** | バイナリ側の要求を優先するため |
 
-Add a CI check to ensure the lock file stays up-to-date:
+ロックファイルが最新状態に保たれているかを確認する CI チェックを追加します：
 
 ```yaml
 - name: Check lock file
-  run: cargo update --locked  # Fails if Cargo.lock is stale
+  run: cargo update --locked  # Cargo.lock が古い場合に失敗する
 ```
 
 ---
 
-### 5. Debug Builds with Optimized Dependencies
+### 5. 依存関係のみを最適化したデバッグビルド
 
-**Problem**: Debug builds are painfully slow because dependencies (especially
-`serde`, `regex`) aren't optimized.
+**問題**: 依存関係（特に `serde` や `regex` など）が最適化されていないため、デバッグビルド時の実行速度が耐えられないほど遅い。
 
-**Fix**: Optimize deps in dev profile while keeping your code unoptimized
-for fast recompilation:
+**解決策**: 迅速な再コンパイルのために自分のコードは未最適化のままにしつつ、dev プロファイルで依存関係のみを最適化します：
 
 ```toml
 # Cargo.toml
 [profile.dev.package."*"]
-opt-level = 2  # Optimize all dependencies in dev mode
+opt-level = 2  # dev モードですべての依存関係を最適化
 ```
 
-This slows the first build slightly but makes runtime dramatically faster
-during development. Particularly impactful for database-backed services and
-parsers.
+これにより初回ビルドはわずかに遅くなりますが、開発中の実行速度は劇的に向上します。データベースを扱うサービスやパーサーにおいて特に効果的です。
 
-> See [Release Profiles](ch07-release-profiles-and-binary-size.md) for per-crate profile overrides.
+> クレートごとのプロファイル上書きについては [リリースプロファイル](ch07-release-profiles-and-binary-size.md) を参照してください。
 
 ---
 
-### 6. CI Cache Thrashing
+### 6. CI キャッシュのスラッシング
 
-**Problem**: `Swatinem/rust-cache@v2` saves a new cache on every PR, bloating
-storage and slowing restore times.
+**問題**: `Swatinem/rust-cache@v2` が PR ごとに新しいキャッシュを保存するため、ストレージが圧迫され、リストア時間も遅くなる。
 
-**Fix**: Only save cache from `main`, restore from anywhere:
+**解決策**: キャッシュの保存は `main` ブランチからのみ行い、リストアはすべてのブランチで利用可能にします：
 
 ```yaml
 - uses: Swatinem/rust-cache@v2
@@ -132,7 +121,7 @@ storage and slowing restore times.
     save-if: ${{ github.ref == 'refs/heads/main' }}
 ```
 
-For workspaces with multiple binaries, add a `shared-key`:
+複数のバイナリを持つワークスペースでは、`shared-key` を追加します：
 
 ```yaml
 - uses: Swatinem/rust-cache@v2
@@ -141,39 +130,35 @@ For workspaces with multiple binaries, add a `shared-key`:
     save-if: ${{ github.ref == 'refs/heads/main' }}
 ```
 
-> See [CI/CD Pipeline](ch11-putting-it-all-together-a-production-cic.md) for the full workflow.
+> 完全なワークフローについては [CI/CD パイプライン](ch11-putting-it-all-together-a-production-cic.md) を参照してください。
 
 ---
 
 ### 7. `RUSTFLAGS` vs `CARGO_ENCODED_RUSTFLAGS`
 
-**Problem**: `RUSTFLAGS="-Dwarnings"` applies to *everything* — including
-build scripts and proc-macros. A warning in `serde_derive`'s build.rs
-fails your CI.
+**問題**: `RUSTFLAGS="-Dwarnings"` はビルドスクリプトやプロシージャルマクロを含む*すべて*に適用されます。`serde_derive` の build.rs 内に警告があると、CI が落ちてしまいます。
 
-**Fix**: Use `CARGO_ENCODED_RUSTFLAGS` which only applies to the top-level
-crate:
+**解決策**: トップレベルのクレートにのみ適用される `CARGO_ENCODED_RUSTFLAGS` を使用します：
 
 ```bash
-# BAD — breaks on third-party build script warnings
+# BAD — サードパーティ製ビルドスクリプトの警告で失敗する
 RUSTFLAGS="-Dwarnings" cargo build
 
-# GOOD — only affects your crate
+# GOOD — 自身のクレートにのみ影響
 CARGO_ENCODED_RUSTFLAGS="-Dwarnings" cargo build
 
-# ALSO GOOD — workspace lints (Cargo.toml)
+# こちらも GOOD — ワークスペースのリント設定 (Cargo.toml)
 [workspace.lints.rust]
 warnings = "deny"
 ```
 
 ---
 
-### 8. Reproducible Builds with `SOURCE_DATE_EPOCH`
+### 8. `SOURCE_DATE_EPOCH` による再現可能なビルド
 
-**Problem**: Embedding `chrono::Utc::now()` in `build.rs` makes builds
-non-reproducible — every build produces a different binary hash.
+**問題**: `build.rs` に `chrono::Utc::now()` を埋め込むとビルドの再現性が失われ、ビルドするたびに異なるバイナリハッシュが生成されてしまいます。
 
-**Fix**: Honor `SOURCE_DATE_EPOCH`:
+**解決策**: `SOURCE_DATE_EPOCH` に従います：
 
 ```rust
 // build.rs
@@ -184,49 +169,48 @@ let timestamp = std::env::var("SOURCE_DATE_EPOCH")
 println!("cargo:rustc-env=BUILD_TIMESTAMP={timestamp}");
 ```
 
-> See [Build Scripts](ch01-build-scripts-buildrs-in-depth.md) for the full build.rs patterns.
+> 完全な build.rs パターンについては [ビルドスクリプト](ch01-build-scripts-buildrs-in-depth.md) を参照してください。
 
 ---
 
-### 9. The `cargo tree` Deduplication Workflow
+### 9. `cargo tree` による重複排除ワークフロー
 
-**Problem**: `cargo tree --duplicates` shows 5 versions of `syn` and 3 of
-`tokio-util`. Compile time is painful.
+**問題**: `cargo tree --duplicates` を実行すると、5 種類のバージョンの `syn` や 3 種類の `tokio-util` が表示される。コンパイル時間が長大化してしまう。
 
-**Fix**: Systematic deduplication:
+**解決策**: 体系的な重複排除を実施します：
 
 ```bash
-# Step 1: Find duplicates
+# ステップ 1: 重複を見つける
 cargo tree --duplicates
 
-# Step 2: Find who pulls the old version
+# ステップ 2: 古いバージョンを引き込んでいるクレートを特定する
 cargo tree --invert --package syn@1.0.109
 
-# Step 3: Update the culprit
-cargo update -p serde_derive  # Might pull in syn 2.x
+# ステップ 3: 原因となっているクレートを更新する
+cargo update -p serde_derive  # syn 2.x を引き込む可能性がある
 
-# Step 4: If no update available, pin in [patch]
+# ステップ 4: アップデートが存在しない場合は [patch] で固定する
 # [patch.crates-io]
 # old-crate = { git = "...", branch = "syn2-migration" }
 
-# Step 5: Verify
-cargo tree --duplicates  # Should be shorter
+# ステップ 5: 検証する
+cargo tree --duplicates  # 出力が短くなっているはず
 ```
 
-> See [Dependency Management](ch06-dependency-management-and-supply-chain-s.md) for `cargo-deny` and supply chain security.
+> `cargo-deny` とサプライチェーンセキュリティについては [依存関係管理](ch06-dependency-management-and-supply-chain-s.md) を参照してください。
 
 ---
 
-### 10. Pre-Push Smoke Test
+### 10. プッシュ前のスモークテスト
 
-**Problem**: You push, CI takes 10 minutes, fails on a formatting issue.
+**問題**: コードをプッシュして CI に 10 分待たされた挙句、フォーマットの問題で失敗する。
 
-**Fix**: Run the fast checks locally before push:
+**解決策**: プッシュ前にローカルで高速なチェックを実行します：
 
 ```toml
 # Makefile.toml (cargo-make)
 [tasks.pre-push]
-description = "Local smoke test before pushing"
+description = "プッシュ前のローカルスモークテスト"
 script = '''
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
@@ -235,11 +219,11 @@ cargo test --workspace --lib
 ```
 
 ```bash
-cargo make pre-push  # < 30 seconds
+cargo make pre-push  # 30秒未満
 git push
 ```
 
-Or use a git pre-push hook:
+あるいは git pre-push フックを使用します：
 
 ```bash
 #!/bin/sh
@@ -247,73 +231,73 @@ Or use a git pre-push hook:
 cargo fmt --all -- --check && cargo clippy --workspace -- -D warnings
 ```
 
-> See [CI/CD Pipeline](ch11-putting-it-all-together-a-production-cic.md) for `Makefile.toml` patterns.
+> `Makefile.toml` のパターンについては [CI/CD パイプライン](ch11-putting-it-all-together-a-production-cic.md) を参照してください。
 
 ---
 
-### 🏋️ Exercises
+### 🏋️ 演習問題
 
-#### 🟢 Exercise 1: Apply Three Tricks
+#### 🟢 演習 1: 3 つのノウハウを適用する
 
-Pick three tricks from this chapter and apply them to an existing Rust project. Which had the biggest impact?
+本章から 3 つのノウハウを選び、既存の Rust プロジェクトに適用してください。どのノウハウが最も大きな効果をもたらしましたか？
 
 <details>
-<summary>Solution</summary>
+<summary>解答例</summary>
 
-Typical high-impact combination:
+一般的に効果の高い組み合わせ：
 
-1. **`[profile.dev.package."*"] opt-level = 2`** — Immediate improvement in dev-mode runtime (2-10× faster for parsing-heavy code)
+1. **`[profile.dev.package."*"] opt-level = 2`** — 開発モードにおける実行速度が即座に改善（パース処理が多いコードでは 2〜10 倍高速化）
 
-2. **`CARGO_ENCODED_RUSTFLAGS`** — Eliminates false CI failures from third-party warnings
+2. **`CARGO_ENCODED_RUSTFLAGS`** — サードパーティの警告による CI の誤検知エラーを根絶
 
-3. **`cargo-hack --each-feature`** — Usually finds at least one broken feature combination in any project with 3+ features
+3. **`cargo-hack --each-feature`** — 3 つ以上のフィーチャを持つプロジェクトでは、通常少なくとも 1 つの壊れた組み合わせが発見される
 
 ```bash
-# Apply trick 5:
+# ノウハウ 5 を適用:
 echo '[profile.dev.package."*"]' >> Cargo.toml
 echo 'opt-level = 2' >> Cargo.toml
 
-# Apply trick 7 in CI:
-# Replace RUSTFLAGS with CARGO_ENCODED_RUSTFLAGS
+# CI でノウハウ 7 を適用:
+# RUSTFLAGS を CARGO_ENCODED_RUSTFLAGS に置き換える
 
-# Apply trick 3:
+# ノウハウ 3 を適用:
 cargo install cargo-hack
 cargo hack check --each-feature --no-dev-deps
 ```
 </details>
 
-#### 🟡 Exercise 2: Deduplicate Your Dependency Tree
+#### 🟡 演習 2: 依存関係ツリーの重複を排除する
 
-Run `cargo tree --duplicates` on a real project. Eliminate at least one duplicate. Measure compile-time before and after.
+実際のプロジェクトで `cargo tree --duplicates` を実行してください。少なくとも 1 つの重複を解消します。適用前後のコンパイル時間を測定してください。
 
 <details>
-<summary>Solution</summary>
+<summary>解答例</summary>
 
 ```bash
-# Before
+# 適用前
 time cargo build --release 2>&1 | tail -1
-cargo tree --duplicates | wc -l  # Count duplicate lines
+cargo tree --duplicates | wc -l  # 重複行数をカウント
 
-# Find and fix one duplicate
+# 1 つの重複を見つけて修正
 cargo tree --duplicates
 cargo tree --invert --package <duplicate-crate>@<old-version>
 cargo update -p <parent-crate>
 
-# After
+# 適用後
 time cargo build --release 2>&1 | tail -1
-cargo tree --duplicates | wc -l  # Should be fewer
+cargo tree --duplicates | wc -l  # 行数が減っているはず
 
-# Typical result: 5-15% compile time reduction per eliminated
-# duplicate (especially for heavy crates like syn, tokio)
+# 一般的な結果: 重複を 1 つ解消するごとにコンパイル時間が 5〜15% 短縮
+# （特に syn や tokio などの重量級クレートで顕著）
 ```
 </details>
 
-### Key Takeaways
+### 重要ポイント
 
-- Use `CARGO_ENCODED_RUSTFLAGS` instead of `RUSTFLAGS` to avoid breaking third-party build scripts
-- `[profile.dev.package."*"] opt-level = 2` is the single highest-impact dev experience trick
-- Cache tuning (`save-if` on main only) prevents CI cache bloat on active repositories
-- `cargo tree --duplicates` + `cargo update` is a free compile-time win — do it monthly
-- Run fast checks locally with `cargo make pre-push` to avoid CI round-trip waste
+- サードパーティのビルドスクリプトを壊さないよう、`RUSTFLAGS` ではなく `CARGO_ENCODED_RUSTFLAGS` を使用する。
+- `[profile.dev.package."*"] opt-level = 2` は、開発者体験を向上させる最も効果的な単一の設定。
+- キャッシュのチューニング（main でのみ `save-if`）により、アクティブなリポジトリでの CI キャッシュ肥大化を防ぐ。
+- `cargo tree --duplicates` + `cargo update` はコストゼロでコンパイル時間を短縮できる — 毎月実行しましょう。
+- `cargo make pre-push` でローカルで高速なチェックを実行し、CI の無駄な往復を回避する。
 
 ---

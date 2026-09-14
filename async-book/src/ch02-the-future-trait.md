@@ -1,14 +1,14 @@
-# 2. The Future Trait 🟡
+# 2. Future トレイト 🟡
 
-> **What you'll learn:**
-> - The `Future` trait: `Output`, `poll()`, `Context`, `Waker`
-> - How a waker tells the executor "poll me again"
-> - The contract: never call `wake()` = your program silently hangs
-> - Implementing a real future by hand (`Delay`)
+> **この章で学ぶこと:**
+> - `Future` トレイトの構造: `Output`、`poll()`、`Context`、`Waker`
+> - Waker がエグゼキュータに「もう一度 poll して」と伝える仕組み
+> - 契約事項: `wake()` を呼び忘れるとプログラムは無言でハングする
+> - 実用的な Future（`Delay`）の手動実装
 
-## Anatomy of a Future
+## Future の解剖
 
-Everything in async Rust ultimately implements this trait:
+非同期Rustにおけるすべてのものは、最終的にこのトレイトを実装しています：
 
 ```rust
 pub trait Future {
@@ -18,76 +18,76 @@ pub trait Future {
 }
 
 pub enum Poll<T> {
-    Ready(T),   // The future has completed with value T
-    Pending,    // The future is not ready yet — call me back later
+    Ready(T),   // Future は値 T を伴って完了した
+    Pending,    // Future はまだ準備ができていない — 後でまた呼び出してほしい
 }
 ```
 
-That's it. A `Future` is anything that can be *polled* — asked "are you done yet?" — and responds with either "yes, here's the result" or "not yet, I'll wake you up when I'm ready."
+これだけです。`Future` とは、**ポーリング（poll）** — 「もう終わった？」と尋ねること — が可能で、「はい、これが結果です（Ready）」または「まだです、準備ができたら起こします（Pending）」のどちらかを返すあらゆる型を指します。
 
-### Output, poll(), Context, Waker
+### Output、poll()、Context、Waker
 
 ```mermaid
 sequenceDiagram
-    participant E as Executor
+    participant E as エグゼキュータ (Executor)
     participant F as Future (Task)
-    participant OS as Operating System<br/>(e.g., epoll/kqueue)
-    participant R as Reactor (Runtime)
+    participant OS as オペレーティングシステム<br/>(epoll/kqueue など)
+    participant R as リアクタ (Reactor / Runtime)
 
-    E->>F: Calls poll(cx)
-    Note right of F: Future attempts operation
-    F->>OS: Syscall (e.g., read TCP socket)
-    OS-->>F: Returns Error: Not Ready
+    E->>F: poll(cx) を呼び出し
+    Note right of F: Future が操作を試行
+    F->>OS: システムコール (例: TCPソケットの読み出し)
+    OS-->>F: エラーを返却: 準備未完了 (Not Ready)
     
-    F->>R: Registers: (Waker)
-    F-->>E: Returns Poll::Pending
-    Note left of E: Task is moved out<br/>of run queue
+    F->>R: 登録: (Waker)
+    F-->>E: Poll::Pending を返却
+    Note left of E: タスクを実行キューから<br/>退避させる
 
-    E->>E: (Executor runs other tasks OR sleeps)
-    R->>OS: epoll_wait() / Polls OS for events
+    E->>E: (エグゼキュータは他のタスクを実行、またはスリープ)
+    R->>OS: epoll_wait() / OSのイベントをポーリング
 
-    Note right of OS: (Sometime Later) New data arrives
-    OS-->>R: Wakes Reactor: data is NOW READY
+    Note right of OS: (しばらく後) 新しいデータが到着
+    OS-->>R: リアクタを起こす: データ準備完了 (READY)
     
-    R->>R: Reactor finds Waker
-    R->>E: Calls Waker::wake()
-    Note right of E: Task is pushed back<br/>to Executor's run queue
+    R->>R: リアクタが Waker を特定
+    R->>E: Waker::wake() を呼び出し
+    Note right of E: タスクがエグゼキュータの<br/>実行キューに戻される
 
-    E->>F: Calls poll(cx) again
-    Note right of F: Future attempts operation again
-    F->>OS: Syscall (e.g., read TCP socket)
-    OS-->>F: Success: Returns Data Buffer
-    F-->>E: Returns Poll::Ready(Data)
+    E->>F: 再び poll(cx) を呼び出し
+    Note right of F: Future が操作を再試行
+    F->>OS: システムコール (例: TCPソケットの読み出し)
+    OS-->>F: 成功: データバッファを返却
+    F-->>E: Poll::Ready(Data) を返却
 ```
 
-Let's break down each piece:
+各構成要素を詳しく見ていきましょう：
 
 ```rust
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-// A future that returns 42 immediately
+// 即座に 42 を返す Future
 struct Ready42;
 
 impl Future for Ready42 {
-    type Output = i32; // What the future eventually produces
+    type Output = i32; // Future が最終的に生成する値の型
 
     fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<i32> {
-        Poll::Ready(42) // Always ready — no waiting
+        Poll::Ready(42) // 常に準備完了 — 待機なし
     }
 }
 ```
 
-**The components**:
-- **`Output`** — the type of value produced when the future completes
-- **`poll()`** — called by the executor to check progress; returns `Ready(value)` or `Pending`
-- **`Pin<&mut Self>`** — ensures the future won't be moved in memory (we'll cover why in Ch. 4)
-- **`Context`** — carries the `Waker` so the future can signal the executor when it's ready to make progress
+**構成要素**:
+- **`Output`** — Futureが完了したときに生成される値の型
+- **`poll()`** — エグゼキュータが進捗を確認するために呼び出すメソッド。`Ready(value)` または `Pending` を返す
+- **`Pin<&mut Self>`** — Futureがメモリ上で移動されないことを保証する（なぜこれが必要かは第4章で解説）
+- **`Context`** — `Waker` を保持しており、Futureが進捗可能な状態になったときにエグゼキュータへ通知できるようにする
 
-### The Waker Contract
+### Waker の契約
 
-The `Waker` is the callback mechanism. When a future returns `Pending`, it *must* arrange for `waker.wake()` to be called later — otherwise the executor will never poll it again and the program hangs.
+`Waker` はコールバックの仕組みです。Futureが `Pending` を返す場合、後から `waker.wake()` が確実に呼び出されるように手配しなければなりません（**義務**）。これを怠ると、エグゼキュータはそのFutureを二度とポーリングしなくなり、プログラムは永遠にハングします。
 
 ```rust
 use std::task::{Context, Poll, Waker};
@@ -97,7 +97,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-/// A future that completes after a delay (toy implementation)
+/// 指定時間経過後に完了する Future（学習用の簡易実装）
 struct Delay {
     completed: Arc<Mutex<bool>>,
     waker_stored: Arc<Mutex<Option<Waker>>>,
@@ -120,15 +120,15 @@ impl Future for Delay {
     type Output = ();
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
-        // Check if already completed before storing waker
+        // Waker を保存する前に、すでに完了しているか確認
         if *self.completed.lock().unwrap() {
             return Poll::Ready(());
         }
 
-        // Store the waker - executor may pass a new one on each poll
+        // Waker を保存 — エグゼキュータは poll のたびに新しい Waker を渡す可能性がある
         *self.waker_stored.lock().unwrap() = Some(cx.waker().clone());
 
-        // Start the background timer on first poll
+        // 初回ポーリング時にバックグラウンドタイマーを開始
         if !self.started {
             self.started = true;
             let completed = Arc::clone(&self.completed);
@@ -139,38 +139,38 @@ impl Future for Delay {
                 thread::sleep(duration);
                 *completed.lock().unwrap() = true;
 
-                // CRITICAL: wake the executor so it polls us again
+                // 重要: エグゼキュータを起こして再度 poll させる
                 if let Some(w) = waker.lock().unwrap().take() {
-                    w.wake(); // "Hey executor, I'm ready — poll me again!"
+                    w.wake(); // 「エグゼキュータさん、準備ができました。もう一度 poll してください！」
                 }
             });
         }
 
-        // Double-check completion after storing waker (handles race condition)
+        // Waker 保存後にもう一度完了チェック（競合状態への対処）
         if *self.completed.lock().unwrap() {
             return Poll::Ready(());
         }
 
-        Poll::Pending // Not done yet
+        Poll::Pending // まだ完了していない
     }
 }
 ```
 
-> **Key insight**: In C#, the TaskScheduler handles waking automatically.
-> In Rust, **you** (or the I/O library you use) are responsible for calling
-> `waker.wake()`. Forget it, and your program silently hangs.
+> **重要な洞察**: C# では、TaskScheduler が自動的に起床（wake）を処理します。
+> 一方 Rust では、`waker.wake()` を呼び出す責任は**あなた**（または利用しているI/Oライブラリ）にあります。
+> これを忘れると、プログラムは何の警告もなく停止（ハング）します。
 
-### Exercise: Implement a CountdownFuture
-
-<details>
-<summary>🏋️ Exercise (click to expand)</summary>
-
-**Challenge**: Implement a `CountdownFuture` that counts down from N to 0, printing the current count each time it's polled. When it reaches 0, it completes with `Ready("Liftoff!")`.
-
-*Hint*: The future needs to store the current count and decrement it on each poll. Remember to always re-register the waker!
+### 演習問題: CountdownFuture の実装
 
 <details>
-<summary>🔑 Solution</summary>
+<summary>🏋️ 演習問題（クリックして展開）</summary>
+
+**課題**: N から 0 までカウントダウンし、poll されるたびに現在のカウントを出力する `CountdownFuture` を実装してください。0 に達したら `Ready("Liftoff!")` で完了します。
+
+*ヒント*: この Future は現在のカウントを保持し、poll ごとにそれを減算する必要があります。Waker の再登録を常に行うことを忘れないでください！
+
+<details>
+<summary>🔑 解答</summary>
 
 ```rust
 use std::future::Future;
@@ -197,26 +197,24 @@ impl Future for CountdownFuture {
         } else {
             println!("{}...", self.count);
             self.count -= 1;
-            cx.waker().wake_by_ref(); // Schedule re-poll immediately
+            cx.waker().wake_by_ref(); // 即座に再ポーリングをスケジュール
             Poll::Pending
         }
     }
 }
 ```
 
-**Key takeaway**: This future is polled once per count. Each time it returns `Pending`, it immediately wakes itself to be polled again. In production, you'd use a timer instead of busy-polling.
+**重要ポイント**: この Future はカウントごとに1回ずつポーリングされます。`Pending` を返すたびに、自身を即座に起床させて再度ポーリングされるようにしています。なお、本番コードではこのようなビジーポーリングの代わりにタイマーを使用します。
 
 </details>
 </details>
 
-> **Key Takeaways — The Future Trait**
-> - `Future::poll()` returns `Poll::Ready(value)` or `Poll::Pending`
-> - A future must register a `Waker` before returning `Pending` — the executor uses it to know when to re-poll
-> - `Pin<&mut Self>` guarantees the future won't be moved in memory (needed for self-referential state machines — see Ch 4)
-> - Everything in async Rust — `async fn`, `.await`, combinators — is built on this one trait
+> **重要ポイント — Future トレイト**
+> - `Future::poll()` は `Poll::Ready(value)` または `Poll::Pending` を返す
+> - Future は `Pending` を返す前に `Waker` を登録しなければならない — エグゼキュータはこれを使っていつ再ポーリングすべきかを知る
+> - `Pin<&mut Self>` は Future がメモリ上で移動しないことを保証する（自己参照ステートマシンに必須 — 第4章を参照）
+> - 非同期Rustのすべて（`async fn`、`.await`、コンビネータ）は、この単一のトレイトの上に成り立っている
 
-> **See also:** [Ch 3 — How Poll Works](ch03-how-poll-works.md) for the executor loop, [Ch 6 — Building Futures by Hand](ch06-building-futures-by-hand.md) for more complex implementations
+> **関連章:** エグゼキュータのループについては [第3章 — Poll の仕組み](ch03-how-poll-works.md) を、より複雑な実装例については [第6章 — 手動でのFuture構築](ch06-building-futures-by-hand.md) を参照してください。
 
 ***
-
-

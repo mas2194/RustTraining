@@ -1,108 +1,104 @@
-# Single-Use Types — Cryptographic Guarantees via Ownership 🟡
+# 単一使用型 — 所有権による暗号学的保証 🟡
 
-> **What you'll learn:** How Rust's move semantics act as a linear type system, making nonce reuse, double key-agreement, and accidental fuse re-programming impossible at compile time.
+> **学べること:** Rustのムーブセマンティクスがいかに線形型システムとして機能し、ノンス（Nonce）の再利用、鍵合意（Key Agreement）の二重実行、偶発的なヒューズの再プログラミングなどをコンパイル時に不可能にするか。
 >
-> **Cross-references:** [ch01](ch01-the-philosophy-why-types-beat-tests.md) (philosophy), [ch04](ch04-capability-tokens-zero-cost-proof-of-aut.md) (capability tokens), [ch05](ch05-protocol-state-machines-type-state-for-r.md) (type-state), [ch14](ch14-testing-type-level-guarantees.md) (testing compile-fail)
+> **関連章:** [第1章](ch01-the-philosophy-why-types-beat-tests.md)（哲学）、[第4章](ch04-capability-tokens-zero-cost-proof-of-aut.md)（ケーパビリティトークン）、[第5章](ch05-protocol-state-machines-type-state-for-r.md)（型状態）、[第14章](ch14-testing-type-level-guarantees.md)（コンパイル失敗のテスト）
 
-## The Nonce Reuse Catastrophe
+## ノンス再利用の致命的な脅威（The Nonce Reuse Catastrophe）
 
-In authenticated encryption (AES-GCM, ChaCha20-Poly1305), reusing a nonce with the
-same key is **catastrophic** — it leaks the XOR of two plaintexts and often the
-authentication key itself. This isn't a theoretical concern:
+認証付き暗号（AES-GCM、ChaCha20-Poly1305など）において、同一の鍵でノンス（Nonce）を再利用することは**致命的（Catastrophic）**です。2つの平文のXORが漏洩し、多くの場合認証鍵そのものまで漏洩します。これは単なる理論上の懸念ではありません。
 
-- **2016**: Forbidden Attack on AES-GCM in TLS — nonce reuse allowed plaintext recovery
-- **2020**: Multiple IoT firmware update systems found reusing nonces due to poor RNG
+- **2016年**: TLS における AES-GCM への「Forbidden Attack」— ノンスの再利用により平文の復元が可能に
+- **2020年**: 劣悪な RNG（乱数生成器）が原因で、複数の IoT ファームウェアアップデートシステムにおいてノンスの再利用が発覚
 
-In C/C++, a nonce is just a `uint8_t[12]`. Nothing prevents you from using it twice.
+C/C++ では、ノンスは単なる `uint8_t[12]` にすぎません。2回使用することを防ぐ仕組みは何一つありません。
 
 ```c
-// C — nothing stops nonce reuse
+// C — ノンスの再利用を止めるものは何もない
 uint8_t nonce[12];
 generate_nonce(nonce);
-encrypt(key, nonce, msg1, out1);   // ✅ first use
-encrypt(key, nonce, msg2, out2);   // 🐛 CATASTROPHIC: same nonce
+encrypt(key, nonce, msg1, out1);   // ✅ 1回目の使用
+encrypt(key, nonce, msg2, out2);   // 🐛 致命的: 同一ノンスの再利用
 ```
 
-## Move Semantics as Linear Types
+## 線形型としてのムーブセマンティクス
 
-Rust's ownership system is effectively a **linear type system** — a value can be used
-exactly once (moved) unless it implements `Copy`. The `ring` crate exploits this:
+Rustの所有権システムは、事実上の**線形型システム（Linear Type System）**です。`Copy` を実装していない限り、値は厳密に一度だけ使用（ムーブ）されます。`ring` クレートはこの性質を巧みに活用しています。
 
 ```rust,ignore
-// ring::aead::Nonce is:
-// - NOT Clone
-// - NOT Copy
-// - Consumed by value when used
-pub struct Nonce(/* private */);
+// ring::aead::Nonce は:
+// - Clone ではない
+// - Copy ではない
+// - 使用時に値渡しによって消費される
+pub struct Nonce(/* プライベート */);
 
 impl Nonce {
     pub fn try_assume_unique_for_key(value: &[u8]) -> Result<Self, Unspecified> {
         // ...
     }
-    // No Clone, no Copy — can only be used once
+    // Clone なし、Copy なし — 一度しか使用できない
 }
 ```
 
-When you pass a `Nonce` to `seal_in_place()`, **it moves**:
+`Nonce` を `seal_in_place()` に渡すと、**それはムーブします**:
 
 ```rust,ignore
-// Pseudocode mirroring ring's API shape
+// ring の API 形状を模した疑似コード
 fn seal_in_place(
     key: &SealingKey,
-    nonce: Nonce,       // ← moved, not borrowed
+    nonce: Nonce,       // ← 借用ではなくムーブされる
     data: &mut Vec<u8>,
 ) -> Result<(), Error> {
-    // ... encrypt data in place ...
-    // nonce is consumed — cannot be used again
+    // ... データをインプレースで暗号化 ...
+    // nonce は消費され、二度と使用できない
     Ok(())
 }
 ```
 
-Attempting to reuse it:
+これを再利用しようとすると:
 
 ```rust,ignore
 fn bad_encrypt(key: &SealingKey, data1: &mut Vec<u8>, data2: &mut Vec<u8>) {
-    // .unwrap() is safe — a 12-byte array is always a valid nonce.
+    // 12バイトの配列は常に有効なノンスであるため、.unwrap() は安全
     let nonce = Nonce::try_assume_unique_for_key(&[0u8; 12]).unwrap();
-    seal_in_place(key, nonce, data1).unwrap();  // ✅ nonce moved here
+    seal_in_place(key, nonce, data1).unwrap();  // ✅ nonce はここでムーブされる
     // seal_in_place(key, nonce, data2).unwrap();
-    //                    ^^^^^ ERROR: use of moved value ❌
+    //                    ^^^^^ エラー: ムーブされた値の使用 ❌
 }
 ```
 
-The compiler **proves** that each nonce is used exactly once. No test required.
+コンパイラは、各ノンスが厳密に一度だけ使用されることを**証明**します。テストを書く必要すらありません。
 
-## Case Study: ring's Nonce
+## ケーススタディ: ring の Nonce
 
-The `ring` crate goes further with `NonceSequence` — a trait that **generates**
-nonces and is also non-cloneable:
+`ring` クレートは、ノンスを**生成**し、自身も複製不能であるトレイト `NonceSequence` によってさらに踏み込んでいます。
 
 ```rust,ignore
-/// A sequence of unique nonces.
-/// Not Clone — once bound to a key, cannot be duplicated.
+/// 一意なノンスのシーケンス。
+/// Clone ではない — 一度鍵にバインドされると複製不可能。
 pub trait NonceSequence {
     fn advance(&mut self) -> Result<Nonce, Unspecified>;
 }
 
-/// SealingKey wraps a NonceSequence — each seal() auto-advances.
+/// SealingKey は NonceSequence をラップする — 各 seal() 呼び出しで自動的に進む。
 pub struct SealingKey<N: NonceSequence> {
-    key: UnboundKey,   // consumed during construction
+    key: UnboundKey,   // 構築時に消費される
     nonce_seq: N,
 }
 
 impl<N: NonceSequence> SealingKey<N> {
     pub fn new(key: UnboundKey, nonce_seq: N) -> Self {
-        // UnboundKey is moved — can't be used for both sealing AND opening
+        // UnboundKey はムーブされる — シーリング（暗号化）とオープニング（復号）の両方に使い回すことはできない
         SealingKey { key, nonce_seq }
     }
 
     pub fn seal_in_place_append_tag(
-        &mut self,       // &mut — exclusive access
+        &mut self,       // &mut — 排他的アクセス
         aad: Aad<&[u8]>,
         in_out: &mut Vec<u8>,
     ) -> Result<(), Unspecified> {
-        let nonce = self.nonce_seq.advance()?; // auto-generate unique nonce
-        // ... encrypt with nonce ...
+        let nonce = self.nonce_seq.advance()?; // 一意なノンスを自動生成
+        // ... ノンスを用いて暗号化 ...
         Ok(())
     }
 }
@@ -111,32 +107,31 @@ impl<N: NonceSequence> SealingKey<N> {
 # pub struct Unspecified;
 ```
 
-The ownership chain prevents:
-1. **Nonce reuse** — `Nonce` is not `Clone`, consumed on each call
-2. **Key duplication** — `UnboundKey` is moved into `SealingKey`, can't also make an `OpeningKey`
-3. **Sequence duplication** — `NonceSequence` is not `Clone`, so no two keys share a counter
+この所有権チェーンによって以下が防止されます。
+1. **ノンスの再利用** — `Nonce` は `Clone` ではなく、呼び出しごとに消費される
+2. **鍵の二重使用** — `UnboundKey` は `SealingKey` にムーブされるため、同時に `OpeningKey` を作成することはできない
+3. **シーケンスの複製** — `NonceSequence` は `Clone` ではないため、2つの鍵が同じカウンタを共有することはない
 
-**None of these require runtime checks.** The compiler enforces all three.
+**これらはいずれも実行時チェックを必要としません。** コンパイラがこれら3つすべてを強制します。
 
-## Case Study: Ephemeral Key Agreement
+## ケーススタディ: エフェメラル鍵合意
 
-Ephemeral Diffie-Hellman keys must be used **exactly once** (that's what "ephemeral" means).
-`ring` enforces this:
+エフェメラル（一時的）な Diffie-Hellman 鍵は、**厳密に一度だけ**使用されなければなりません（それが「エフェメラル」の意味そのものです）。`ring` はこれを強制します。
 
 ```rust,ignore
-/// An ephemeral private key. Not Clone, not Copy.
-/// Consumed by agree_ephemeral().
+/// エフェメラル秘密鍵。Clone でも Copy でもない。
+/// agree_ephemeral() によって消費される。
 pub struct EphemeralPrivateKey { /* ... */ }
 
-/// Compute shared secret — consumes the private key.
+/// 共有シークレットを計算する — 秘密鍵を消費する。
 pub fn agree_ephemeral(
-    my_private_key: EphemeralPrivateKey,  // ← moved
+    my_private_key: EphemeralPrivateKey,  // ← ムーブされる
     peer_public_key: &UnparsedPublicKey,
     error_value: Unspecified,
     kdf: impl FnOnce(&[u8]) -> Result<SharedSecret, Unspecified>,
 ) -> Result<SharedSecret, Unspecified> {
-    // ... DH computation ...
-    // my_private_key is consumed — can never be reused
+    // ... DH 計算 ...
+    // my_private_key は消費され、再利用は不可能になる
     # kdf(&[])
 }
 # pub struct UnparsedPublicKey;
@@ -144,46 +139,42 @@ pub fn agree_ephemeral(
 # pub struct Unspecified;
 ```
 
-After calling `agree_ephemeral()`, the private key **no longer exists in memory**
-(it's been dropped). A C++ developer would need to remember to `memset(key, 0, len)`
-and hope the compiler doesn't optimise it away. In Rust, the key is simply gone.
+`agree_ephemeral()` を呼び出した後、秘密鍵は**もはやメモリ上に存在しません**（ドロップされます）。C++ 開発者であれば `memset(key, 0, len)` を忘れずに呼び出し、それがコンパイラの最適化によって消去されないことを祈る必要があります。Rust では、鍵は単純に消滅します。
 
-## Hardware Application: One-Time Fuse Programming
+## ハードウェアへの適用: 1回限りのヒューズプログラミング
 
-Server platforms have **OTP (one-time programmable) fuses** for security keys,
-board serial numbers, and feature bits. Writing a fuse is irreversible — doing it
-twice with different data bricks the board. This is a perfect fit for move semantics:
+サーバープラットフォームには、セキュリティキー、ボードシリアル番号、機能フラグなどのための **OTP（One-Time Programmable: 1回書き込み可能）ヒューズ** が備わっています。ヒューズへの書き込みは不可逆であり、異なるデータで2回書き込もうとするとボードが文鎮化（brick）します。これはムーブセマンティクスに完全に合致するユースケースです。
 
 ```rust,ignore
 use std::io;
 
-/// A fuse write payload. Not Clone, not Copy.
-/// Consumed when the fuse is programmed.
+/// ヒューズ書き込みペイロード。Clone でも Copy でもない。
+/// ヒューズがプログラミングされるときに消費される。
 pub struct FusePayload {
     address: u32,
     data: Vec<u8>,
-    // private constructor — only created via validated builder
+    // プライベートコンストラクタ — 検証済みビルダー経由でのみ生成可能
 }
 
-/// Proof that the fuse programmer is in the correct state.
+/// ヒューズプログラマが正しい状態にあることの証明。
 pub struct FuseController {
-    /* hardware handle */
+    /* ハードウェアハンドル */
 }
 
 impl FuseController {
-    /// Program a fuse — consumes the payload, preventing double-write.
+    /// ヒューズをプログラミングする — ペイロードを消費し、二重書き込みを防止する。
     pub fn program(
         &mut self,
-        payload: FusePayload,  // ← moved — can't be used twice
+        payload: FusePayload,  // ← ムーブされる — 二重使用は不可能
     ) -> io::Result<()> {
-        // ... write to OTP hardware ...
-        // payload is consumed — trying to program again with the same
-        // payload is a compile error
+        // ... OTP ハードウェアに書き込み ...
+        // payload は消費される — 同一の payload で再度プログラミングを
+        // 試みるとコンパイルエラーになる
         Ok(())
     }
 }
 
-/// Builder with validation — only way to create a FusePayload.
+/// 検証機能付きビルダー — FusePayload を作成する唯一の方法。
 pub struct FusePayloadBuilder {
     address: Option<u32>,
     data: Option<Vec<u8>>,
@@ -205,14 +196,14 @@ impl FusePayloadBuilder {
     }
 
     pub fn build(self) -> Result<FusePayload, &'static str> {
-        let address = self.address.ok_or("address required")?;
-        let data = self.data.ok_or("data required")?;
-        if data.len() > 32 { return Err("fuse data too long"); }
+        let address = self.address.ok_or("アドレスが必要です")?;
+        let data = self.data.ok_or("データが必要です")?;
+        if data.len() > 32 { return Err("ヒューズデータが長すぎます"); }
         Ok(FusePayload { address, data })
     }
 }
 
-// Usage:
+// 使用例:
 fn program_board_serial(ctrl: &mut FuseController) -> io::Result<()> {
     let payload = FusePayloadBuilder::new()
         .address(0x100)
@@ -220,22 +211,21 @@ fn program_board_serial(ctrl: &mut FuseController) -> io::Result<()> {
         .build()
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
 
-    ctrl.program(payload)?;      // ✅ payload consumed
+    ctrl.program(payload)?;      // ✅ payload が消費される
 
-    // ctrl.program(payload);    // ❌ ERROR: use of moved value
-    //              ^^^^^^^ value used after move
+    // ctrl.program(payload);    // ❌ エラー: ムーブされた値の使用
+    //              ^^^^^^^ ムーブ後に使用された値
 
     Ok(())
 }
 ```
 
-## Hardware Application: Single-Use Calibration Token
+## ハードウェアへの適用: 単一使用のキャリブレーション（校正）トークン
 
-Some sensors require a calibration step that must happen **exactly once** per power
-cycle. A calibration token enforces this:
+一部のセンサーでは、電源サイクルごとに**厳密に1回だけ**実行されなければならないキャリブレーション（校正）手順が必要です。キャリブレーショントークンを用いれば、これを強制できます。
 
 ```rust,ignore
-/// Issued once at power-on. Not Clone, not Copy.
+/// 電源投入時に一度だけ発行される。Clone でも Copy でもない。
 pub struct CalibrationToken {
     _private: (),
 }
@@ -245,7 +235,7 @@ pub struct SensorController {
 }
 
 impl SensorController {
-    /// Called once at power-on — returns a calibration token.
+    /// 電源投入時に一度だけ呼び出される — キャリブレーショントークンを返す。
     pub fn power_on() -> (Self, CalibrationToken) {
         (
             SensorController { calibrated: false },
@@ -253,89 +243,89 @@ impl SensorController {
         )
     }
 
-    /// Calibrate the sensor — consumes the token.
+    /// センサーをキャリブレーションする — トークンを消費する。
     pub fn calibrate(&mut self, _token: CalibrationToken) -> io::Result<()> {
-        // ... run calibration sequence ...
+        // ... キャリブレーションシーケンスを実行 ...
         self.calibrated = true;
         Ok(())
     }
 
-    /// Read a sensor — only meaningful after calibration.
+    /// センサーの値を読み取る — キャリブレーション完了後にのみ有効。
     ///
-    /// **Limitation:** The move-semantics guarantee is *partial*. The caller
-    /// can `drop(cal_token)` without calling `calibrate()` — the token will
-    /// be destroyed but calibration won't run. The `#[must_use]` annotation
-    /// (see below) generates a warning but not a hard error.
+    /// **制約事項:** ムーブセマンティクスによる保証は「部分的」です。呼び出し側が
+    /// calibrate() を呼び出さずに drop(cal_token) した場合、トークンは破棄されますが
+    /// キャリブレーションは実行されません。#[must_use] 属性（後述）を付与することで
+    /// 警告を生成できますが、ハードエラーにはなりません。
     ///
-    /// The runtime `self.calibrated` check here is the **safety net** for
-    /// that gap. For a fully compile-time solution, see the type-state
-    /// pattern in ch05 where `send_command()` only exists on `IpmiSession<Active>`.
+    /// ここでの実行時 self.calibrated チェックは、その隙間を塞ぐ「セーフティネット」です。
+    /// 完全にコンパイル時のみで解決する方法については、第5章の型状態パターン
+    /// （send_command() が IpmiSession<Active> にのみ存在する仕組み）を参照してください。
     pub fn read(&self) -> io::Result<f64> {
         if !self.calibrated {
-            return Err(io::Error::new(io::ErrorKind::Other, "not calibrated"));
+            return Err(io::Error::new(io::ErrorKind::Other, "キャリブレーションされていません"));
         }
-        Ok(25.0) // stub
+        Ok(25.0) // スタブ
     }
 }
 
 fn sensor_workflow() -> io::Result<()> {
     let (mut ctrl, cal_token) = SensorController::power_on();
 
-    // Must use cal_token somewhere — it's not Copy, so dropping it
-    // without consuming it generates a warning (or error with #[must_use])
+    // cal_token はどこかで使用されなければならない — Copy ではないため、
+    // 消費せずに drop すると警告（#[must_use] の場合はエラー）が生成される
     ctrl.calibrate(cal_token)?;
 
-    // Now reads work:
+    // これで読み取りが可能になる:
     let temp = ctrl.read()?;
-    println!("Temperature: {temp}°C");
+    println!("温度: {temp}°C");
 
-    // Can't calibrate again — token was consumed:
-    // ctrl.calibrate(cal_token);  // ❌ use of moved value
+    // 再度キャリブレーションすることはできない — トークンは消費済み:
+    // ctrl.calibrate(cal_token);  // ❌ ムーブされた値の使用
 
     Ok(())
 }
 ```
 
-### When to Use Single-Use Types
+### 単一使用型を使うべき場面
 
-| Scenario | Use single-use (move) semantics? |
+| シナリオ | 単一使用（ムーブ）セマンティクスを使うべきか？ |
 |----------|:------:|
-| Cryptographic nonces | ✅ Always — nonce reuse is catastrophic |
-| Ephemeral keys (DH, ECDH) | ✅ Always — reuse weakens forward secrecy |
-| OTP fuse writes | ✅ Always — double-write bricks hardware |
-| License activation codes | ✅ Usually — prevent double-activation |
-| Calibration tokens | ✅ Usually — enforce once-per-session |
-| File write handles | ⚠️ Sometimes — depends on protocol |
-| Database transaction handles | ⚠️ Sometimes — commit/rollback is single-use |
-| General data buffers | ❌ These need reuse — use `&mut [u8]` |
+| 暗号学的ノンス | ✅ 常に — ノンス再利用は致命的 |
+| エフェメラル鍵（DH、ECDH） | ✅ 常に — 再利用は前方秘匿性を損なう |
+| OTP ヒューズの書き込み | ✅ 常に — 二重書き込みはハードウェアを文鎮化させる |
+| ライセンスアクティベーションコード | ✅ 基本的に — 二重アクティベーションの防止 |
+| キャリブレーショントークン | ✅ 基本的に — セッションあたり1回の強制 |
+| ファイル書き込みハンドル | ⚠️ プロトコルによる |
+| データベーストランザクションハンドル | ⚠️ 状況による — commit/rollback は単一使用 |
+| 一般的なデータバッファ | ❌ 再利用が必要 — `&mut [u8]` を使用すべき |
 
-## Single-Use Ownership Flow
+## 単一使用の所有権フロー
 
 ```mermaid
 flowchart LR
-    N["Nonce::new()"] -->|move| E["encrypt(nonce, msg)"]
-    E -->|consumed| X["❌ nonce gone"]
-    N -.->|"reuse attempt"| ERR["COMPILE ERROR:<br/>use of moved value"]
+    N["Nonce::new()"] -->|ムーブ| E["encrypt(nonce, msg)"]
+    E -->|消費| X["❌ nonce は消滅"]
+    N -.->|"再利用の試み"| ERR["コンパイルエラー:<br/>ムーブされた値の使用"]
     style N fill:#e1f5fe,color:#000
     style E fill:#c8e6c9,color:#000
     style X fill:#ffcdd2,color:#000
     style ERR fill:#ffcdd2,color:#000
 ```
 
-## Exercise: Single-Use Firmware Signing Token
+## 演習問題: 単一使用のファームウェア署名トークン
 
-Design a `SigningToken` that can be used exactly once to sign a firmware image:
-- `SigningToken::issue(key_id: &str) -> SigningToken` (not Clone, not Copy)
-- `sign(token: SigningToken, image: &[u8]) -> SignedImage` (consumes the token)
-- Attempting to sign twice should be a compile error.
+ファームウェアイメージの署名に厳密に一度だけ使用できる `SigningToken` を設計してください。
+- `SigningToken::issue(key_id: &str) -> SigningToken`（Clone でも Copy でもない）
+- `sign(token: SigningToken, image: &[u8]) -> SignedImage`（トークンを消費する）
+- 2回署名しようとするとコンパイルエラーになること。
 
 <details>
-<summary>Solution</summary>
+<summary>解答例</summary>
 
 ```rust,ignore
 pub struct SigningToken {
     key_id: String,
-    // NOT Clone, NOT Copy
+    // Clone ではない、Copy ではない
 }
 
 pub struct SignedImage {
@@ -350,30 +340,29 @@ impl SigningToken {
 }
 
 pub fn sign(token: SigningToken, _image: &[u8]) -> SignedImage {
-    // Token consumed by move — can't be reused
+    // トークンはムーブによって消費される — 再利用は不可能
     SignedImage {
-        signature: vec![0xDE, 0xAD],  // stub
+        signature: vec![0xDE, 0xAD],  // スタブ
         key_id: token.key_id,
     }
 }
 
-// ✅ Compiles:
+// ✅ コンパイル成功:
 // let tok = SigningToken::issue("release-key");
 // let signed = sign(tok, &firmware_bytes);
 //
-// ❌ Compile error:
-// let signed2 = sign(tok, &other_bytes);  // ERROR: use of moved value
+// ❌ コンパイルエラー:
+// let signed2 = sign(tok, &other_bytes);  // エラー: ムーブされた値の使用
 ```
 
 </details>
 
-## Key Takeaways
+## 主なまとめ
 
-1. **Move = linear use** — a non-Clone, non-Copy type can be consumed exactly once; the compiler enforces this.
-2. **Nonce reuse is catastrophic** — Rust's ownership system prevents it structurally, not by discipline.
-3. **Pattern applies beyond crypto** — OTP fuses, calibration tokens, audit entries — anything that must happen at most once.
-4. **Ephemeral keys get forward secrecy for free** — the key agreement value is moved into the derived secret and vanishes.
-5. **When in doubt, remove `Clone`** — you can always add it later; removing it from a published API is a breaking change.
+1. **ムーブ ＝ 線形な使用** — `Clone` でも `Copy` でもない型は厳密に一度だけ消費でき、コンパイラがこれを強制します。
+2. **ノンスの再利用は致命的** — Rustの所有権システムは、開発者の注意力（規律）ではなく構造によってそれを防止します。
+3. **暗号以外にも広く適用可能** — OTP ヒューズ、キャリブレーショントークン、監査エントリなど、最大でも一度しか実行してはならないあらゆる操作に適用できます。
+4. **エフェメラル鍵は前方秘匿性を追加コストなしで獲得する** — 鍵合意値は導出されたシークレットへとムーブされ、メモリから消滅します。
+5. **迷ったら `Clone` を外す** — 後から追加することはいつでも可能ですが、一度公開した API から削除することは破壊的変更（Breaking Change）になります。
 
 ---
-

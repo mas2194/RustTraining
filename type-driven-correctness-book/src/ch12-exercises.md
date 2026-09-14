@@ -1,28 +1,28 @@
-# Exercises 🟡
+# 演習問題 🟡
 
-> **What you'll learn:** Hands-on practice applying correct-by-construction patterns to realistic hardware scenarios — NVMe admin commands, firmware update state machines, sensor pipelines, PCIe phantom types, multi-protocol health checks, and session-typed diagnostic protocols.
+> **学べること:** 構造的に正しくするパターンを、実践的なハードウェアシナリオ — NVMe管理コマンド、ファームウェア更新の状態機械、センサーパイプライン、PCIe幽霊型、マルチプロトコル健全性チェック、セッション型の診断プロトコル — に適用するハンズオン練習。
 >
-> **Cross-references:** [ch02](ch02-typed-command-interfaces-request-determi.md) (exercise 1), [ch05](ch05-protocol-state-machines-type-state-for-r.md) (exercise 2), [ch06](ch06-dimensional-analysis-making-the-compiler.md) (exercise 3), [ch09](ch09-phantom-types-for-resource-tracking.md) (exercise 4), [ch10](ch10-putting-it-all-together-a-complete-diagn.md) (exercise 5)
+> **相互参照:** [第2章](ch02-typed-command-interfaces-request-determi.md)（演習1）、[第5章](ch05-protocol-state-machines-type-state-for-r.md)（演習2）、[第6章](ch06-dimensional-analysis-making-the-compiler.md)（演習3）、[第9章](ch09-phantom-types-for-resource-tracking.md)（演習4）、[第10章](ch10-putting-it-all-together-a-complete-diagn.md)（演習5）
 
-## Practice Problems
+## 練習問題
 
-### Exercise 1: NVMe Admin Command (Typed Commands)
+### 演習1: NVMe管理コマンド（型付きコマンド）
 
-Design a typed command interface for NVMe admin commands:
+NVMe管理コマンドに対する型付きコマンドインターフェースを設計してください：
 
-- `Identify` → `IdentifyResponse` (model number, serial, firmware rev)
-- `GetLogPage` → `SmartLog` (temperature, available spare, data units read)
-- `GetFeature` → feature-specific response
+- `Identify` → `IdentifyResponse`（モデル番号、シリアル番号、ファームウェアリビジョン）
+- `GetLogPage` → `SmartLog`（温度、使用可能な予備領域、読み取りデータユニット数）
+- `GetFeature` → 機能固有のレスポンス
 
-Requirements:
-1. The command type determines the response type
-2. No runtime dispatch — static dispatch only
-3. Add a `NamespaceId` newtype that prevents mixing namespace IDs with other `u32`s
+要件：
+1. コマンド型によってレスポンス型が一意に決定されること
+2. ランタイムディスパッチを行わず、静的ディスパッチのみを使用すること
+3. 名前空間IDが他の `u32` と混同されるのを防ぐ `NamespaceId` ニュータイプを追加すること
 
-**Hint:** Follow the `IpmiCmd` trait pattern from ch02, but use NVMe-specific constants.
+**ヒント:** 第2章の `IpmiCmd` トレイトパターンに従い、NVMe固有の定数を使用してください。
 
 <details>
-<summary>Sample Solution (Exercise 1)</summary>
+<summary>解答例（演習1）</summary>
 
 ```rust,ignore
 use std::io;
@@ -51,7 +51,7 @@ pub struct ArbitrationFeature {
     pub low_priority_weight: u8,
 }
 
-/// The core pattern: associated type pins each command's response.
+/// コアパターン: 関連型によって各コマンドのレスポンスを固定する。
 pub trait NvmeAdminCmd {
     type Response;
     fn opcode(&self) -> u8;
@@ -113,34 +113,34 @@ impl NvmeAdminCmd for GetFeature {
     }
 }
 
-/// Static dispatch — the compiler monomorphises per command type.
+/// 静的ディスパッチ — コンパイラがコマンド型ごとに単相化する。
 pub struct NvmeController;
 
 impl NvmeController {
     pub fn execute<C: NvmeAdminCmd>(&self, cmd: &C) -> io::Result<C::Response> {
-        // Build SQE from cmd.opcode()/cmd.nsid(),
-        // submit to SQ, wait for CQ, then:
+        // cmd.opcode()/cmd.nsid() から SQE を構築し、
+        // SQ に投入して CQ を待機したのち:
         let raw = self.submit_and_read(cmd.opcode())?;
         cmd.parse_response(&raw)
     }
 
     fn submit_and_read(&self, _opcode: u8) -> io::Result<Vec<u8>> {
-        // Real implementation talks to /dev/nvme0
+        // 実際の実装では /dev/nvme0 と通信する
         Ok(vec![0; 512])
     }
 }
 ```
 
-**Key points:**
-- `NamespaceId(u32)` prevents mixing namespace IDs with arbitrary `u32` values.
-- `NvmeAdminCmd::Response` is the "type index" — `execute()` returns exactly `C::Response`.
-- Fully static dispatch: no `Box<dyn …>`, no runtime downcasting.
+**重要ポイント:**
+- `NamespaceId(u32)` により、名前空間IDと任意の `u32` 値の混同を防止します。
+- `NvmeAdminCmd::Response` が「型のインデックス」として機能し、`execute()` は正確に `C::Response` を返します。
+- 完全な静的ディスパッチ: `Box<dyn …>` や実行時のダウンキャストは不要です。
 
 </details>
 
-### Exercise 2: Firmware Update State Machine (Type-State)
+### 演習2: ファームウェア更新の状態機械（型状態）
 
-Model a BMC firmware update lifecycle:
+BMCファームウェア更新のライフサイクルをモデル化してください：
 
 ```mermaid
 stateDiagram-v2
@@ -149,44 +149,44 @@ stateDiagram-v2
     Uploading --> Uploading : send_chunk(data)
     Uploading --> Verifying : finish_upload()
     Uploading --> Idle : abort()
-    Verifying --> Applying : verify() ✅ + VerifiedImage token
-    Verifying --> Idle : verify() ❌ or abort()
+    Verifying --> Applying : verify() ✅ + VerifiedImage トークン
+    Verifying --> Idle : verify() ❌ または abort()
     Applying --> Rebooting : apply(token)
     Rebooting --> Complete : reboot_complete()
     Complete --> [*]
 
-    note right of Applying : No abort() — irreversible
-    note right of Verifying : VerifiedImage is a proof token
+    note right of Applying : abort() 不可 — 取り消し不能
+    note right of Verifying : VerifiedImage は証明トークン
 ```
 
-Requirements:
-1. Each state is a distinct type
-2. Upload can only begin from Idle
-3. Verification requires upload to be complete
-4. Apply can only happen after successful verification — take a `VerifiedImage` proof token
-5. Reboot is the only option after applying
-6. Add an `abort()` method available in Uploading and Verifying (but not Applying — too late)
+要件：
+1. 各状態が個別の型であること
+2. アップロードは Idle からのみ開始できること
+3. 検証（Verification）はアップロードが完了していることを要求すること
+4. 適用（Apply）は検証に成功した後にのみ実行可能であること — `VerifiedImage` 証明トークンを受け取ること
+5. 適用後に可能な操作は再起動のみであること
+6. Uploading および Verifying で利用可能な `abort()` メソッドを追加すること（ただし Applying では手遅れのため利用不可とすること）
 
-**Hint:** Combine type-state (ch05) with capability tokens (ch04).
+**ヒント:** 型状態（第5章）とケイパビリティトークン（第4章）を組み合わせてください。
 
 <details>
-<summary>Sample Solution (Exercise 2)</summary>
+<summary>解答例（演習2）</summary>
 
 ```rust,ignore
-// --- State types ---
-// Design choice: here we store state inline (`_state: S`) rather than using
-// `PhantomData<S>` (ch05's approach). This lets states carry data —
-// e.g., `Uploading { bytes_sent: usize }` tracks progress. Use `PhantomData`
-// when states are pure markers (zero-sized); use inline storage when
-// states carry meaningful runtime data.
+// --- 状態の型 ---
+// 設計上の選択: ここでは第5章のアプローチ（PhantomData<S>）ではなく、
+// 状態をインライン（_state: S）で保持しています。これにより、
+// 状態が進捗状況を追跡する（例: Uploading { bytes_sent: usize }）などのデータを持てるようになります。
+// 状態が純粋なマーカー（ゼロサイズ）の場合は PhantomData を使用し、
+// 状態が意味のあるランタイムデータを運ぶ場合はインライン保持を使用します。
 pub struct Idle;
-pub struct Uploading { bytes_sent: usize }  // not ZST — carries progress data
+pub struct Uploading { bytes_sent: usize }  // ZST ではない — 進捗データを保持
 pub struct Verifying;
 pub struct Applying;
 pub struct Rebooting;
 pub struct Complete;
 
-/// Proof token: only constructed inside verify().
+/// 証明トークン: verify() の内部でのみ構築可能。
 pub struct VerifiedImage { _private: () }
 
 pub struct FwUpdate<S> {
@@ -211,31 +211,31 @@ impl FwUpdate<Uploading> {
     pub fn finish_upload(self) -> FwUpdate<Verifying> {
         FwUpdate { bmc_addr: self.bmc_addr, _state: Verifying }
     }
-    /// Abort available during upload — returns to Idle.
+    /// アップロード中に利用可能な中断 — Idle に戻る。
     pub fn abort(self) -> FwUpdate<Idle> {
         FwUpdate { bmc_addr: self.bmc_addr, _state: Idle }
     }
 }
 
 impl FwUpdate<Verifying> {
-    /// On success, returns the next state AND a VerifiedImage proof token.
+    /// 成功時に次の状態と VerifiedImage 証明トークンを返す。
     pub fn verify(self) -> Result<(FwUpdate<Applying>, VerifiedImage), FwUpdate<Idle>> {
-        // Real: check CRC, signature, compatibility
+        // 実際には: CRC、署名、互換性をチェック
         let token = VerifiedImage { _private: () };
         Ok((
             FwUpdate { bmc_addr: self.bmc_addr, _state: Applying },
             token,
         ))
     }
-    /// Abort available during verification.
+    /// 検証中に利用可能な中断。
     pub fn abort(self) -> FwUpdate<Idle> {
         FwUpdate { bmc_addr: self.bmc_addr, _state: Idle }
     }
 }
 
 impl FwUpdate<Applying> {
-    /// Consumes the VerifiedImage proof — can't apply without verification.
-    /// Note: NO abort() method here — once flashing starts, it's too dangerous.
+    /// VerifiedImage 証明を消費する — 検証なしに適用することはできない。
+    /// 注意: ここには abort() メソッドは存在しない — いったん書き込みが始まったら危険すぎるため。
     pub fn apply(self, _proof: VerifiedImage) -> FwUpdate<Rebooting> {
         FwUpdate { bmc_addr: self.bmc_addr, _state: Rebooting }
     }
@@ -251,7 +251,7 @@ impl FwUpdate<Complete> {
     pub fn version(&self) -> &str { "2.1.0" }
 }
 
-// Usage:
+// 使い方:
 // let fw = FwUpdate::new("192.168.1.100")
 //     .begin_upload()
 //     .send_chunk(b"image_data")
@@ -261,29 +261,27 @@ impl FwUpdate<Complete> {
 // println!("New version: {}", fw.version());
 ```
 
-**Key points:**
-- `abort()` exists only on `FwUpdate<Uploading>` and `FwUpdate<Verifying>` — calling
-  it on `FwUpdate<Applying>` is a **compile error**, not a runtime check.
-- `VerifiedImage` has a private field, so only `verify()` can create one.
-- `apply()` consumes the proof token — you can't skip verification.
+**重要ポイント:**
+- `abort()` は `FwUpdate<Uploading>` と `FwUpdate<Verifying>` にのみ存在します — `FwUpdate<Applying>` で呼び出そうとすると、ランタイムチェックではなく**コンパイルエラー**になります。
+- `VerifiedImage` は非公開フィールドを持つため、`verify()` だけがこれを作成できます。
+- `apply()` は証明トークンを消費します — 検証をスキップすることはできません。
 
 </details>
 
-### Exercise 3: Sensor Reading Pipeline (Dimensional Analysis)
+### 演習3: センサー読み取りパイプライン（次元解析）
 
-Build a complete sensor pipeline:
+完全なセンサーパイプラインを構築してください：
 
-1. Define newtypes: `RawAdc`, `Celsius`, `Fahrenheit`, `Volts`, `Millivolts`, `Watts`
-2. Implement `From<Celsius> for Fahrenheit` and vice versa
-3. Create `impl Mul<Volts, Output=Watts> for Amperes` (P = V × I)
-4. Build a `Threshold<T>` generic checker
-5. Write a pipeline: ADC → calibration → threshold check → result
+1. ニュータイプを定義する: `RawAdc`, `Celsius`, `Fahrenheit`, `Volts`, `Millivolts`, `Watts`
+2. `From<Celsius> for Fahrenheit` およびその逆を実装する
+3. `impl Mul<Volts, Output=Watts> for Amperes` を作成する（P = V × I）
+4. ジェネリックなしきい値チェッカー `Threshold<T>` を構築する
+5. パイプラインを作成する: ADC → キャリブレーション → しきい値チェック → 結果
 
-The compiler should reject: comparing `Celsius` to `Volts`, adding `Watts` to `Rpm`,
-passing `Millivolts` where `Volts` is expected.
+コンパイラは以下を拒否しなければなりません：`Celsius` と `Volts` の比較、`Watts` と `Rpm` の加算、`Volts` が要求される場所への `Millivolts` の受け渡し。
 
 <details>
-<summary>Sample Solution (Exercise 3)</summary>
+<summary>解答例（演習3）</summary>
 
 ```rust,ignore
 use std::ops::{Add, Sub, Mul};
@@ -309,7 +307,7 @@ pub struct Amperes(pub f64);
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Watts(pub f64);
 
-// --- Safe conversions ---
+// --- 安全な変換 ---
 impl From<Celsius> for Fahrenheit {
     fn from(c: Celsius) -> Self { Fahrenheit(c.0 * 9.0 / 5.0 + 32.0) }
 }
@@ -323,10 +321,9 @@ impl From<Volts> for Millivolts {
     fn from(v: Volts) -> Self { Millivolts(v.0 * 1000.0) }
 }
 
-// --- Arithmetic on same-unit types ---
-// NOTE: Adding absolute temperatures (25°C + 30°C) is physically
-// questionable — see ch06's discussion of ΔT newtypes for a more
-// rigorous approach.  Here we keep it simple for the exercise.
+// --- 同一単位の型どうしの算術演算 ---
+// 注意: 絶対温度の加算（25°C + 30°C）は物理的に疑問符がつきます — より厳密なアプローチについては
+// 第6章の ΔT ニュータイプの議論を参照してください。ここでは演習のためにシンプルにしています。
 impl Add for Celsius {
     type Output = Celsius;
     fn add(self, rhs: Self) -> Celsius { Celsius(self.0 + rhs.0) }
@@ -336,16 +333,15 @@ impl Sub for Celsius {
     fn sub(self, rhs: Self) -> Celsius { Celsius(self.0 - rhs.0) }
 }
 
-// P = V × I  (cross-unit multiplication)
+// P = V × I  (異なる単位どうしの乗算)
 impl Mul<Amperes> for Volts {
     type Output = Watts;
     fn mul(self, rhs: Amperes) -> Watts { Watts(self.0 * rhs.0) }
 }
 
-// --- Generic threshold checker ---
-// Exercise 3 extends ch06's Threshold with a generic ThresholdResult<T>
-// that carries the triggering reading — an evolution of ch06's simpler
-// ThresholdResult { Normal, Warning, Critical } enum.
+// --- ジェネリックなしきい値チェッカー ---
+// 演習3では、第6章の Threshold を、トリガーとなった読み取り値を運ぶジェネリックな
+// ThresholdResult<T> で拡張しています — これは第6章のより単純な ThresholdResult { Normal, Warning, Critical } 列挙型の発展形です。
 pub enum ThresholdResult<T> {
     Normal(T),
     Warning(T),
@@ -357,7 +353,7 @@ pub struct Threshold<T> {
     pub critical: T,
 }
 
-// Generic impl — works for any unit type that supports PartialOrd.
+// ジェネリック実装 — PartialOrd をサポートする任意の単位型で動作する。
 impl<T: PartialOrd + Copy> Threshold<T> {
     pub fn check(&self, reading: T) -> ThresholdResult<T> {
         if reading >= self.critical {
@@ -369,12 +365,12 @@ impl<T: PartialOrd + Copy> Threshold<T> {
         }
     }
 }
-// Now `Threshold<Rpm>`, `Threshold<Volts>`, etc. all work automatically.
+// これで `Threshold<Rpm>`, `Threshold<Volts>` などがすべて自動的に機能する。
 
-// --- Pipeline: ADC → calibration → threshold → result ---
+// --- パイプライン: ADC → キャリブレーション → しきい値 → 結果 ---
 pub struct CalibrationParams {
-    pub scale: f64,  // ADC counts per °C
-    pub offset: f64, // °C at ADC 0
+    pub scale: f64,  // °C あたりの ADC カウント
+    pub offset: f64, // ADC が 0 のときの °C
 }
 
 pub fn calibrate(raw: RawAdc, params: &CalibrationParams) -> Celsius {
@@ -390,51 +386,50 @@ pub fn sensor_pipeline(
     threshold.check(temp)
 }
 
-// Compile-time safety — these would NOT compile:
-// let _ = Celsius(25.0) + Volts(12.0);   // ERROR: mismatched types
-// let _: Millivolts = Volts(1.0);         // ERROR: no implicit coercion
-// let _ = Watts(100.0) + Rpm(3000);       // ERROR: mismatched types
+// コンパイル時の安全性 — これらはコンパイル「できない」:
+// let _ = Celsius(25.0) + Volts(12.0);   // エラー: 型が一致しない
+// let _: Millivolts = Volts(1.0);         // エラー: 暗黙の型変換はない
+// let _ = Watts(100.0) + Rpm(3000);       // エラー: 型が一致しない
 ```
 
-**Key points:**
-- Each physical unit is a distinct type — no accidental mixing.
-- `Mul<Amperes> for Volts` yields `Watts`, encoding P = V × I in the type system.
-- Explicit `From` conversions for related units (mV ↔ V, °C ↔ °F).
-- `Threshold<Celsius>` only accepts `Celsius` — can't accidentally threshold-check RPM.
+**重要ポイント:**
+- 各物理単位は個別の型であり、偶発的な混同は起こり得ません。
+- `Mul<Amperes> for Volts` は `Watts` を生成し、P = V × I を型システムにエンコードします。
+- 関連する単位間（mV ↔ V、°C ↔ °F）には明示的な `From` 変換を用意します。
+- `Threshold<Celsius>` は `Celsius` のみを受け入れます — 誤って RPM のしきい値チェックを行うことはできません。
 
 </details>
 
-### Exercise 4: PCIe Capability Walk (Phantom Types + Validated Boundary)
+### 演習4: PCIeケイパビリティ走査（幽霊型 + 境界でのバリデーション）
 
-Model the PCIe capability linked list:
+PCIeケイパビリティの連結リストをモデル化してください：
 
-1. `RawCapability` — unvalidated bytes from config space
-2. `ValidCapability` — parsed and validated (via TryFrom)
-3. Each capability type (MSI, MSI-X, PCIe Express, Power Management) has its own
-   phantom-typed register layout
-4. Walking the list returns an iterator of `ValidCapability` values
+1. `RawCapability` — コンフィグ空間からの未検証バイト列
+2. `ValidCapability` — （TryFrom経由で）パースおよびバリデーション済み
+3. 各ケイパビリティ型（MSI, MSI-X, PCIe Express, Power Management）が独自の幽霊型レジスタレイアウトを持つこと
+4. リストの走査により `ValidCapability` 値のイテレータが返されること
 
-**Hint:** Combine validated boundaries (ch07) with phantom types (ch09).
+**ヒント:** 境界でのバリデーション（第7章）と幽霊型（第9章）を組み合わせてください。
 
 <details>
-<summary>Sample Solution (Exercise 4)</summary>
+<summary>解答例（演習4）</summary>
 
 ```rust,ignore
 use std::marker::PhantomData;
 
-// --- Phantom markers for capability types ---
+// --- ケイパビリティ型用の幽霊マーカー ---
 pub struct Msi;
 pub struct MsiX;
 pub struct PciExpress;
 pub struct PowerMgmt;
 
-// PCI capability IDs from the spec
+// 仕様書で定義されている PCI ケイパビリティ ID
 const CAP_ID_PM:   u8 = 0x01;
 const CAP_ID_MSI:  u8 = 0x05;
 const CAP_ID_PCIE: u8 = 0x10;
 const CAP_ID_MSIX: u8 = 0x11;
 
-/// Unvalidated bytes — may be garbage.
+/// 未検証のバイト列 — ゴミデータである可能性がある。
 #[derive(Debug)]
 pub struct RawCapability {
     pub id: u8,
@@ -442,7 +437,7 @@ pub struct RawCapability {
     pub data: Vec<u8>,
 }
 
-/// Validated and type-tagged capability.
+/// バリデーション済みかつ型タグ付けされたケイパビリティ。
 #[derive(Debug)]
 pub struct ValidCapability<Kind> {
     id: u8,
@@ -451,7 +446,7 @@ pub struct ValidCapability<Kind> {
     _kind: PhantomData<Kind>,
 }
 
-// --- TryFrom: parse-don't-validate boundary ---
+// --- TryFrom: 「バリデーションではなくパースする」境界 ---
 impl TryFrom<RawCapability> for ValidCapability<PowerMgmt> {
     type Error = &'static str;
     fn try_from(raw: RawCapability) -> Result<Self, Self::Error> {
@@ -476,9 +471,9 @@ impl TryFrom<RawCapability> for ValidCapability<Msi> {
     }
 }
 
-// (Similar TryFrom impls for MsiX, PciExpress — omitted for brevity)
+// (MsiX, PciExpress に対する同様の TryFrom 実装 — 簡潔さのため省略)
 
-// --- Type-safe accessors: only available on the correct capability ---
+// --- 型安全なアクセサ: 正しいケイパビリティでのみ利用可能 ---
 impl ValidCapability<PowerMgmt> {
     pub fn pm_control(&self) -> u16 {
         u16::from_le_bytes([self.data[0], self.data[1]])
@@ -500,7 +495,7 @@ impl ValidCapability<MsiX> {
     }
 }
 
-// --- Capability walker: iterates the linked list ---
+// --- ケイパビリティウォーカー: 連結リストを走査する ---
 pub struct CapabilityWalker<'a> {
     config_space: &'a [u8],
     next_ptr: u8,
@@ -508,7 +503,7 @@ pub struct CapabilityWalker<'a> {
 
 impl<'a> CapabilityWalker<'a> {
     pub fn new(config_space: &'a [u8]) -> Self {
-        // Capability pointer lives at offset 0x34 in PCI config space
+        // ケイパビリティポインタは PCI コンフィグ空間のオフセット 0x34 に配置されている
         let first_ptr = if config_space.len() > 0x34 {
             config_space[0x34]
         } else { 0 };
@@ -533,7 +528,7 @@ impl<'a> Iterator for CapabilityWalker<'a> {
     }
 }
 
-// Usage:
+// 使い方:
 // for raw_cap in CapabilityWalker::new(&config_space) {
 //     if let Ok(pm) = ValidCapability::<PowerMgmt>::try_from(raw_cap) {
 //         println!("PM control: 0x{:04X}", pm.pm_control());
@@ -541,33 +536,31 @@ impl<'a> Iterator for CapabilityWalker<'a> {
 // }
 ```
 
-**Key points:**
-- `RawCapability` → `ValidCapability<Kind>` is the parse-don't-validate boundary.
-- `pm_control()` only exists on `ValidCapability<PowerMgmt>` — calling it on an MSI
-  capability is a compile error.
-- The `CapabilityWalker` iterator yields raw capabilities; the caller validates
-  the ones they care about with `TryFrom`.
+**重要ポイント:**
+- `RawCapability` → `ValidCapability<Kind>` は「バリデーションではなくパースする」境界です。
+- `pm_control()` は `ValidCapability<PowerMgmt>` にのみ存在します — MSIケイパビリティに対して呼び出すとコンパイルエラーになります。
+- `CapabilityWalker` イテレータは生のケイパビリティを生成し、呼び出し元は `TryFrom` を使用して関心のあるものをバリデーションします。
 
 </details>
 
-### Exercise 5: Multi-Protocol Health Check (Capability Mixins)
+### 演習5: マルチプロトコル健全性チェック（ケイパビリティミックスイン）
 
-Create a health-check framework:
+健全性チェックフレームワークを作成してください：
 
-1. Define ingredient traits: `HasIpmi`, `HasRedfish`, `HasNvmeCli`, `HasGpio`
-2. Create mixin traits:
-   - `ThermalHealthMixin` (requires HasIpmi + HasGpio) — reads temps, checks alerts
-   - `StorageHealthMixin` (requires HasNvmeCli) — SMART data checks
-   - `BmcHealthMixin` (requires HasIpmi + HasRedfish) — cross-validates BMC data
-3. Build a `FullPlatformController` that implements all ingredient traits
-4. Build a `StorageOnlyController` that only implements `HasNvmeCli`
-5. Verify that `StorageOnlyController` gets `StorageHealthMixin` but NOT the others
+1. 要素トレイト（Ingredient Traits）を定義する: `HasIpmi`, `HasRedfish`, `HasNvmeCli`, `HasGpio`
+2. ミックスイントレイトを作成する:
+   - `ThermalHealthMixin`（HasIpmi + HasGpio を要求） — 温度を読み取り、アラートをチェック
+   - `StorageHealthMixin`（HasNvmeCli を要求） — SMARTデータのチェック
+   - `BmcHealthMixin`（HasIpmi + HasRedfish を要求） — BMCデータの相互検証
+3. すべての要素トレイトを実装する `FullPlatformController` を構築する
+4. `HasNvmeCli` のみを実装する `StorageOnlyController` を構築する
+5. `StorageOnlyController` が `StorageHealthMixin` を獲得し、他のミックスインは獲得**しない**ことを検証する
 
 <details>
-<summary>Sample Solution (Exercise 5)</summary>
+<summary>解答例（演習5）</summary>
 
 ```rust,ignore
-// --- Ingredient traits ---
+// --- 要素トレイト（Ingredient Traits） ---
 pub trait HasIpmi {
     fn ipmi_read_sensor(&self, id: u8) -> f64;
 }
@@ -586,7 +579,7 @@ pub struct SmartData {
     pub spare_pct: u8,
 }
 
-// --- Mixin traits with blanket impls ---
+// --- ブランケット実装（一括実装）を持つミックスイントレイト ---
 pub trait ThermalHealthMixin: HasIpmi + HasGpio {
     fn thermal_check(&self) -> ThermalStatus {
         let temp = self.ipmi_read_sensor(0x01);
@@ -620,7 +613,7 @@ pub struct ThermalStatus { pub temperature: f64, pub alert_active: bool }
 pub struct StorageStatus { pub temperature_ok: bool, pub spare_ok: bool }
 pub struct BmcStatus { pub ipmi_temp: f64, pub redfish_temp: String, pub consistent: bool }
 
-// --- Full platform: all ingredients → all three mixins for free ---
+// --- フルプラットフォーム: すべての要素を備えている → 3つのミックスインすべてを無償で獲得 ---
 pub struct FullPlatformController;
 
 impl HasIpmi for FullPlatformController {
@@ -638,7 +631,7 @@ impl HasGpio for FullPlatformController {
     fn gpio_read_alert(&self, _pin: u8) -> bool { false }
 }
 
-// --- Storage-only: only HasNvmeCli → only StorageHealthMixin ---
+// --- ストレージ専用: HasNvmeCli のみ → StorageHealthMixin のみ ---
 pub struct StorageOnlyController;
 
 impl HasNvmeCli for StorageOnlyController {
@@ -647,43 +640,39 @@ impl HasNvmeCli for StorageOnlyController {
     }
 }
 
-// StorageOnlyController automatically gets storage_check().
-// Calling thermal_check() or bmc_health() on it is a COMPILE ERROR.
+// StorageOnlyController は自動的に storage_check() を獲得する。
+// これに対して thermal_check() や bmc_health() を呼び出すとコンパイルエラーになる。
 ```
 
-**Key points:**
-- Blanket `impl<T: HasIpmi + HasGpio> ThermalHealthMixin for T {}` — any type that
-  implements both ingredients automatically gets the mixin.
-- `StorageOnlyController` only implements `HasNvmeCli`, so the compiler grants it
-  `StorageHealthMixin` but rejects `thermal_check()` and `bmc_health()` — zero
-  runtime checks needed.
-- Adding a new mixin (e.g., `NetworkHealthMixin: HasRedfish + HasGpio`) is one trait
-  + one blanket impl — existing controllers pick it up automatically if they qualify.
+**重要ポイント:**
+- ブランケット実装 `impl<T: HasIpmi + HasGpio> ThermalHealthMixin for T {}` — 両方の要素を実装するすべての型が、自動的にミックスインを獲得します。
+- `StorageOnlyController` は `HasNvmeCli` のみを実装するため、コンパイラは `StorageHealthMixin` を付与しますが、`thermal_check()` や `bmc_health()` は拒否します — ランタイムチェックは不要です。
+- 新しいミックスインの追加（例: `NetworkHealthMixin: HasRedfish + HasGpio`）は、1つのトレイトと1つのブランケット実装を追加するだけで済みます — 既存のコントローラーが要件を満たしていれば自動的に適用されます。
 
 </details>
 
-### Exercise 6: Session-Typed Diagnostic Protocol (Single-Use + Type-State)
+### 演習6: セッション型による診断プロトコル（単一使用 + 型状態）
 
-Design a diagnostic session with single-use test execution tokens:
+単一使用のテスト実行トークンを用いた診断セッションを設計してください：
 
-1. `DiagSession` starts in `Setup` state
-2. Transition to `Running` state — issues `N` execution tokens (one per test case)
-3. Each `TestToken` is consumed when the test runs — prevents running the same test twice
-4. After all tokens are consumed, transition to `Complete` state
-5. Generate a report (only in `Complete` state)
+1. `DiagSession` は `Setup` 状態から開始する
+2. `Running` 状態に遷移する — `N` 個の実行トークンを発行する（テストケースごとに1つ）
+3. 各 `TestToken` はテスト実行時に消費される — 同じテストの2回実行を防止する
+4. すべてのトークンが消費された後、`Complete` 状態に遷移する
+5. レポートを生成する（`Complete` 状態でのみ可能）
 
-**Advanced:** Use a const generic `N` to track how many tests remain at the type level.
+**発展:** const ジェネリクス `N` を使用して、残りのテスト数を型レベルで追跡してみてください。
 
 <details>
-<summary>Sample Solution (Exercise 6)</summary>
+<summary>解答例（演習6）</summary>
 
 ```rust,ignore
-// --- State types ---
+// --- 状態の型 ---
 pub struct Setup;
 pub struct Running;
 pub struct Complete;
 
-/// Single-use test token. NOT Clone, NOT Copy — consumed on use.
+/// 単一使用のテストトークン。Clone も Copy も実装しない — 使用時に消費される。
 pub struct TestToken {
     test_name: String,
 }
@@ -709,7 +698,7 @@ impl DiagSession<Setup> {
         }
     }
 
-    /// Transition to Running — issues one token per test case.
+    /// Running に遷移 — テストケースごとに1つのトークンを発行。
     pub fn start(self, test_names: &[&str]) -> (DiagSession<Running>, Vec<TestToken>) {
         let tokens = test_names.iter()
             .map(|n| TestToken { test_name: n.to_string() })
@@ -726,9 +715,9 @@ impl DiagSession<Setup> {
 }
 
 impl DiagSession<Running> {
-    /// Consume a token to run one test. The move prevents double-running.
+    /// トークンを消費して1つのテストを実行。ムーブにより二重実行を防止。
     pub fn run_test(mut self, token: TestToken) -> Self {
-        let passed = true; // real code runs actual diagnostics here
+        let passed = true; // 実際のコードではここで実際の診断を実行する
         self.results.push(TestResult {
             test_name: token.test_name,
             passed,
@@ -736,14 +725,13 @@ impl DiagSession<Running> {
         self
     }
 
-    /// Transition to Complete.
+    /// Complete に遷移。
     ///
-    /// **Note:** This solution does NOT enforce that all tokens have been
-    /// consumed — `finish()` can be called with tokens still outstanding.
-    /// The tokens will simply be dropped (they're not `#[must_use]`).
-    /// For full compile-time enforcement, use the const-generic variant
-    /// described in the "Advanced" note below, where `finish()` is only
-    /// available on `DiagSession<Running, 0>`.
+    /// **注意:** この解答例では、すべてのトークンが消費されたことを強制してはいません —
+    /// 未使用のトークンが残っていても finish() を呼び出すことができてしまいます。
+    /// トークンは単にドロップされます（#[must_use] ではないため）。
+    /// 完全なコンパイル時強制を行うには、以下の「発展」の注記にある const ジェネリクス版を使用してください。
+    /// その場合、finish() は DiagSession<Running, 0> でのみ利用可能になります。
     pub fn finish(self) -> DiagSession<Complete> {
         DiagSession {
             name: self.name,
@@ -754,7 +742,7 @@ impl DiagSession<Running> {
 }
 
 impl DiagSession<Complete> {
-    /// Report is ONLY available in Complete state.
+    /// レポートは Complete 状態でのみ利用可能。
     pub fn report(&self) -> String {
         let total = self.results.len();
         let passed = self.results.iter().filter(|r| r.passed).count();
@@ -762,7 +750,7 @@ impl DiagSession<Complete> {
     }
 }
 
-// Usage:
+// 使い方:
 // let session = DiagSession::new("GPU stress");
 // let (mut session, tokens) = session.start(&["vram", "compute", "thermal"]);
 // for token in tokens {
@@ -771,29 +759,24 @@ impl DiagSession<Complete> {
 // let session = session.finish();
 // println!("{}", session.report());  // "GPU stress: 3/3 passed"
 //
-// // These would NOT compile:
-// // session.run_test(used_token);  →  ERROR: use of moved value
-// // running_session.report();      →  ERROR: no method `report` on DiagSession<Running>
+// // これらはコンパイル「できない」:
+// // session.run_test(used_token);  →  エラー: ムーブされた値の使用
+// // running_session.report();      →  エラー: DiagSession<Running> にメソッド `report` は存在しない
 ```
 
-**Key points:**
-- `TestToken` is not `Clone` or `Copy` — consuming it via `run_test(token)` moves it,
-  so re-running the same test is a compile error.
-- `report()` only exists on `DiagSession<Complete>` — calling it mid-run is impossible.
-- The **Advanced** variant would use `DiagSession<Running, N>` with const generics
-  where `run_test` returns `DiagSession<Running, {N-1}>` and `finish` is only
-  available on `DiagSession<Running, 0>` — that ensures *all* tokens are consumed
-  before finishing.
+**重要ポイント:**
+- `TestToken` は `Clone` も `Copy` も実装していません — `run_test(token)` で消費するとムーブされるため、同じテストを再実行しようとするとコンパイルエラーになります。
+- `report()` は `DiagSession<Complete>` にのみ存在します — 実行の途中で呼び出すことは不可能です。
+- **発展**のバリエーションでは、const ジェネリクスを用いた `DiagSession<Running, N>` を使用します。この場合、`run_test` は `DiagSession<Running, {N-1}>` を返し、`finish` は `DiagSession<Running, 0>` でのみ利用可能になります — これにより、終了前に*すべての*トークンが確実に消費されることが保証されます。
 
 </details>
 
-## Key Takeaways
+## 重要ポイント
 
-1. **Practice with realistic protocols** — NVMe, firmware update, sensor pipelines, PCIe are all real-world targets for these patterns.
-2. **Each exercise maps to a core chapter** — use the cross-references to review the pattern before attempting.
-3. **Solutions use expandable details** — try each exercise before revealing the solution.
-4. **Compose patterns in exercise 5** — multi-protocol health checks combine typed commands, dimensional types, and validated boundaries.
-5. **Session types (exercise 6) are the frontier** — they enforce message ordering across channels, extending type-state to distributed systems.
+1. **現実的なプロトコルで実践する** — NVMe、ファームウェア更新、センサーパイプライン、PCIeはすべて、これらのパターンの格好の実践対象です。
+2. **各演習がコアの章に対応している** — 取り組む前に相互参照を確認してパターンを復習してください。
+3. **解答には展開可能な折りたたみ（details）を活用** — 解答を見る前に自分で演習に挑戦してみてください。
+4. **演習5でパターンを組み合わせる** — マルチプロトコル健全性チェックは、型付きコマンド、次元の型、境界でのバリデーションを統合します。
+5. **セッション型（演習6）は最先端の領域** — チャネルを越えたメッセージの順序付けを強制し、型状態の概念を分散システムへと拡張します。
 
 ---
-

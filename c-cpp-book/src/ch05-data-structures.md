@@ -1,37 +1,37 @@
-### Rust array type
+### Rustの配列型
 
-> **What you'll learn:** Rust's core data structures — arrays, tuples, slices, strings, structs, `Vec`, and `HashMap`. This is a dense chapter; focus on understanding `String` vs `&str` and how structs work. You'll revisit references and borrowing in depth in chapter 7.
+> **学習目標:** Rustの主要なデータ構造 — 配列、タプル、スライス、文字列、構造体、`Vec`、`HashMap` を学びます。本章は内容が豊富です。特に `String` と `&str` の違い、および構造体の仕組みの理解に集中してください。参照と借用については第7章でさらに詳しく掘り下げます。
 
-- Arrays contain a fixed number of elements of the same type
-    - Like all other Rust types, arrays are immutable by default (unless mut is used)
-    - Arrays are indexed using [] and are bounds checked. The len() method can be used to obtain the length of the array
+- 配列（array）は、同じ型の固定数の要素を格納します
+    - 他のすべてのRustの型と同様に、配列はデフォルトで不変（immutable）です（`mut` を使用しない限り）
+    - 配列は `[]` を使ってインデックスアクセスされ、境界チェック（bounds check）が行われます。配列の長さを取得するには `len()` メソッドを使用できます
 ```rust
     fn get_index(y : usize) -> usize {
         y+1        
     }
     
     fn main() {
-        // Initializes an array of 3 elements and sets all to 42
+        // 3要素の配列を初期化し、すべてを42に設定します
         let a : [u8; 3] = [42; 3];
-        // Alternative syntax
+        // 代替構文
         // let a = [42u8, 42u8, 42u8];
         for x in a {
             println!("{x}");
         }
         let y = get_index(a.len());
-        // Commenting out the below will cause a panic
+        // 以下のコメントを解除するとパニック（panic）が発生します
         //println!("{}", a[y]);
     }
 ```
 
 ----
-### Rust array type continued
-- Arrays can be nested
-    - Rust has several built-in formatters for printing. In the below, the ```:?``` is the ```debug``` print formatter. The ```:#?``` formatter can be used for ```pretty print```. These formatters can be customized per type (more on this later) 
+### Rustの配列型（続き）
+- 配列は入れ子（ネスト）にできます
+    - Rustには出力用の組み込みフォーマッタがいくつか用意されています。以下において、`:?` は `debug` 出力フォーマッタです。`:#?` フォーマッタは `pretty print`（整形出力）に使用できます。これらのフォーマッタは型ごとにカスタマイズ可能です（詳細は後述）
 ```rust
     fn main() {
         let a = [
-            [40, 0], // Define a nested array
+            [40, 0], // ネストされた配列を定義
             [41, 0],
             [42, 1],
         ];
@@ -41,10 +41,10 @@
     }
 ```
 ----
-### Rust tuples
-- Tuples have a fixed size and can group arbitrary types into a single compound type
-    - The constituent types can be indexed by their relative location (.0, .1, .2, ...). An empty tuple, i.e., () is called the unit value and is the equivalent of a void return value
-    - Rust supports tuple destructuring to make it easy to bind variables to individual elements
+### Rustのタプル
+- タプル（tuple）は固定長であり、任意の型を1つの複合型にグループ化できます
+    - 構成する要素には、相対位置（`.0`, `.1`, `.2`, ...）でインデックスアクセスできます。空のタプル、すなわち `()` はユニット値（unit value）と呼ばれ、voidの戻り値に相当します
+    - Rustはタプルの分配束縛（destructuring）をサポートしており、個々の要素に変数を簡単に束縛できます
 ```rust
 fn get_tuple() -> (u32, bool) {
     (42, true)        
@@ -55,141 +55,139 @@ fn main() {
    let u : (u32, bool) = (43, false);
    println!("{}, {}", t.0, t.1);
    println!("{}, {}", u.0, u.1);
-   let (num, flag) = get_tuple(); // Tuple destructuring
+   let (num, flag) = get_tuple(); // タプルの分配束縛
    println!("{num}, {flag}");
 }
 ```
 
-### Rust references
-- References in Rust are roughly equivalent to pointers in C with some key differences
-    - It is legal to have any number of read-only (immutable) references to a variable at any point of time. A reference cannot outlive the variable scope (this is a key concept called **lifetime**; discussed in detail later)
-    - Only a single writable (mutable) reference to a mutable variable is permitted and it must not overlap with any other reference.
+### Rustの参照
+- Rustにおける参照（reference）は、いくつかの重要な違いを除けば、C言語のポインタにおおよそ相当します
+    - ある時点で、1つの変数に対して任意の数の読み取り専用（不変）参照を持つことは正当です。参照はその変数のスコープより長く生存することはできません（これは**ライフタイム**と呼ばれる極めて重要な概念であり、後で詳しく説明します）
+    - 可変な変数に対する書き込み可能（可変）な参照は1つだけ許可され、他の参照と重複してはなりません。
 ```rust
 fn main() {
     let mut a = 42;
     {
         let b = &a;
         let c = b;
-        println!("{} {}", *b, *c); // The compiler automatically dereferences *c
+        println!("{} {}", *b, *c); // コンパイラは自動的に *c を逆参照します
         
         let d = &mut a;
         
         /*
-         * Uncommenting the line below would cause the
-         * program to not compile, because `b` is used
-         * while the mutable reference `d` is live in the current scope
+         * 以下の行のコメントを解除するとプログラムはコンパイルエラーになります。
+         * なぜなら、可変参照 `d` が現在のスコープで有効である間に `b` が使用されているためです。
          * 
-         * You cannot have a mutable and immutable reference in use in the same scope
-         * at the same time!
+         * 同じスコープ内で可変参照と不変参照を同時に使用することはできません！
          */
         // println!("{}", *b);
     }
-    let d = &mut a; // Ok: b and c are not in scope
+    let d = &mut a; // OK: b と c はスコープ外です
     *d = 43;
 }
 ```
 
 ----
-# Rust slices
-- Rust references can be used to create subsets of arrays
-    - Unlike arrays, which have a static fixed length determined at compile time, slices can be of arbitrary size. Internally, slices are implemented as a "fat-pointer" that contains the length of the slice and a pointer to the starting element in the original array
+# Rustのスライス
+- Rustの参照を使用して、配列の部分集合（スライス）を作成できます
+    - コンパイル時に静的な固定長が決まる配列とは異なり、スライスは任意のサイズにできます。内部的には、スライスはスライスの長さと元の配列の開始要素へのポインタを含む「ファットポインタ（fat pointer）」として実装されています
 ```rust
 fn main() {
     let a = [40, 41, 42, 43];
-    let b = &a[1..a.len()]; // A slice starting with the second element in the original
-    let c = &a[1..]; // Same as the above
-    let d = &a[..]; // Same as &a[0..] or &a[0..a.len()]
+    let b = &a[1..a.len()]; // 元の配列の2番目の要素から始まるスライス
+    let c = &a[1..]; // 上記と同じ
+    let d = &a[..]; // &a[0..] や &a[0..a.len()] と同じ
     println!("{b:?} {c:?} {d:?}");
 }
 ```
 ----
-# Rust constants and statics
-- The ```const``` keyword can be used to define a constant value. Constant values are evaluated at **compile time** and are inlined into the program
-- The ```static``` keyword is used to define the equivalent of global variables in languages like C/C++ Static variables have an addressable memory location and are created once and last the entire lifetime of the program
+# Rustの定数と静的変数
+- `const` キーワードを使用して定数値を定義できます。定数値は**コンパイル時**に評価され、プログラム内にインライン展開されます
+- `static` キーワードは、C/C++などの言語におけるグローバル変数に相当するものを定義するために使用されます。静的変数はアドレス指定可能なメモリ位置を持ち、一度だけ作成され、プログラム全体のライフタイムにわたって存続します
 ```rust
 const SECRET_OF_LIFE: u32 = 42;
 static GLOBAL_VARIABLE : u32 = 2;
 fn main() {
-    println!("The secret of life is {}", SECRET_OF_LIFE);
-    println!("Value of global variable is {GLOBAL_VARIABLE}")
+    println!("人生の秘密は {}", SECRET_OF_LIFE);
+    println!("グローバル変数の値は {GLOBAL_VARIABLE}")
 }
 ```
 
 ----
-# Rust strings: String vs &str
+# Rustの文字列: String vs &str
 
-- Rust has **two** string types that serve different purposes
-    - `String` — owned, heap-allocated, growable (like C's `malloc`'d buffer, or C++'s `std::string`)
-    - `&str` — borrowed, lightweight reference (like C's `const char*` with length, or C++'s `std::string_view` — but `&str` is **lifetime-checked** so it can never dangle)
-    - Unlike C's null-terminated strings, Rust strings track their length and are guaranteed valid UTF-8
+- Rustには、異なる目的を果たす**2つ**の文字列型があります
+    - `String` — 所有権を持つ（owned）、ヒープ確保、伸長可能（C言語の `malloc` で確保されたバッファや、C++の `std::string` に類似）
+    - `&str` — 借用された（borrowed）、軽量な参照（長さ情報を持つC言語の `const char*` や、C++の `std::string_view` に類似 — ただし `&str` は**ライフタイムがチェックされる**ため、ダングリングポインタになることはありません）
+    - C言語のヌル終端文字列とは異なり、Rustの文字列は自身の長さを保持しており、有効なUTF-8であることが保証されています
 
-> **For C++ developers:** `String` ≈ `std::string`, `&str` ≈ `std::string_view`. Unlike `std::string_view`, a `&str` is guaranteed valid for its entire lifetime by the borrow checker.
+> **C++開発者向け:** `String` ≈ `std::string`、`&str` ≈ `std::string_view` です。`std::string_view` とは異なり、`&str` はボローチェッカによってその生存期間全体で有効であることが保証されます。
 
-## String vs &str: Owned vs Borrowed
+## String vs &str: 所有（Owned）vs 借用（Borrowed）
 
-> **Production patterns**: See [JSON handling: nlohmann::json → serde](ch17-2-avoiding-unchecked-indexing.md#json-handling-nlohmannjson--serde) for how string handling works with serde in production code.
+> **実践パターン**: 実プロダクションコードにおいてserdeで文字列処理がどのように機能するかについては、[JSON処理: nlohmann::json → serde](ch17-2-avoiding-unchecked-indexing.md#json-handling-nlohmannjson--serde) を参照してください。
 
-| **Aspect** | **C `char*`** | **C++ `std::string`** | **Rust `String`** | **Rust `&str`** |
+| **観点** | **C `char*`** | **C++ `std::string`** | **Rust `String`** | **Rust `&str`** |
 |------------|--------------|----------------------|-------------------|----------------|
-| **Memory** | Manual (`malloc`/`free`) | Heap-allocated, owns buffer | Heap-allocated, auto-freed | Borrowed reference (lifetime-checked) |
-| **Mutability** | Always mutable via pointer | Mutable | Mutable with `mut` | Always immutable |
-| **Size info** | None (relies on `'\0'`) | Tracks length and capacity | Tracks length and capacity | Tracks length (fat pointer) |
-| **Encoding** | Unspecified (usually ASCII) | Unspecified (usually ASCII) | Guaranteed valid UTF-8 | Guaranteed valid UTF-8 |
-| **Null terminator** | Required | Required (`c_str()`) | Not used | Not used |
+| **メモリ** | 手動（`malloc`/`free`） | ヒープ確保、バッファを所有 | ヒープ確保、自動解放 | 借用された参照（ライフタイムチェック付き） |
+| **可変性** | ポインタ経由で常に可変 | 可変 | `mut` により可変 | 常に不変 |
+| **サイズ情報** | なし（`'\0'` に依存） | 長さとキャパシティを追跡 | 長さとキャパシティを追跡 | 長さを追跡（ファットポインタ） |
+| **エンコーディング** | 未規定（通常はASCII） | 未規定（通常はASCII） | 有効なUTF-8を保証 | 有効なUTF-8を保証 |
+| **ヌル終端** | 必須 | 必須（`c_str()`） | 使用しない | 使用しない |
 
 ```rust
 fn main() {
-    // &str - string slice (borrowed, immutable, usually a string literal)
-    let greeting: &str = "Hello";  // Points to read-only memory
+    // &str - 文字列スライス（借用、不変、通常は文字列リテラル）
+    let greeting: &str = "Hello";  // 読み取り専用メモリを指す
 
-    // String - owned, heap-allocated, growable
-    let mut owned = String::from(greeting);  // Copies data to heap
-    owned.push_str(", World!");        // Grow the string
-    owned.push('!');                   // Append a single character
+    // String - 所有権を持つ、ヒープ確保、伸長可能
+    let mut owned = String::from(greeting);  // データをヒープにコピー
+    owned.push_str(", World!");        // 文字列を拡張
+    owned.push('!');                   // 単一の文字を追加
 
-    // Converting between String and &str
-    let slice: &str = &owned;          // String -> &str (free, just a borrow)
-    let owned2: String = slice.to_string();  // &str -> String (allocates)
-    let owned3: String = String::from(slice); // Same as above
+    // String と &str 間の変換
+    let slice: &str = &owned;          // String -> &str（ゼロコスト、単なる借用）
+    let owned2: String = slice.to_string();  // &str -> String（メモリ確保が発生）
+    let owned3: String = String::from(slice); // 上記と同じ
 
-    // String concatenation (note: + consumes the left operand)
+    // 文字列の連結（注: + は左側のオペランドを消費します）
     let hello = String::from("Hello");
     let world = String::from(", World!");
-    let combined = hello + &world;  // hello is moved (consumed), world is borrowed
-    // println!("{hello}");  // Won't compile: hello was moved
+    let combined = hello + &world;  // hello はムーブ（消費）され、world は借用される
+    // println!("{hello}");  // コンパイルエラー: hello はムーブされたため使用不可
 
-    // Use format! to avoid move issues
+    // ムーブの問題を避けるには format! を使用する
     let a = String::from("Hello");
     let b = String::from("World");
-    let combined = format!("{a}, {b}!");  // Neither a nor b is consumed
+    let combined = format!("{a}, {b}!");  // a も b も消費されない
 
     println!("{combined}");
 }
 ```
 
-## Why You Cannot Index Strings with `[]`
+## なぜ文字列を `[]` でインデックス指定できないのか
 ```rust
 fn main() {
     let s = String::from("hello");
-    // let c = s[0];  // Won't compile! Rust strings are UTF-8, not byte arrays
+    // let c = s[0];  // コンパイルエラー！Rustの文字列はバイト配列ではなくUTF-8です
 
-    // Safe alternatives:
+    // 安全な代替手段:
     let first_char = s.chars().next();           // Option<char>: Some('h')
-    let as_bytes = s.as_bytes();                 // &[u8]: raw UTF-8 bytes
-    let substring = &s[0..1];                    // &str: "h" (byte range, must be valid UTF-8 boundary)
+    let as_bytes = s.as_bytes();                 // &[u8]: 生のUTF-8バイト列
+    let substring = &s[0..1];                    // &str: "h"（バイト範囲、有効なUTF-8境界である必要あり）
 
-    println!("First char: {:?}", first_char);
-    println!("Bytes: {:?}", &as_bytes[..5]);
+    println!("最初の文字: {:?}", first_char);
+    println!("バイト列: {:?}", &as_bytes[..5]);
 }
 ```
 
-## Exercise: String manipulation
+## 演習: 文字列操作
 
-🟢 **Starter**
-- Write a function `fn count_words(text: &str) -> usize` that counts the number of whitespace-separated words in a string
-- Write a function `fn longest_word(text: &str) -> &str` that returns the longest word (hint: you'll need to think about lifetimes -- why does the return type need to be `&str` and not `String`?)
+🟢 **初級課題**
+- 文字列内の空白で区切られた単語数をカウントする関数 `fn count_words(text: &str) -> usize` を書いてください
+- 最も長い単語を返す関数 `fn longest_word(text: &str) -> &str` を書いてください（ヒント: ライフタイムを考慮する必要があります — なぜ戻り値の型は `String` ではなく `&str` である必要があるのでしょうか？）
 
-<details><summary>Solution (click to expand)</summary>
+<details><summary>解答（クリックして展開）</summary>
 
 ```rust
 fn count_words(text: &str) -> usize {
@@ -204,17 +202,17 @@ fn longest_word(text: &str) -> &str {
 
 fn main() {
     let text = "the quick brown fox jumps over the lazy dog";
-    println!("Word count: {}", count_words(text));       // 9
-    println!("Longest word: {}", longest_word(text));     // "jumps"
+    println!("単語数: {}", count_words(text));       // 9
+    println!("最長単語: {}", longest_word(text));     // "jumps"
 }
 ```
 
 </details>
 
-# Rust structs
-- The ```struct``` keyword declares a user-defined struct type
-    - ```struct``` members can either be named, or anonymous (tuple structs)
-- Unlike languages like C++, there's no notion of "data inheritance" in Rust
+# Rustの構造体
+- `struct` キーワードはユーザー定義の構造体型を宣言します
+    - `struct` のメンバは名前付き、または無名（タプル構造体）のいずれかにできます
+- C++などの言語とは異なり、Rustには「データの継承」という概念はありません
 ```rust
 fn main() {
     struct MyStruct {
@@ -229,14 +227,14 @@ fn main() {
         num: x.num,
         is_secret_of_life: x.is_secret_of_life,
     };
-    let z = MyStruct { num: x.num, ..x }; // The .. means copy remaining
+    let z = MyStruct { num: x.num, ..x }; // .. は残りのフィールドをコピー/ムーブすることを意味します
     println!("{} {} {}", x.num, y.is_secret_of_life, z.num);
 }
 ```
 
-# Rust tuple structs
-- Rust tuple structs are similar to tuples and individual fields don't have names
-    - Like tuples, individual elements are accessed using .0, .1, .2, .... A common use case for tuple structs is to wrap primitive types to create custom types. **This can be useful to avoid mixing differing values of the same type**
+# Rustのタプル構造体
+- Rustのタプル構造体はタプルに似ており、個々のフィールドには名前がありません
+    - タプルと同様に、個々の要素には `.0`, `.1`, `.2`, ... でアクセスします。タプル構造体の一般的なユースケースは、プリミティブ型をラップしてカスタム型を作成することです。**これは、同じ基本型を持つ異なる意味の値を混同するのを防ぐのに役立ちます**
 ```rust
 struct WeightInGrams(u32);
 struct WeightInMilligrams(u32);
@@ -251,71 +249,71 @@ fn to_weight_in_milligrams(w : WeightInGrams) -> WeightInMilligrams  {
 fn main() {
     let x = to_weight_in_grams(42);
     let y = to_weight_in_milligrams(x);
-    // let z : WeightInGrams = x;  // Won't compile: x was moved into to_weight_in_milligrams()
-    // let a : WeightInGrams = y;   // Won't compile: type mismatch (WeightInMilligrams vs WeightInGrams)
+    // let z : WeightInGrams = x;  // コンパイルエラー: x は to_weight_in_milligrams() へムーブされました
+    // let a : WeightInGrams = y;   // コンパイルエラー: 型の不一致 (WeightInMilligrams と WeightInGrams)
 }
 ```
 
 
-**Note**: The `#[derive(...)]` attribute automatically generates common trait implementations for structs and enums. You'll see this used throughout the course:
+**注意**: `#[derive(...)]` 属性は、構造体や列挙型に対して一般的なトレイトの実装を自動的に生成します。これはコース全体を通じて頻繁に使用されます：
 ```rust
 #[derive(Debug, Clone, PartialEq)]
 struct Point { x: i32, y: i32 }
 
 fn main() {
     let p = Point { x: 1, y: 2 };
-    println!("{:?}", p);           // Debug: works because of #[derive(Debug)]
-    let p2 = p.clone();           // Clone: works because of #[derive(Clone)]
-    assert_eq!(p, p2);            // PartialEq: works because of #[derive(PartialEq)]
+    println!("{:?}", p);           // Debug: #[derive(Debug)] のおかげで動作
+    let p2 = p.clone();           // Clone: #[derive(Clone)] のおかげで動作
+    assert_eq!(p, p2);            // PartialEq: #[derive(PartialEq)] のおかげで動作
 }
 ```
-We'll cover the trait system in depth later, but `#[derive(Debug)]` is so useful that you should add it to nearly every `struct` and `enum` you create.
+トレイトシステムについては後で詳しく説明しますが、`#[derive(Debug)]` は非常に便利なので、作成するほぼすべての `struct` や `enum` に追加することをお勧めします。
 
-# Rust Vec type
-- The ```Vec<T>``` type implements a dynamic heap allocated buffer (similar to manually managed `malloc`/`realloc` arrays in C, or C++'s `std::vector`)
-    - Unlike arrays with fixed size, `Vec` can grow and shrink at runtime
-    - `Vec` owns its data and automatically manages memory allocation/deallocation
-- Common operations: `push()`, `pop()`, `insert()`, `remove()`, `len()`, `capacity()`
+# Rustの Vec 型
+- `Vec<T>` 型は、動的にヒープ確保されるバッファを実装しています（C言語における手動管理の `malloc`/`realloc` 配列や、C++の `std::vector` に類似）
+    - 固定長の配列とは異なり、`Vec` は実行時に拡大・縮小できます
+    - `Vec` はそのデータを所有し、メモリの確保と解放を自動的に管理します
+- 一般的な操作: `push()`, `pop()`, `insert()`, `remove()`, `len()`, `capacity()`
 ```rust
 fn main() {
-    let mut v = Vec::new();    // Empty vector, type inferred from usage
-    v.push(42);                // Add element to end - Vec<i32>
+    let mut v = Vec::new();    // 空のベクタ、型は使用状況から推論される
+    v.push(42);                // 末尾に要素を追加 - Vec<i32>
     v.push(43);                
     
-    // Safe iteration (preferred)
-    for x in &v {              // Borrow elements, don't consume vector
+    // 安全な反復処理（推奨）
+    for x in &v {              // ベクタを消費せず、要素を借用する
         println!("{x}");
     }
     
-    // Initialization shortcuts
-    let mut v2 = vec![1, 2, 3, 4, 5];           // Macro for initialization
-    let v3 = vec![0; 10];                       // 10 zeros
+    // 初期化のショートカット
+    let mut v2 = vec![1, 2, 3, 4, 5];           // 初期化用マクロ
+    let v3 = vec![0; 10];                       // 10個のゼロ
     
-    // Safe access methods (preferred over indexing)
+    // 安全なアクセス方法（インデックス直接指定より推奨）
     match v2.get(0) {
-        Some(first) => println!("First: {first}"),
-        None => println!("Empty vector"),
+        Some(first) => println!("先頭: {first}"),
+        None => println!("空のベクタ"),
     }
     
-    // Useful methods
-    println!("Length: {}, Capacity: {}", v2.len(), v2.capacity());
-    if let Some(last) = v2.pop() {             // Remove and return last element
-        println!("Popped: {last}");
+    // 便利なメソッド
+    println!("長さ: {}, キャパシティ: {}", v2.len(), v2.capacity());
+    if let Some(last) = v2.pop() {             // 末尾の要素を取り出して削除
+        println!("取り出した値: {last}");
     }
     
-    // Dangerous: direct indexing (can panic!)
-    // println!("{}", v2[100]);  // Would panic at runtime
+    // 危険: 直接のインデックス指定（パニックの可能性あり！）
+    // println!("{}", v2[100]);  // 実行時にパニックを引き起こします
 }
 ```
-> **Production patterns**: See [Avoiding unchecked indexing](ch17-2-avoiding-unchecked-indexing.md#avoiding-unchecked-indexing) for safe `.get()` patterns from production Rust code.
+> **実践パターン**: プロダクションレベルのRustコードにおける安全な `.get()` パターンについては、[チェックなしのインデックスアクセスの回避](ch17-2-avoiding-unchecked-indexing.md#avoiding-unchecked-indexing) を参照してください。
 
-# Rust HashMap type
-- ```HashMap``` implements generic ```key``` -> ```value``` lookups (a.k.a. ```dictionary``` or ```map```)
+# Rustの HashMap 型
+- `HashMap` はジェネリックな `キー` -> `値` の検索（いわゆる `辞書（dictionary）` や `マップ（map）`）を実装しています
 ```rust
 fn main() {
-    use std::collections::HashMap;  // Need explicit import, unlike Vec
-    let mut map = HashMap::new();       // Allocate an empty HashMap
-    map.insert(40, false);  // Type is inferred as int -> bool
+    use std::collections::HashMap;  // Vecとは異なり、明示的なインポートが必要
+    let mut map = HashMap::new();       // 空のHashMapを確保
+    map.insert(40, false);  // 型は int -> bool と推論される
     map.insert(41, false);
     map.insert(42, true);
     for (key, value) in map {
@@ -323,21 +321,21 @@ fn main() {
     }
     let map = HashMap::from([(40, false), (41, false), (42, true)]);
     if let Some(x) = map.get(&43) {
-        println!("43 was mapped to {x:?}");
+        println!("43は {x:?} にマップされました");
     } else {
-        println!("No mapping was found for 43");
+        println!("43に対するマッピングは見つかりませんでした");
     }
-    let x = map.get(&43).or(Some(&false));  // Default value if key isn't found
+    let x = map.get(&43).or(Some(&false));  // キーが見つからない場合のデフォルト値
     println!("{x:?}"); 
 }
 ```
 
-# Exercise: Vec and HashMap
+# 演習: Vec と HashMap
 
-🟢 **Starter**
-- Create a ```HashMap<u32, bool>``` with a few entries (make sure that some values are ```true``` and others are ```false```). Loop over all elements in the hashmap and put the keys into one ```Vec``` and the values into another
+🟢 **初級課題**
+- いくつかのエントリを持つ `HashMap<u32, bool>` を作成してください（一部の値が `true` で、他の値が `false` になるようにしてください）。HashMap内のすべての要素をループ処理し、キーを1つの `Vec` に、値を別の `Vec` に格納してください
 
-<details><summary>Solution (click to expand)</summary>
+<details><summary>解答（クリックして展開）</summary>
 
 ```rust
 use std::collections::HashMap;
@@ -350,13 +348,13 @@ fn main() {
         keys.push(*k);
         values.push(*v);
     }
-    println!("Keys:   {keys:?}");
-    println!("Values: {values:?}");
+    println!("キー:   {keys:?}");
+    println!("値:     {values:?}");
 
-    // Alternative: use iterators with unzip()
+    // 代替案: unzip() を使ったイテレータの利用
     let (keys2, values2): (Vec<u32>, Vec<bool>) = map.into_iter().unzip();
-    println!("Keys (unzip):   {keys2:?}");
-    println!("Values (unzip): {values2:?}");
+    println!("キー (unzip):   {keys2:?}");
+    println!("値 (unzip):     {values2:?}");
 }
 ```
 
@@ -364,100 +362,100 @@ fn main() {
 
 ---
 
-## Deep Dive: C++ References vs Rust References
+## 詳細解説: C++の参照 vs Rustの参照
 
-> **For C++ developers:** C++ programmers often assume Rust `&T` works like C++ `T&`. While superficially similar, there are fundamental differences that cause confusion. C developers can skip this section — Rust references are covered in [Ownership and Borrowing](ch07-ownership-and-borrowing.md).
+> **C++開発者向け:** C++プログラマは、Rustの `&T` がC++の `T&` のように動作すると仮定しがちです。表面的には似ていますが、混乱の原因となる根本的な違いがあります。Cプログラマはこのセクションをスキップしても構いません — Rustの参照については [所有権と借用](ch07-ownership-and-borrowing.md) で詳しく説明します。
 
-#### 1. No Rvalue References or Universal References
+#### 1. 右辺値参照やユニバーサル参照は存在しない
 
-In C++, `&&` has two meanings depending on context:
+C++では、`&&` は文脈に応じて2つの意味を持ちます：
 
 ```cpp
-// C++: && means different things:
-int&& rref = 42;           // Rvalue reference — binds to temporaries
-void process(Widget&& w);   // Rvalue reference — caller must std::move
+// C++: && は文脈によって意味が異なります:
+int&& rref = 42;           // 右辺値参照 — 一時オブジェクトにバインド
+void process(Widget&& w);   // 右辺値参照 — 呼び出し元は std::move が必要
 
-// Universal (forwarding) reference — deduced template context:
+// ユニバーサル（転送）参照 — 推論されるテンプレート文脈:
 template<typename T>
-void forward(T&& arg) {     // NOT an rvalue ref! Deduced as T& or T&&
-    inner(std::forward<T>(arg));  // Perfect forwarding
+void forward(T&& arg) {     // 右辺値参照ではない！ T& または T&& として推論される
+    inner(std::forward<T>(arg));  // 完全転送
 }
 ```
 
-**In Rust: none of this exists.** `&&` is simply the logical AND operator.
+**Rustでは、このようなものは一切存在しません。** `&&` は単なる論理積（AND）演算子です。
 
 ```rust
-// Rust: && is just boolean AND
+// Rust: && は単なるブール演算の AND
 let a = true && false; // false
 
-// Rust has NO rvalue references, no universal references, no perfect forwarding.
-// Instead:
-//   - Move is the default for non-Copy types (no std::move needed)
-//   - Generics + trait bounds replace universal references
-//   - No temporary-binding distinction — values are values
+// Rustには右辺値参照、ユニバーサル参照、完全転送は存在しません。
+// その代わり:
+//   - Copyトレイトを実装していない型では、ムーブがデフォルト（std::move は不要）
+//   - ジェネリクス + トレイト境界がユニバーサル参照を代替
+//   - 一時オブジェクトへのバインドの区別はなく、値は単なる値
 
-fn process(w: Widget) { }      // Takes ownership (like C++ value param + implicit move)
-fn process_ref(w: &Widget) { } // Borrows immutably (like C++ const T&)
-fn process_mut(w: &mut Widget) { } // Borrows mutably (like C++ T&, but exclusive)
+fn process(w: Widget) { }      // 所有権を取得（C++の値渡しパラメータ + 暗黙のムーブに相当）
+fn process_ref(w: &Widget) { } // 不変で借用（C++の const T& に相当）
+fn process_mut(w: &mut Widget) { } // 可変で借用（C++の T& に相当するが、排他的）
 ```
 
-| C++ Concept | Rust Equivalent | Notes |
+| C++の概念 | Rustの同等物 | 備考 |
 |-------------|-----------------|-------|
-| `T&` (lvalue ref) | `&T` or `&mut T` | Rust splits into shared vs exclusive |
-| `T&&` (rvalue ref) | Just `T` | Take by value = take ownership |
-| `T&&` in template (universal ref) | `impl Trait` or `<T: Trait>` | Generics replace forwarding |
-| `std::move(x)` | `x` (just use it) | Move is the default |
-| `std::forward<T>(x)` | No equivalent needed | No universal references to forward |
+| `T&`（左辺値参照） | `&T` または `&mut T` | Rustでは共有参照と排他参照に分離 |
+| `T&&`（右辺値参照） | 単なる `T` | 値渡し = 所有権の取得 |
+| テンプレート内の `T&&`（ユニバーサル参照） | `impl Trait` または `<T: Trait>` | ジェネリクスが転送を代替 |
+| `std::move(x)` | `x`（そのまま使用） | ムーブがデフォルト |
+| `std::forward<T>(x)` | 同等のものは不要 | 転送すべきユニバーサル参照が存在しない |
 
-#### 2. Moves Are Bitwise — No Move Constructors
+#### 2. ムーブはビット単位（memcpy）— ムーブコンストラクタは存在しない
 
-In C++, moving is a *user-defined operation* (move constructor / move assignment). In Rust, moving is always a **bitwise memcpy** of the value, and the source is invalidated:
+C++において、ムーブは*ユーザー定義の操作*（ムーブコンストラクタ / ムーブ代入演算子）です。Rustにおいて、ムーブは常に値の**ビット単位の memcpy** であり、移動元は無効化されます：
 
 ```rust
-// Rust move = memcpy the bytes, mark source as invalid
+// Rustのムーブ = バイト列をmemcpyし、移動元を無効としてマークする
 let s1 = String::from("hello");
-let s2 = s1; // Bytes of s1 are copied to s2's stack slot
-              // s1 is now invalid — compiler enforces this
-// println!("{s1}"); // ❌ Compile error: value used after move
+let s2 = s1; // s1のバイト列がs2のスタックスロットにコピーされる
+              // s1は無効化される — コンパイラがこれを強制する
+// println!("{s1}"); // ❌ コンパイルエラー: ムーブ後の値の使用
 ```
 
 ```cpp
-// C++ move = call the move constructor (user-defined!)
+// C++のムーブ = ムーブコンストラクタの呼び出し（ユーザー定義！）
 std::string s1 = "hello";
-std::string s2 = std::move(s1); // Calls string's move ctor
-// s1 is now a "valid but unspecified state" zombie
-std::cout << s1; // Compiles! Prints... something (empty string, usually)
+std::string s2 = std::move(s1); // string のムーブコンストラクタを呼び出す
+// s1 は「有効だが未規定の状態」のゾンビとなる
+std::cout << s1; // コンパイル可能！ 何か（通常は空文字列）が出力される
 ```
 
-**Consequences**:
-- Rust has no Rule of Five (no copy ctor, move ctor, copy=, move=, destructor to define)
-- No moved-from "zombie" state — the compiler simply prevents access
-- No `noexcept` considerations for moves — bitwise copy can't throw
+**結果として生じるメリット**:
+- Rustには「Rule of Five（5つの特殊メンバ関数のルール）」がありません（コピーコンストラクタ、ムーブコンストラクタ、コピー代入、ムーブ代入、デストラクタを定義する必要がない）
+- ムーブ後の「ゾンビ」状態が存在しない — コンパイラが単にアクセスを防止します
+- ムーブに関して `noexcept` を考慮する必要がない — ビット単位のコピーは例外をスローし得ません
 
-#### 3. Auto-Deref: The Compiler Sees Through Indirection
+#### 3. 自動逆参照（Auto-Deref）: コンパイラが間接参照を透過的に解決
 
-Rust automatically dereferences through multiple layers of pointers/wrappers via the `Deref` trait. This has no C++ equivalent:
+Rustは、`Deref` トレイトを介して、ポインタやラッパーの多重層を自動的に逆参照します。これにはC++に対応する機能がありません：
 
 ```rust
 use std::sync::{Arc, Mutex};
 
-// Nested wrapping: Arc<Mutex<Vec<String>>>
+// ネストされたラッパー: Arc<Mutex<Vec<String>>>
 let data = Arc::new(Mutex::new(vec!["hello".to_string()]));
 
-// In C++, you'd need explicit unlocking and manual dereferencing at each layer.
-// In Rust, the compiler auto-derefs through Arc → Mutex → MutexGuard → Vec:
-let guard = data.lock().unwrap(); // Arc auto-derefs to Mutex
+// C++では、各層で明示的なロック解除や手動の間接参照が必要になります。
+// Rustでは、コンパイラが Arc → Mutex → MutexGuard → Vec を自動逆参照します:
+let guard = data.lock().unwrap(); // Arc が Mutex に自動逆参照される
 let first: &str = &guard[0];      // MutexGuard→Vec (Deref), Vec[0] (Index),
-                                   // &String→&str (Deref coercion)
+                                   // &String→&str (Deref型強制)
 println!("First: {first}");
 
-// Method calls also auto-deref:
+// メソッド呼び出しも自動逆参照されます:
 let boxed_string = Box::new(String::from("hello"));
-println!("Length: {}", boxed_string.len());  // Box→String, then String::len()
-// No need for (*boxed_string).len() or boxed_string->len()
+println!("Length: {}", boxed_string.len());  // Box→String、そして String::len()
+// (*boxed_string).len() や boxed_string->len() は不要
 ```
 
-**Deref coercion** also applies to function arguments — the compiler inserts dereferences to make types match:
+**Deref型強制（Deref coercion）**は関数の引数にも適用されます — コンパイラは型が一致するように逆参照を挿入します：
 
 ```rust
 fn greet(name: &str) {
@@ -469,67 +467,59 @@ fn main() {
     let boxed = Box::new(String::from("Bob"));
     let arced = std::sync::Arc::new(String::from("Carol"));
 
-    greet(&owned);  // &String → &str  (1 deref coercion)
-    greet(&boxed);  // &Box<String> → &String → &str  (2 deref coercions)
-    greet(&arced);  // &Arc<String> → &String → &str  (2 deref coercions)
-    greet("Dave");  // &str already — no coercion needed
+    greet(&owned);  // &String → &str  （1回のDeref型強制）
+    greet(&boxed);  // &Box<String> → &String → &str  （2回のDeref型強制）
+    greet(&arced);  // &Arc<String> → &String → &str  （2回のDeref型強制）
+    greet("Dave");  // 既に &str — 型強制は不要
 }
-// In C++ you'd need .c_str() or explicit conversions for each case.
+// C++では、それぞれのケースで .c_str() や明示的な変換が必要になります。
 ```
 
-**The Deref chain**: When you call `x.method()`, Rust's method resolution
-tries the receiver type `T`, then `&T`, then `&mut T`. If no match, it
-dereferences via the `Deref` trait and repeats with the target type.
-This continues through multiple layers — which is why `Box<Vec<T>>`
-"just works" like a `Vec<T>`. Deref *coercion* (for function arguments)
-is a separate but related mechanism that automatically converts `&Box<String>`
-to `&str` by chaining `Deref` impls.
+**Derefチェーン**: `x.method()` を呼び出すと、Rustのメソッド解決はレシーバの型 `T`、次に `&T`、次に `&mut T` を試行します。一致するものがない場合、`Deref` トレイトを介して逆参照し、ターゲット型で繰り返します。これは複数の層を通じて継続します — これが `Box<Vec<T>>` が `Vec<T>` と同様に「自然に機能する」理由です。Deref*型強制*（関数の引数用）は独立した関連メカニズムであり、`Deref` 実装を連鎖させることで `&Box<String>` を `&str` に自動的に変換します。
 
-#### 4. No Null References, No Optional References
+#### 4. null参照やオプション参照は存在しない
 
 ```cpp
-// C++: references can't be null, but pointers can, and the distinction is blurry
-Widget& ref = *ptr;  // If ptr is null → UB
-Widget* opt = nullptr;  // "optional" reference via pointer
+// C++: 参照はnullになれませんがポインタはnullになれるため、境界が曖昧です
+Widget& ref = *ptr;  // ptr が null の場合 → 未定義動作 (UB)
+Widget* opt = nullptr;  // ポインタを介した「オプションの」参照
 ```
 
 ```rust
-// Rust: references are ALWAYS valid — guaranteed by the borrow checker
-// No way to create a null or dangling reference in safe code
-let r: &i32 = &42; // Always valid
+// Rust: 参照は常に有効です — ボローチェッカによって保証されます
+// 安全なコード内で null やダングリング参照を作成する方法はありません
+let r: &i32 = &42; // 常に有効
 
-// "Optional reference" is explicit:
-let opt: Option<&Widget> = None; // Clear intent, no null pointer
+// 「オプションの参照」は明示的に表現されます:
+let opt: Option<&Widget> = None; // 明確な意図、nullポインタは不要
 if let Some(w) = opt {
-    w.do_something(); // Only reachable when present
+    w.do_something(); // 値が存在する場合にのみ到達可能
 }
 ```
 
-#### 5. References Cannot Be Reseated
+#### 5. 参照の再バインド（Reseat）はできない
 
 ```cpp
-// C++: a reference is an alias — it can't be rebound
+// C++: 参照はエイリアス（別名）であり、再バインドできません
 int a = 1, b = 2;
 int& r = a;
-r = b;  // This ASSIGNS b's value to a — it does NOT rebind r!
-// a is now 2, r still refers to a
+r = b;  // これは b の値を a に代入します — r を再バインドするわけではありません！
+// a は 2 になり、r は依然として a を参照しています
 ```
 
 ```rust
-// Rust: let bindings can shadow, but references follow different rules
+// Rust: let 束縛はシャドーイングできますが、参照は異なる規則に従います
 let a = 1;
 let b = 2;
 let r = &a;
-// r = &b;   // ❌ Cannot assign to immutable variable
-let r = &b;  // ✅ But you can SHADOW r with a new binding
-             // The old binding is gone, not reseated
+// r = &b;   // ❌ 不変変数への代入はできません
+let r = &b;  // ✅ しかし新しい束縛で r をシャドーイングできます
+             // 古い束縛は破棄され、参照が再バインドされたわけではありません
 
-// With mut:
+// mut を使用した場合:
 let mut r = &a;
-r = &b;      // ✅ r now points to b — this IS rebinding (not assignment through)
+r = &b;      // ✅ r は b を指すようになります — これは（中身への代入ではなく）再バインドです
 ```
 
-> **Mental model**: In C++, a reference is a permanent alias for one object.
-> In Rust, a reference is a value (a pointer with lifetime guarantees) that
-> follows normal variable binding rules — immutable by default, rebindable
-> only if declared `mut`.
+> **メンタルモデル**: C++では、参照は1つのオブジェクトに対する永続的なエイリアスです。
+> Rustでは、参照は通常の値束縛規則に従う値（ライフタイム保証が付いたポインタ）です — デフォルトで不変であり、`mut` と宣言された場合にのみ再バインド可能です。

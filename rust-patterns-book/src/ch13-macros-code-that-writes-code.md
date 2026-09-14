@@ -1,19 +1,19 @@
-# 13. Macros — Code That Writes Code 🟡
+# 13. マクロ — コードを書くコード 🟡
 
-> **What you'll learn:**
-> - Declarative macros (`macro_rules!`) with pattern matching and repetition
-> - When macros are the right tool vs generics/traits
-> - Procedural macros: derive, attribute, and function-like
-> - Writing a custom derive macro with `syn` and `quote`
+> **学習内容:**
+> - パターンマッチングと繰り返し構文を用いた宣言的マクロ（`macro_rules!`）
+> - ジェネリクス/トレイトとマクロの適切な使い分け
+> - 手続き的マクロ（Proc Macro）の種類: derive、属性型、関数型マクロ
+> - `syn` と `quote` を用いたカスタム derive マクロの作成
 
-## Declarative Macros (macro_rules!)
+## 宣言的マクロ (macro_rules!)
 
-Macros match patterns on syntax and expand to code at compile time:
+マクロは構文上のパターンにマッチし、コンパイル時にコードを展開します:
 
 ```rust
-// A simple macro that creates a HashMap
+// HashMap を作成するシンプルなマクロ
 macro_rules! hashmap {
-    // Match: key => value pairs separated by commas
+    // マッチ対象: カンマ区切りの key => value ペア
     ( $( $key:expr => $value:expr ),* $(,)? ) => {
         {
             let mut map = std::collections::HashMap::new();
@@ -28,7 +28,7 @@ let scores = hashmap! {
     "Bob" => 87,
     "Carol" => 92,
 };
-// Expands to:
+// 展開結果:
 // let mut map = HashMap::new();
 // map.insert("Alice", 95);
 // map.insert("Bob", 87);
@@ -36,22 +36,22 @@ let scores = hashmap! {
 // map
 ```
 
-**Macro fragment types**:
+**マクロのフラグメント型**:
 
-| Fragment | Matches | Example |
+| フラグメント | マッチ対象 | 例 |
 |----------|---------|---------|
-| `$x:expr` | Any expression | `42`, `a + b`, `foo()` |
-| `$x:ty` | A type | `i32`, `Vec<String>` |
-| `$x:ident` | An identifier | `my_var`, `Config` |
-| `$x:pat` | A pattern | `Some(x)`, `_` |
-| `$x:stmt` | A statement | `let x = 5;` |
-| `$x:tt` | A single token tree | Anything (most flexible) |
-| `$x:literal` | A literal value | `42`, `"hello"`, `true` |
+| `$x:expr` | 任意の式 | `42`, `a + b`, `foo()` |
+| `$x:ty` | 型 | `i32`, `Vec<String>` |
+| `$x:ident` | 識別子 | `my_var`, `Config` |
+| `$x:pat` | パターン | `Some(x)`, `_` |
+| `$x:stmt` | 文（statement） | `let x = 5;` |
+| `$x:tt` | 単一のトークンツリー | 任意（最も柔軟） |
+| `$x:literal` | リテラル値 | `42`, `"hello"`, `true` |
 
-**Repetition**: `$( ... ),*` means "zero or more, comma-separated"
+**繰り返し（Repetition）**: `$( ... ),*` は「0個以上のカンマ区切り」を意味します
 
 ```rust
-// Generate test functions automatically
+// テスト関数を自動生成する
 macro_rules! test_cases {
     ( $( $name:ident: $input:expr => $expected:expr ),* $(,)? ) => {
         $(
@@ -68,74 +68,74 @@ test_cases! {
     test_hello: "hello" => "HELLO",
     test_trim: "  spaces  " => "SPACES",
 }
-// Generates three separate #[test] functions
+// 3つの独立した #[test] 関数が生成される
 ```
 
-### When (Not) to Use Macros
+### マクロを使うべき場合・使うべきでない場合
 
-**Use macros when**:
-- Reducing boilerplate that traits/generics can't handle (variadic arguments, DRY test generation)
-- Creating DSLs (`html!`, `sql!`, `vec!`)
-- Conditional code generation (`cfg!`, `compile_error!`)
+**マクロを使うべき場合**:
+- トレイトやジェネリクスでは対応できないボイラープレートの削減（可変長引数、DRY なテストケース生成など）
+- ドメイン特化言語（DSL）の作成（`html!`, `sql!`, `vec!` など）
+- 条件付きコード生成（`cfg!`, `compile_error!` など）
 
-**Don't use macros when**:
-- A function or generic would work (macros are harder to debug, autocomplete doesn't help)
-- You need type checking inside the macro (macros operate on tokens, not types)
-- The pattern is used once or twice (not worth the abstraction cost)
+**マクロを使うべきでない場合**:
+- 通常の関数やジェネリクスで事足りる場合（マクロはデバッグが難しく、コード補完の恩恵も受けにくい）
+- マクロ内部で型チェックが必要な場合（マクロは型ではなく構文トークンを操作するため）
+- そのパターンが1〜2箇所でしか使われない場合（抽象化のコストに見合わない）
 
 ```rust
-// ❌ Unnecessary macro — a function works fine:
+// ❌ 不要なマクロ — 通常の関数で十分:
 macro_rules! double {
     ($x:expr) => { $x * 2 };
 }
 
-// ✅ Just use a function:
+// ✅ 通常の関数を使用:
 fn double(x: i32) -> i32 { x * 2 }
 
-// ✅ Good macro use — variadic, can't be a function:
+// ✅ 適切なマクロの利用例 — 可変長引数は通常の関数では扱えない:
 macro_rules! println {
-    ($($arg:tt)*) => { /* format string + args */ };
+    ($($arg:tt)*) => { /* フォーマット文字列 + 引数 */ };
 }
 ```
 
-### Procedural Macros Overview
+### 手続き的マクロ（Proc Macro）の概要
 
-Procedural macros are Rust functions that transform token streams. They require a separate crate with `proc-macro = true`:
+手続き的マクロ（Procedural Macro）は、トークンストリームを受け取って変換する Rust の関数です。`proc-macro = true` を指定した独立したクレートが必要です:
 
 ```rust
-// Three types of proc macros:
+// 手続き的マクロの3つの種類:
 
-// 1. Derive macros — #[derive(MyTrait)]
-// Generate trait implementations from struct definitions
+// 1. Derive マクロ — #[derive(MyTrait)]
+// 構造体の定義からトレイトの実装を生成
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Config {
     name: String,
     port: u16,
 }
 
-// 2. Attribute macros — #[my_attribute]
-// Transform the annotated item
+// 2. 属性型マクロ — #[my_attribute]
+// アノテーションされた構文要素自体を変換
 #[route(GET, "/api/users")]
 async fn list_users() -> Json<Vec<User>> { /* ... */ }
 
-// 3. Function-like macros — my_macro!(...)
-// Custom syntax
+// 3. 関数型マクロ — my_macro!(...)
+// 独自のカスタム構文を定義
 let query = sql!(SELECT * FROM users WHERE id = ?);
 ```
 
-### Derive Macros in Practice
+### 実践的な Derive マクロ
 
-The most common proc macro type. Here's how `#[derive(Debug)]` works conceptually:
+最も広く使われている手続き的マクロの形式です。以下は `#[derive(Debug)]` の概念的な仕組みです:
 
 ```rust
-// Input (your struct):
+// 入力（ユーザー定義の構造体）:
 #[derive(Debug)]
 struct Point {
     x: f64,
     y: f64,
 }
 
-// The derive macro generates:
+// derive マクロが生成するコード:
 impl std::fmt::Debug for Point {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Point")
@@ -146,47 +146,43 @@ impl std::fmt::Debug for Point {
 }
 ```
 
-**Commonly used derive macros**:
+**よく使われる derive マクロ**:
 
-| Derive | Crate | What It Generates |
+| Derive | クレート | 生成される機能 |
 |--------|-------|-------------------|
-| `Debug` | std | `fmt::Debug` impl (debug printing) |
-| `Clone`, `Copy` | std | Value duplication |
-| `PartialEq`, `Eq` | std | Equality comparison |
-| `Hash` | std | Hashing for HashMap keys |
-| `Serialize`, `Deserialize` | serde | JSON/YAML/etc. encoding |
-| `Error` | thiserror | `std::error::Error` + `Display` |
-| `Parser` | `clap` | CLI argument parsing |
-| `Builder` | derive_builder | Builder pattern |
+| `Debug` | std | `fmt::Debug` 実装（デバッグ出力） |
+| `Clone`, `Copy` | std | 値の複製 |
+| `PartialEq`, `Eq` | std | 等値比較 |
+| `Hash` | std | HashMap キー用のハッシュ計算 |
+| `Serialize`, `Deserialize` | serde | JSON/YAML 等のエンコード・デコード |
+| `Error` | thiserror | `std::error::Error` + `Display` 実装 |
+| `Parser` | `clap` | コマンドライン引数のパース |
+| `Builder` | derive_builder | Builder パターンの自動実装 |
 
-> **Practical advice**: Use derive macros liberally — they eliminate error-prone
-> boilerplate. Writing your own proc macros is an advanced topic; use existing
-> ones (`serde`, `thiserror`, `clap`) before building custom ones.
+> **実践的なアドバイス**: derive マクロは積極的に活用してください。ヒューマンエラーの起きやすい定型コードを排除できます。独自の手続き的マクロを自作するのは高度なトピックです。まずは既存の確立されたマクロ（`serde`, `thiserror`, `clap` 等）を利用しましょう。
 
-### Macro Hygiene and `$crate`
+### マクロの健全性（Hygiene）と `$crate`
 
-**Hygiene** means that identifiers created inside a macro don't collide with
-identifiers in the caller's scope. Rust's `macro_rules!` is *partially* hygienic:
+**健全性（Hygiene）**とは、マクロの内部で作成された識別子が呼び出し元のスコープにある識別子と衝突しない性質のことです。Rust の `macro_rules!` は*部分的に健全（partially hygienic）*です:
 
 ```rust
 macro_rules! make_var {
     () => {
-        let x = 42; // This 'x' is in the MACRO's scope
+        let x = 42; // この 'x' はマクロ内部のスコープに属する
     };
 }
 
 fn main() {
     let x = 10;
-    make_var!();   // Creates a different 'x' (hygienic)
-    println!("{x}"); // Prints 10, not 42 — macro's x doesn't leak
+    make_var!();   // 別の 'x' を作成（健全性による分離）
+    println!("{x}"); // 42 ではなく 10 が出力される — マクロの x は外に漏れない
 }
 ```
 
-**`$crate`**: When writing macros in a library, use `$crate` to refer to
-your own crate — it resolves correctly regardless of how users import your crate:
+**`$crate`**: ライブラリ内でマクロを定義する場合は、自身のクレートを参照するために `$crate` を使用します。これにより、利用者がどのような名前でクレートをインポートしても正しく解決されます:
 
 ```rust
-// In my_diagnostics crate:
+// my_diagnostics クレート内:
 
 pub fn log_result(msg: &str) {
     println!("[diag] {msg}");
@@ -195,32 +191,30 @@ pub fn log_result(msg: &str) {
 #[macro_export]
 macro_rules! diag_log {
     ($($arg:tt)*) => {
-        // ✅ $crate always resolves to my_diagnostics, even if the user
-        // renamed the crate in their Cargo.toml
+        // ✅ 利用者が Cargo.toml でクレート名を変更していても、
+        // $crate は常に my_diagnostics に正しく解決されます
         $crate::log_result(&format!($($arg)*))
     };
 }
 
-// ❌ Without $crate:
-// my_diagnostics::log_result(...)  ← breaks if user writes:
+// ❌ $crate を使用しない場合:
+// my_diagnostics::log_result(...)  ← 利用者が以下のようにリネームすると壊れる:
 //   [dependencies]
 //   diag = { package = "my_diagnostics", version = "1" }
 ```
 
-> **Rule**: Always use `$crate::` in `#[macro_export]` macros. Never use
-> your crate's name directly.
+> **鉄則**: `#[macro_export]` するマクロ内では常に `$crate::` を使用してください。自身のクレート名を直接記述してはなりません。
 
-### Recursive Macros and `tt` Munching
+### 再帰マクロと `tt` マンチング（tt Munching）
 
-Recursive macros process input one token at a time — a technique called
-**`tt` munching** (token-tree munching):
+再帰マクロは入力を1トークンずつ処理します。この手法は **`tt` マンチング（token-tree munching）** と呼ばれます:
 
 ```rust
-// Count the number of expressions passed to the macro
+// マクロに渡された式の個数をカウントする
 macro_rules! count {
-    // Base case: no tokens left
+    // 基底ケース: トークンが残っていない場合
     () => { 0usize };
-    // Recursive case: consume one expression, count the rest
+    // 再帰ケース: 1つの式を消費し、残りを再帰的にカウント
     ($head:expr $(, $tail:expr)* $(,)?) => {
         1usize + count!($($tail),*)
     };
@@ -230,45 +224,42 @@ fn main() {
     let n = count!("a", "b", "c", "d");
     assert_eq!(n, 4);
 
-    // Works at compile time too:
+    // コンパイル時定数としても動作:
     const N: usize = count!(1, 2, 3);
     assert_eq!(N, 3);
 }
 ```
 
 ```rust
-// Build a heterogeneous tuple from a list of expressions:
+// 式のリストからヘテロジニアス（異種型）なタプルを構築する:
 macro_rules! tuple_from {
-    // Base: single element
+    // 基底ケース: 単一要素
     ($single:expr $(,)?) => { ($single,) };
-    // Recursive: first element + rest
+    // 再帰ケース: 先頭要素 + 残りの要素
     ($head:expr, $($tail:expr),+ $(,)?) => {
         ($head, tuple_from!($($tail),+))
     };
 }
 
 let t = tuple_from!(1, "hello", 3.14, true);
-// Expands to: (1, ("hello", (3.14, (true,))))
+// 展開結果: (1, ("hello", (3.14, (true,))))
 ```
 
-**Fragment specifier subtleties**:
+**フラグメント指定子の注意点**:
 
-| Fragment | Gotcha |
+| フラグメント | 注意点 |
 |----------|--------|
-| `$x:expr` | Greedily parses — `1 + 2` is ONE expression, not three tokens |
-| `$x:ty` | Greedily parses — `Vec<String>` is one type; can't be followed by `+` or `<` |
-| `$x:tt` | Matches exactly ONE token tree — most flexible, least checked |
-| `$x:ident` | Only plain identifiers — not paths like `std::io` |
-| `$x:pat` | In Rust 2021, matches `A \| B` patterns; use `$x:pat_param` for single patterns |
+| `$x:expr` | 貪欲にパースされる — `1 + 2` は3つのトークンではなく「1つの式」として扱われる |
+| `$x:ty` | 貪欲にパースされる — `Vec<String>` は1つの型。直後に `+` や `<` を続けることはできない |
+| `$x:tt` | 厳密に1つのトークンツリーにマッチ — 最も柔軟だが構文チェックは最小限 |
+| `$x:ident` | 単純な識別子のみ — `std::io` のようなパスはマッチしない |
+| `$x:pat` | Rust 2021 では `A \| B` パターンにマッチ。単一パターンの場合は `$x:pat_param` を使用 |
 
-> **When to use `tt`**: When you need to forward tokens to another macro without
-> the parser constraining them. `$($args:tt)*` is the "accept everything" pattern
-> (used by `println!`, `format!`, `vec!`).
+> **`tt` を使うべき場合**: パーサーによる厳格な制約をかけずに、トークンをそのまま別のマクロに転送したい場合に使用します。`$($args:tt)*` はあらゆる入力を受け付けるパターンであり、`println!`, `format!`, `vec!` 等で活用されています。
 
-### Writing a Derive Macro with `syn` and `quote`
+### syn と quote を用いた Derive マクロの作成
 
-Derive macros live in a separate crate (`proc-macro = true`) and transform
-a token stream using `syn` (parse Rust) and `quote` (generate Rust):
+derive マクロは独立したクレート（`proc-macro = true`）に配置され、`syn`（Rust コードの構文解析）と `quote`（Rust コードの生成）を用いてトークンストリームを変換します:
 
 ```toml
 # my_derive/Cargo.toml
@@ -287,15 +278,15 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, DeriveInput};
 
-/// Derive macro that generates a `describe()` method
-/// returning the struct name and field names.
+/// 構造体名とフィールド名一覧を返す `describe()` メソッドを
+/// 自動生成する derive マクロ。
 #[proc_macro_derive(Describe)]
 pub fn derive_describe(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = &input.ident;
     let name_str = name.to_string();
 
-    // Extract field names (only for structs with named fields)
+    // フィールド名を抽出（名前付きフィールドを持つ構造体のみ対象）
     let fields = match &input.data {
         syn::Data::Struct(data) => {
             data.fields.iter()
@@ -321,7 +312,7 @@ pub fn derive_describe(input: TokenStream) -> TokenStream {
 ```
 
 ```rust
-// In the application crate:
+// アプリケーションクレート側での利用:
 use my_derive::Describe;
 
 #[derive(Describe)]
@@ -333,44 +324,40 @@ struct SensorReading {
 
 fn main() {
     println!("{}", SensorReading::describe());
-    // "SensorReading { sensor_id, value, timestamp }"
+    // 出力: "SensorReading { sensor_id, value, timestamp }"
 }
 ```
 
-**The workflow**: `TokenStream` (raw tokens) → `syn::parse` (AST) →
-inspect/transform → `quote!` (generate tokens) → `TokenStream` (back to compiler).
+**マクロ処理の流れ**: `TokenStream`（生のトークン列）→ `syn::parse`（抽象構文木: AST）→ 検証・変換 → `quote!`（トークン列の生成）→ `TokenStream`（コンパイラへ返却）。
 
-| Crate | Role | Key types |
+| クレート | 役割 | 主な型 |
 |-------|------|-----------|
-| `proc-macro` | Compiler interface | `TokenStream` |
-| `syn` | Parse Rust source into AST | `DeriveInput`, `ItemFn`, `Type` |
-| `quote` | Generate Rust tokens from templates | `quote!{}`, `#variable` interpolation |
-| `proc-macro2` | Bridge between syn/quote and proc-macro | `TokenStream`, `Span` |
+| `proc-macro` | コンパイラとのインターフェース | `TokenStream` |
+| `syn` | Rust ソースを AST にパース | `DeriveInput`, `ItemFn`, `Type` |
+| `quote` | テンプレートから Rust トークン列を生成 | `quote!{}`, `#variable` による展開 |
+| `proc-macro2` | syn/quote と proc-macro 間のブリッジ | `TokenStream`, `Span` |
 
-> **Practical tip**: Start by studying the source of a simple derive macro
-> like `thiserror` or `derive_more` before writing your own. The
-> `cargo expand` command (via `cargo-expand`) shows what any macro expands
-> to — invaluable for debugging.
+> **実践的なヒント**: 独自のマクロを書く前に、`thiserror` や `derive_more` などのシンプルな derive マクロの実装を参考にすることをお勧めします。また、`cargo-expand` ツールによる `cargo expand` コマンドは、マクロがどのように展開されたかを確認でき、デバッグ時に極めて有用です。
 
-> **Key Takeaways — Macros**
-> - `macro_rules!` for simple code generation; proc macros (`syn` + `quote`) for complex derives
-> - Prefer generics/traits over macros when possible — macros are harder to debug and maintain
-> - `$crate` ensures hygiene; `tt` munching enables recursive pattern matching
+> **マクロの重要ポイント**
+> - 単純なコード生成には `macro_rules!` を、複雑な derive には手続き的マクロ（`syn` + `quote`）を使用する
+> - 可能であればジェネリクスやトレイトを優先する — マクロはデバッグや保守が難しくなる傾向がある
+> - `$crate` で健全性を担保し、`tt` マンチングで再帰的なパターンマッチングを実現する
 
-> **See also:** [Ch 2 — Traits](ch02-traits-in-depth.md) for when traits/generics beat macros. [Ch 13 — Testing](ch14-testing-and-benchmarking-patterns.md) for testing macro-generated code.
+> **関連情報:** トレイトやジェネリクスがマクロより優れているケースについては [第2章 — トレイト詳説](ch02-traits-in-depth.md) を、マクロが生成したコードのテスト手法については [第14章 — テストとベンチマークパターン](ch14-testing-and-benchmarking-patterns.md) を参照してください。
 
 ```mermaid
 flowchart LR
-    A["Source code"] --> B["macro_rules!<br>pattern matching"]
-    A --> C["#[derive(MyMacro)]<br>proc macro"]
+    A["ソースコード"] --> B["macro_rules!<br>パターンマッチング"]
+    A --> C["#[derive(MyMacro)]<br>手続き的マクロ"]
 
-    B --> D["Token expansion"]
-    C --> E["syn: parse AST"]
-    E --> F["Transform"]
-    F --> G["quote!: generate tokens"]
+    B --> D["トークン展開"]
+    C --> E["syn: AST のパース"]
+    E --> F["コード変換"]
+    F --> G["quote!: トークン生成"]
     G --> D
 
-    D --> H["Compiled code"]
+    D --> H["コンパイル済みコード"]
 
     style A fill:#e8f4f8,stroke:#2980b9,color:#000
     style B fill:#d4efdf,stroke:#27ae60,color:#000
@@ -384,9 +371,9 @@ flowchart LR
 
 ---
 
-### Exercise: Declarative Macro — `map!` ★ (~15 min)
+### 演習: 宣言的マクロ — `map!` ★（約15分）
 
-Write a `map!` macro that creates a `HashMap` from key-value pairs:
+キー・バリューのペアから `HashMap` を生成する `map!` マクロを作成してください:
 
 ```rust,ignore
 let m = map! {
@@ -396,10 +383,10 @@ let m = map! {
 assert_eq!(m.get("host"), Some(&"localhost"));
 ```
 
-Requirements: support trailing comma and empty invocation `map!{}`.
+要件: 末尾のカンマ（trailing comma）および引数なしの呼び出し `map!{}` をサポートすること。
 
 <details>
-<summary>🔑 Solution</summary>
+<summary>🔑 解答例</summary>
 
 ```rust
 macro_rules! map {
@@ -431,4 +418,3 @@ fn main() {
 </details>
 
 ***
-

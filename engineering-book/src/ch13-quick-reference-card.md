@@ -1,151 +1,151 @@
-# Quick Reference Card
+# クイックリファレンスカード
 
-### Cheat Sheet: Commands at a Glance
+### チートシート: コマンド早見表
 
 ```bash
-# ─── Build Scripts ───
-cargo build                          # Compiles build.rs first, then crate
-cargo build -vv                      # Verbose — shows build.rs output
+# ─── ビルドスクリプト ───
+cargo build                          # 最初に build.rs をコンパイルし、次にクレート本体をコンパイル
+cargo build -vv                      # 詳細出力 — build.rs の標準出力を表示
 
-# ─── Cross-Compilation ───
+# ─── クロスコンパイル ───
 rustup target add x86_64-unknown-linux-musl
 cargo build --release --target x86_64-unknown-linux-musl
 cargo zigbuild --release --target x86_64-unknown-linux-gnu.2.17
 cross build --release --target aarch64-unknown-linux-gnu
 
-# ─── Benchmarking ───
-cargo bench                          # Run all benchmarks
-cargo bench -- parse                 # Run benchmarks matching "parse"
-cargo flamegraph -- --args           # Generate flamegraph from binary
-perf record -g ./target/release/bin  # Record perf data
-perf report                          # View perf data interactively
+# ─── ベンチマーク ───
+cargo bench                          # すべてのベンチマークを実行
+cargo bench -- parse                 # "parse" に一致するベンチマークを実行
+cargo flamegraph -- --args           # バイナリからフレームグラフを生成
+perf record -g ./target/release/bin  # perf データを記録
+perf report                          # perf データを対話的に表示
 
-# ─── Coverage ───
-cargo llvm-cov --html                # HTML report
+# ─── カバレッジ ───
+cargo llvm-cov --html                # HTML レポートを生成
 cargo llvm-cov --lcov --output-path lcov.info
 cargo llvm-cov --workspace --fail-under-lines 80
-cargo tarpaulin --out Html           # Alternative tool
+cargo tarpaulin --out Html           # 代替ツール
 
-# ─── Safety Verification ───
-cargo +nightly miri test             # Run tests under Miri
+# ─── 安全性の検証 ───
+cargo +nightly miri test             # Miri 環境下でテストを実行
 MIRIFLAGS="-Zmiri-disable-isolation" cargo +nightly miri test
 valgrind --leak-check=full ./target/debug/binary
 RUSTFLAGS="-Zsanitizer=address" cargo +nightly test -Zbuild-std --target x86_64-unknown-linux-gnu
 
-# ─── Audit & Supply Chain ───
-cargo audit                          # Known vulnerability scan
-cargo audit --deny warnings          # Fail CI on any advisory
-cargo deny check                     # License + advisory + ban + source checks
-cargo deny list                      # List all licenses in dep tree
-cargo vet                            # Supply chain trust verification
-cargo outdated --workspace           # Find outdated dependencies
-cargo semver-checks                  # Detect breaking API changes
-cargo geiger                         # Count unsafe in dependency tree
+# ─── 監査とサプライチェーンセキュリティ ───
+cargo audit                          # 既知の脆弱性をスキャン
+cargo audit --deny warnings          # アドバイザリが検出された場合に CI を失敗させる
+cargo deny check                     # ライセンス + アドバイザリ + 禁止クレート + ソース元のチェック
+cargo deny list                      # 依存関係ツリー内のすべてのライセンスを一覧表示
+cargo vet                            # サプライチェーンの信頼性検証
+cargo outdated --workspace           # 古くなった依存関係を検出
+cargo semver-checks                  # 破壊的 API 変更を検出
+cargo geiger                         # 依存関係ツリー内の unsafe の数を集計
 
-# ─── Binary Optimization ───
-cargo bloat --release --crates       # Size contribution per crate
-cargo bloat --release -n 20          # 20 largest functions
-cargo +nightly udeps --workspace     # Find unused dependencies
-cargo machete                        # Fast unused dep detection
-cargo expand --lib module::name      # See macro expansions
-cargo msrv find                      # Discover minimum Rust version
-cargo clippy --fix --workspace --allow-dirty  # Auto-fix lint warnings
+# ─── バイナリの最適化 ───
+cargo bloat --release --crates       # クレートごとのバイナリサイズ寄与度を表示
+cargo bloat --release -n 20          # サイズの大きい上位 20 関数を表示
+cargo +nightly udeps --workspace     # 未使用の依存関係を検出
+cargo machete                        # 未使用の依存関係を高速に検出
+cargo expand --lib module::name      # マクロの展開結果を表示
+cargo msrv find                      # サポートする最小 Rust バージョン（MSRV）を調査
+cargo clippy --fix --workspace --allow-dirty  # リント警告を自動修正
 
-# ─── Compile-Time Optimization ───
-export RUSTC_WRAPPER=sccache         # Shared compilation cache
-sccache --show-stats                 # Cache hit statistics
-cargo nextest run                    # Faster test runner
-cargo nextest run --retries 2        # Retry flaky tests
+# ─── コンパイル時間の最適化 ───
+export RUSTC_WRAPPER=sccache         # 共有コンパイルキャッシュを有効化
+sccache --show-stats                 # キャッシュヒット統計を表示
+cargo nextest run                    # 高速なテストランナーで実行
+cargo nextest run --retries 2        # 不安定なテストをリトライ実行
 
-# ─── Platform Engineering ───
-cargo check --target thumbv7em-none-eabihf   # Verify no_std builds
-cargo build --target x86_64-pc-windows-gnu   # Cross-compile to Windows
-cargo xwin build --target x86_64-pc-windows-msvc  # MSVC ABI cross-compile
-cfg!(target_os = "linux")                    # Compile-time cfg (evaluates to bool)
+# ─── プラットフォームエンジニアリング ───
+cargo check --target thumbv7em-none-eabihf   # no_std ビルドを検証
+cargo build --target x86_64-pc-windows-gnu   # Windows 向けにクロスコンパイル
+cargo xwin build --target x86_64-pc-windows-msvc  # MSVC ABI 向けクロスコンパイル
+cfg!(target_os = "linux")                    # コンパイル時 cfg (bool 値として評価)
 
-# ─── Release ───
-cargo release patch --dry-run        # Preview release
-cargo release patch --execute        # Bump, commit, tag, publish
-cargo dist plan                      # Preview distribution artifacts
+# ─── リリース ───
+cargo release patch --dry-run        # リリースのプレビュー
+cargo release patch --execute        # バージョン引き上げ、コミット、タグ付け、公開
+cargo dist plan                      # 配布成果物のプレビュー
 ```
 
-### Decision Table: Which Tool When
+### 決定表: 目的別ツールの使い分け
 
-| Goal | Tool | When to Use |
-|------|------|-------------|
-| Embed git hash / build info | `build.rs` | Binary needs traceability |
-| Compile C code with Rust | `cc` crate in `build.rs` | FFI to small C libraries |
-| Generate code from schemas | `prost-build` / `tonic-build` | Protobuf, gRPC, FlatBuffers |
-| Link system library | `pkg-config` in `build.rs` | OpenSSL, libpci, systemd |
-| Static Linux binary | `--target x86_64-unknown-linux-musl` | Container/cloud deployment |
-| Target old glibc | `cargo-zigbuild` | RHEL 7, CentOS 7 compatibility |
-| ARM server binary | `cross` or `cargo-zigbuild` | Graviton/Ampere deployment |
-| Statistical benchmarks | Criterion.rs | Performance regression detection |
-| Quick perf check | Divan | Development-time profiling |
-| Find hot spots | `cargo flamegraph` / `perf` | After benchmark identifies slow code |
-| Line/branch coverage | `cargo-llvm-cov` | CI coverage gates, gap analysis |
-| Quick coverage check | `cargo-tarpaulin` | Local development |
-| Rust UB detection | Miri | Pure-Rust `unsafe` code |
-| C FFI memory safety | Valgrind memcheck | Mixed Rust/C codebases |
-| Data race detection | TSan or Miri | Concurrent `unsafe` code |
-| Buffer overflow detection | ASan | `unsafe` pointer arithmetic |
-| Leak detection | Valgrind or LSan | Long-running services |
-| Local CI equivalent | `cargo-make` | Developer workflow automation |
-| Pre-commit checks | `cargo-husky` or git hooks | Catch issues before push |
-| Automated releases | `cargo-release` + `cargo-dist` | Version management + distribution |
-| Dependency auditing | `cargo-audit` / `cargo-deny` | Supply chain security |
-| License compliance | `cargo-deny` (licenses) | Commercial / enterprise projects |
-| Supply chain trust | `cargo-vet` | High-security environments |
-| Find outdated deps | `cargo-outdated` | Scheduled maintenance |
-| Detect breaking changes | `cargo-semver-checks` | Library crate publishing |
-| Dependency tree analysis | `cargo tree --duplicates` | Dedup and trim dep graph |
-| Binary size analysis | `cargo-bloat` | Size-constrained deployments |
-| Find unused deps | `cargo-udeps` / `cargo-machete` | Trim compile time and size |
-| LTO tuning | `lto = true` or `"thin"` | Release binary optimization |
-| Size-optimized binary | `opt-level = "z"` + `strip = true` | Embedded / WASM / containers |
-| Unsafe usage audit | `cargo-geiger` | Security policy enforcement |
-| Macro debugging | `cargo-expand` | Derive / macro_rules debugging |
-| Faster linking | `mold` linker | Developer inner loop |
-| Compilation cache | `sccache` | CI and local build speed |
-| Faster tests | `cargo-nextest` | CI and local test speed |
-| MSRV compliance | `cargo-msrv` | Library publishing |
-| `no_std` library | `#![no_std]` + `default-features = false` | Embedded, UEFI, WASM |
-| Windows cross-compile | `cargo-xwin` / MinGW | Linux → Windows builds |
-| Platform abstraction | `#[cfg]` + trait pattern | Multi-OS codebases |
-| Windows API calls | `windows-sys` / `windows` crate | Native Windows functionality |
-| End-to-end timing | `hyperfine` | Whole-binary benchmarks, before/after comparison |
-| Property-based testing | `proptest` | Edge case discovery, parser robustness |
-| Snapshot testing | `insta` | Large structured output verification |
-| Coverage-guided fuzzing | `cargo-fuzz` | Crash discovery in parsers |
-| Concurrency model checking | `loom` | Lock-free data structures, atomic ordering |
-| Feature combination testing | `cargo-hack` | Crates with multiple `#[cfg]` features |
-| Fast UB checks (near-native) | `cargo-careful` | CI safety gate, lighter than Miri |
-| Auto-rebuild on save | `cargo-watch` | Developer inner loop, tight feedback |
-| Workspace documentation | `cargo doc` + rustdoc | API discovery, onboarding, doc-link CI |
-| Reproducible builds | `--locked` + `SOURCE_DATE_EPOCH` | Release integrity verification |
-| CI cache tuning | `Swatinem/rust-cache@v2` | Build time reduction (cold → cached) |
-| Workspace lint policy | `[workspace.lints]` in Cargo.toml | Consistent Clippy/compiler lints across all crates |
-| Auto-fix lint warnings | `cargo clippy --fix` | Automated cleanup of trivial issues |
+| 目的 | ツール | 使い分け・利用シーン |
+|------|--------|----------------------|
+| git ハッシュやビルド情報の埋め込み | `build.rs` | バイナリにトレーサビリティを持たせたい場合 |
+| Rust と一緒に C コードをコンパイル | `build.rs` 内の `cc` クレート | 小さな C ライブラリへの FFI |
+| スキーマ定義からのコード生成 | `prost-build` / `tonic-build` | Protobuf, gRPC, FlatBuffers |
+| システムライブラリのリンク | `build.rs` 内の `pkg-config` | OpenSSL, libpci, systemd |
+| 静的リンクされた Linux バイナリ | `--target x86_64-unknown-linux-musl` | コンテナ / クラウドデプロイ |
+| 古い glibc を対象にする | `cargo-zigbuild` | RHEL 7, CentOS 7 互換性 |
+| ARM サーバー用バイナリ | `cross` または `cargo-zigbuild` | Graviton / Ampere へのデプロイ |
+| 統計的ベンチマーク | Criterion.rs | パフォーマンス低下（リグレッション）の検知 |
+| 手軽なパフォーマンス確認 | Divan | 開発中のプロファイリング |
+| ホットスポットの特定 | `cargo flamegraph` / `perf` | ベンチマークでボトルネックを特定した後 |
+| 行・分岐カバレッジ測定 | `cargo-llvm-cov` | CI のカバレッジゲート、未テスト箇所の分析 |
+| 手軽なカバレッジ確認 | `cargo-tarpaulin` | ローカル開発時 |
+| Rust の未定義動作（UB）検出 | Miri | 純粋な Rust の `unsafe` コード |
+| C FFI のメモリ安全性検証 | Valgrind memcheck | Rust と C が混在するコードベース |
+| データ競合の検出 | TSan または Miri | 並行処理を行う `unsafe` コード |
+| バッファオーバーフローの検出 | ASan | `unsafe` なポインタ演算 |
+| メモリリークの検出 | Valgrind または LSan | 長時間稼働するサービス |
+| ローカルでの CI 同等環境 | `cargo-make` | 開発者ワークフローの自動化 |
+| プッシュ前のチェック | `cargo-husky` または git フック | プッシュ前に問題を検出 |
+| 自動リリース | `cargo-release` + `cargo-dist` | バージョン管理 + パッケージ配布 |
+| 依存関係の脆弱性監査 | `cargo-audit` / `cargo-deny` | サプライチェーンセキュリティ |
+| ライセンスコンプライアンス | `cargo-deny` (licenses) | 商用 / エンタープライズプロジェクト |
+| サプライチェーンの信頼性 | `cargo-vet` | 高セキュリティ環境 |
+| 古くなった依存関係の特定 | `cargo-outdated` | 定期メンテナンス |
+| 破壊的変更の検出 | `cargo-semver-checks` | ライブラリクレートの公開時 |
+| 依存関係ツリーの分析 | `cargo tree --duplicates` | 依存グラフの重複排除とスリム化 |
+| バイナリサイズの分析 | `cargo-bloat` | 容量制約のある環境へのデプロイ |
+| 未使用の依存関係の検出 | `cargo-udeps` / `cargo-machete` | コンパイル時間とバイナリサイズの削減 |
+| LTO のチューニング | `lto = true` または `"thin"` | リリースバイナリの最適化 |
+| サイズ優先のバイナリ最適化 | `opt-level = "z"` + `strip = true` | 組み込み / WASM / コンテナ |
+| unsafe 使用箇所の監査 | `cargo-geiger` | セキュリティポリシーの適用 |
+| マクロのデバッグ | `cargo-expand` | derive マクロや `macro_rules` のデバッグ |
+| リンクの高速化 | `mold` リンカ | 開発時のインナーループ高速化 |
+| コンパイルキャッシュ | `sccache` | CI およびローカルビルドの高速化 |
+| テストの高速化 | `cargo-nextest` | CI およびローカルテストの高速化 |
+| MSRV 準拠の確認 | `cargo-msrv` | ライブラリの公開前確認 |
+| `no_std` ライブラリ | `#![no_std]` + `default-features = false` | 組み込み、UEFI、WASM |
+| Windows 向けクロスコンパイル | `cargo-xwin` / MinGW | Linux から Windows 向けビルド |
+| プラットフォームの抽象化 | `#[cfg]` + トレイトパターン | マルチ OS 対応コードベース |
+| Windows API の直接呼び出し | `windows-sys` / `windows` クレート | Windows ネイティブ機能の利用 |
+| エンドツーエンドの実行時間計測 | `hyperfine` | バイナリ全体のベンチマーク、適用前後の比較 |
+| プロパティベーステスト | `proptest` | エッジケースの発見、パーサーの堅牢性検証 |
+| スナップショットテスト | `insta` | 大規模な構造化出力の検証 |
+| カバレッジ誘導ファジング | `cargo-fuzz` | パーサーにおけるクラッシュの発見 |
+| 並行性モデル検査 | `loom` | ロックフリーデータ構造、アトミック操作の順序付け |
+| フィーチャ組み合わせのテスト | `cargo-hack` | 複数の `#[cfg]` フィーチャを持つクレート |
+| 高速な UB チェック（ネイティブ並み） | `cargo-careful` | CI 安全性ゲート、Miri より軽量 |
+| 保存時の自動リビルド | `cargo-watch` | 開発インナーループ、迅速なフィードバック |
+| ワークスペースのドキュメント生成 | `cargo doc` + rustdoc | API の探索、オンボーディング、ドキュメントリンク CI |
+| 再現可能なビルド | `--locked` + `SOURCE_DATE_EPOCH` | リリース成果物の完全性検証 |
+| CI キャッシュのチューニング | `Swatinem/rust-cache@v2` | ビルド時間短縮（コールド → キャッシュあり） |
+| ワークスペースのリント方針統一 | Cargo.toml 内の `[workspace.lints]` | すべてのクレートで一貫した Clippy/コンパイラリント |
+| リント警告の自動修正 | `cargo clippy --fix` | 単純な問題の自動クリーンアップ |
 
-### Further Reading
+### 参考資料
 
-| Topic | Resource |
-|-------|----------|
-| Cargo build scripts | [Cargo Book — Build Scripts](https://doc.rust-lang.org/cargo/reference/build-scripts.html) |
-| Cross-compilation | [Rust Cross-Compilation](https://rust-lang.github.io/rustup/cross-compilation.html) |
-| `cross` tool | [cross-rs/cross](https://github.com/cross-rs/cross) |
+| トピック | リソース |
+|----------|----------|
+| Cargo ビルドスクリプト | [Cargo Book — Build Scripts](https://doc.rust-lang.org/cargo/reference/build-scripts.html) |
+| クロスコンパイル | [Rust Cross-Compilation](https://rust-lang.github.io/rustup/cross-compilation.html) |
+| `cross` ツール | [cross-rs/cross](https://github.com/cross-rs/cross) |
 | `cargo-zigbuild` | [cargo-zigbuild docs](https://github.com/rust-cross/cargo-zigbuild) |
 | Criterion.rs | [Criterion User Guide](https://bheisler.github.io/criterion.rs/book/) |
 | Divan | [Divan docs](https://github.com/nvzqz/divan) |
 | `cargo-llvm-cov` | [cargo-llvm-cov](https://github.com/taiki-e/cargo-llvm-cov) |
 | `cargo-tarpaulin` | [tarpaulin docs](https://github.com/xd009642/tarpaulin) |
 | Miri | [Miri GitHub](https://github.com/rust-lang/miri) |
-| Sanitizers in Rust | [rustc Sanitizer docs](https://doc.rust-lang.org/nightly/unstable-book/compiler-flags/sanitizer.html) |
+| Rust におけるサニタイザ | [rustc Sanitizer docs](https://doc.rust-lang.org/nightly/unstable-book/compiler-flags/sanitizer.html) |
 | `cargo-make` | [cargo-make book](https://sagiegurari.github.io/cargo-make/) |
 | `cargo-release` | [cargo-release docs](https://github.com/crate-ci/cargo-release) |
 | `cargo-dist` | [cargo-dist docs](https://axodotdev.github.io/cargo-dist/book/) |
-| Profile-guided optimization | [Rust PGO guide](https://doc.rust-lang.org/rustc/profile-guided-optimization.html) |
-| Flamegraphs | [cargo-flamegraph](https://github.com/flamegraph-rs/flamegraph) |
+| プロファイルガイド最適化 (PGO) | [Rust PGO guide](https://doc.rust-lang.org/rustc/profile-guided-optimization.html) |
+| フレームグラフ | [cargo-flamegraph](https://github.com/flamegraph-rs/flamegraph) |
 | `cargo-deny` | [cargo-deny docs](https://embarkstudios.github.io/cargo-deny/) |
 | `cargo-vet` | [cargo-vet docs](https://mozilla.github.io/cargo-vet/) |
 | `cargo-audit` | [cargo-audit](https://github.com/rustsec/rustsec/tree/main/cargo-audit) |
@@ -155,20 +155,20 @@ cargo dist plan                      # Preview distribution artifacts
 | `cargo-semver-checks` | [cargo-semver-checks](https://github.com/obi1kenobi/cargo-semver-checks) |
 | `cargo-nextest` | [nextest docs](https://nexte.st/) |
 | `sccache` | [sccache](https://github.com/mozilla/sccache) |
-| `mold` linker | [mold](https://github.com/rui314/mold) |
+| `mold` リンカ | [mold](https://github.com/rui314/mold) |
 | `cargo-msrv` | [cargo-msrv](https://github.com/foresterre/cargo-msrv) |
 | LTO | [rustc Codegen Options](https://doc.rust-lang.org/rustc/codegen-options/index.html) |
-| Cargo Profiles | [Cargo Book — Profiles](https://doc.rust-lang.org/cargo/reference/profiles.html) |
+| Cargo プロファイル | [Cargo Book — Profiles](https://doc.rust-lang.org/cargo/reference/profiles.html) |
 | `no_std` | [Rust Embedded Book](https://docs.rust-embedded.org/book/) |
-| `windows-sys` crate | [windows-rs](https://github.com/microsoft/windows-rs) |
+| `windows-sys` クレート | [windows-rs](https://github.com/microsoft/windows-rs) |
 | `cargo-xwin` | [cargo-xwin docs](https://github.com/rust-cross/cargo-xwin) |
 | `cargo-hack` | [cargo-hack](https://github.com/taiki-e/cargo-hack) |
 | `cargo-careful` | [cargo-careful](https://github.com/RalfJung/cargo-careful) |
 | `cargo-watch` | [cargo-watch](https://github.com/watchexec/cargo-watch) |
-| Rust CI cache | [Swatinem/rust-cache](https://github.com/Swatinem/rust-cache) |
-| Rustdoc book | [Rustdoc Book](https://doc.rust-lang.org/rustdoc/) |
-| Conditional compilation | [Rust Reference — cfg](https://doc.rust-lang.org/reference/conditional-compilation.html) |
-| Embedded Rust | [Awesome Embedded Rust](https://github.com/rust-embedded/awesome-embedded-rust) |
+| Rust CI キャッシュ | [Swatinem/rust-cache](https://github.com/Swatinem/rust-cache) |
+| Rustdoc ブック | [Rustdoc Book](https://doc.rust-lang.org/rustdoc/) |
+| 条件付きコンパイル | [Rust Reference — cfg](https://doc.rust-lang.org/reference/conditional-compilation.html) |
+| 組み込み Rust | [Awesome Embedded Rust](https://github.com/rust-embedded/awesome-embedded-rust) |
 | `hyperfine` | [hyperfine](https://github.com/sharkdp/hyperfine) |
 | `proptest` | [proptest](https://github.com/proptest-rs/proptest) |
 | `insta` | [insta snapshot testing](https://insta.rs/) |
@@ -177,9 +177,6 @@ cargo dist plan                      # Preview distribution artifacts
 
 ---
 
-*Generated as a companion reference — a companion to Rust Patterns and
-Type-Driven Correctness.*
+*副読本リファレンスとして生成 — 『Rust のパターンと型駆動による正確性』のコンパニオンガイド。*
 
-*Version 1.3 — Added cargo-hack, cargo-careful, cargo-watch, cargo doc,
-reproducible builds, CI caching strategies, capstone exercise, and chapter
-dependency diagram for completeness.*
+*バージョン 1.3 — 網羅性を高めるため、cargo-hack、cargo-careful、cargo-watch、cargo doc、再現可能なビルド、CI キャッシュ戦略、総合演習問題、および章依存関係図を追加。*

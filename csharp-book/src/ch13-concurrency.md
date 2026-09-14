@@ -1,72 +1,70 @@
-## Thread Safety: Convention vs Type System Guarantees
+## スレッドセーフ性: 規約 vs 型システムによる保証
 
-> **What you'll learn:** How Rust enforces thread safety at compile time vs C#'s convention-based approach,
-> `Arc<Mutex<T>>` vs `lock`, channels vs `ConcurrentQueue`, `Send`/`Sync` traits,
-> scoped threads, and the bridge to async/await.
+> **学習内容:** C# の規約ベースのアプローチに対する Rust のコンパイル時スレッドセーフ保証、`lock` に対する `Arc<Mutex<T>>`、`ConcurrentQueue` に対するチャネル、`Send`/`Sync` トレイト、スコープ付きスレッド（scoped threads）、および async/await への橋渡し。
 >
-> **Difficulty:** 🔴 Advanced
+> **難易度:** 🔴 上級
 
-> **Deep dive**: For production async patterns (stream processing, graceful shutdown, connection pooling, cancellation safety), see the companion [Async Rust Training](../../async-book/src/summary.md) guide.
+> **詳細解説**: 本番環境向けの非同期パターン（ストリーム処理、グレースフルシャットダウン、コネクションプーリング、キャンセル安全性）については、姉妹編の [Async Rust Training](../../async-book/src/summary.md) ガイドを参照してください。
 >
-> **Prerequisites**: [Ownership & Borrowing](ch07-ownership-and-borrowing.md) and [Smart Pointers](ch07-3-smart-pointers-beyond-single-ownership.md) (Rc vs Arc decision tree).
+> **前提知識**: [所有権と借用](ch07-ownership-and-borrowing.md) および [スマートポインタ](ch07-3-smart-pointers-beyond-single-ownership.md)（Rc vs Arc の判断基準）。
 
-### C# - Thread Safety by Convention
+### C# - 規約によるスレッドセーフ性
 ```csharp
-// C# collections aren't thread-safe by default
+// C# のコレクションはデフォルトではスレッドセーフではありません
 public class UserService
 {
     private readonly List<string> items = new();
     private readonly Dictionary<int, User> cache = new();
 
-    // This can cause data races:
+    // これはデータ競合を引き起こす可能性があります:
     public void AddItem(string item)
     {
-        items.Add(item);  // Not thread-safe!
+        items.Add(item);  // スレッドセーフではない！
     }
 
-    // Must use locks manually:
+    // 手動でロックを使用する必要があります:
     private readonly object lockObject = new();
 
     public void SafeAddItem(string item)
     {
         lock (lockObject)
         {
-            items.Add(item);  // Safe, but runtime overhead
+            items.Add(item);  // 安全ですが、実行時オーバーヘッドが発生します
         }
-        // Easy to forget the lock elsewhere
+        // 他の場所でロックを忘れるリスクがあります
     }
 
-    // ConcurrentCollection helps but limited:
+    // ConcurrentCollection は役立ちますが制限があります:
     private readonly ConcurrentBag<string> safeItems = new();
     
     public void ConcurrentAdd(string item)
     {
-        safeItems.Add(item);  // Thread-safe but limited operations
+        safeItems.Add(item);  // スレッドセーフですが行える操作が限られます
     }
 
-    // Complex shared state management
+    // 複雑な共有状態の管理
     private readonly ConcurrentDictionary<int, User> threadSafeCache = new();
     private volatile bool isShutdown = false;
     
     public async Task ProcessUser(int userId)
     {
-        if (isShutdown) return;  // Race condition possible!
+        if (isShutdown) return;  // 競合状態（レイスコンディション）が発生する可能性があります！
         
         var user = await GetUser(userId);
-        threadSafeCache.TryAdd(userId, user);  // Must remember which collections are safe
+        threadSafeCache.TryAdd(userId, user);  // どのコレクションが安全かをプログラマが覚えておく必要があります
     }
 
-    // Thread-local storage requires careful management
+    // スレッドローカルストレージは慎重な管理が必要です
     private static readonly ThreadLocal<Random> threadLocalRandom = 
         new ThreadLocal<Random>(() => new Random());
         
     public int GetRandomNumber()
     {
-        return threadLocalRandom.Value.Next();  // Safe but manual management
+        return threadLocalRandom.Value.Next();  // 安全ですが手動管理が必要です
     }
 }
 
-// Event handling with potential race conditions
+// 競合状態の可能性があるイベント処理
 public class EventProcessor
 {
     public event Action<string> DataReceived;
@@ -74,28 +72,28 @@ public class EventProcessor
     
     public void OnDataReceived(string data)
     {
-        // Race condition - event might be null between check and invocation
+        // 競合状態 - チェックと呼び出しの間にイベントが null になる可能性があります
         if (DataReceived != null)
         {
             DataReceived(data);
         }
-        // Modern C# (6+) mitigates the null race with: DataReceived?.Invoke(data);
-        // but the underlying event-delegate model still allows races on the list below
+        // 現代の C# (6+) では DataReceived?.Invoke(data); により null 競合を軽減できますが、
+        // 基盤となるイベント・デリゲートモデルでは下記のリストに対する競合が依然として発生し得ます
         
-        // Another race condition - list not thread-safe
+        // もう一つの競合状態 - リストがスレッドセーフではありません
         eventLog.Add($"Processed: {data}");
     }
 }
 ```
 
-### Rust - Thread Safety Guaranteed by Type System
+### Rust - 型システムによって保証されるスレッドセーフ性
 ```rust
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 use std::collections::HashMap;
 use tokio::sync::{mpsc, broadcast};
 
-// Rust prevents data races at compile time
+// Rust はコンパイル時にデータ競合を防止します
 pub struct UserService {
     items: Arc<Mutex<Vec<String>>>,
     cache: Arc<RwLock<HashMap<i32, User>>>,
@@ -112,10 +110,10 @@ impl UserService {
     pub fn add_item(&self, item: String) {
         let mut items = self.items.lock().unwrap();
         items.push(item);
-        // Lock automatically released when `items` goes out of scope
+        // items がスコープを抜けるとロックは自動的に解放されます
     }
     
-    // Multiple readers, single writer - automatically enforced
+    // 複数の読み取り、単一の書き込み — 自動的に強制されます
     pub async fn get_user(&self, user_id: i32) -> Option<User> {
         let cache = self.cache.read().unwrap();
         cache.get(&user_id).cloned()
@@ -126,7 +124,7 @@ impl UserService {
         cache.insert(user_id, user);
     }
     
-    // Clone the Arc for thread sharing
+    // スレッド間で共有するために Arc をクローンします
     pub fn process_in_background(&self) {
         let items = Arc::clone(&self.items);
         
@@ -139,7 +137,7 @@ impl UserService {
     }
 }
 
-// Channel-based communication - no shared state needed
+// チャネルベースの通信 — 共有状態は不要です
 pub struct MessageProcessor {
     sender: mpsc::UnboundedSender<String>,
 }
@@ -155,29 +153,29 @@ impl MessageProcessor {
     }
 }
 
-// This won't compile - Rust prevents sharing mutable data unsafely:
+// これはコンパイルされません — Rust は可変データを危険に共有することを防止します:
 fn impossible_data_race() {
     let mut items = vec![1, 2, 3];
     
-    // This won't compile - cannot move `items` into multiple closures
+    // これはコンパイルされません — items を複数のクロージャにムーブすることはできません
     /*
     thread::spawn(move || {
-        items.push(4);  // ERROR: use of moved value
+        items.push(4);  // エラー: ムーブ済みの値の使用
     });
     
     thread::spawn(move || {
-        items.push(5);  // ERROR: use of moved value  
+        items.push(5);  // エラー: ムーブ済みの値の使用  
     });
     */
 }
 
-// Safe concurrent data processing
+// 安全な並行・並列データ処理
 use rayon::prelude::*;
 
 fn parallel_processing() {
     let data = vec![1, 2, 3, 4, 5];
     
-    // Parallel iteration - guaranteed thread-safe
+    // 並列イテレーション — スレッドセーフが保証されます
     let results: Vec<i32> = data
         .par_iter()
         .map(|&x| x * x)
@@ -186,11 +184,11 @@ fn parallel_processing() {
     println!("{:?}", results);
 }
 
-// Async concurrency with message passing
+// メッセージパッシングによる非同期並行処理
 async fn async_message_passing() {
     let (tx, mut rx) = mpsc::channel(100);
     
-    // Producer task
+    // プロデューサタスク
     let producer = tokio::spawn(async move {
         for i in 0..10 {
             if tx.send(i).await.is_err() {
@@ -199,14 +197,14 @@ async fn async_message_passing() {
         }
     });
     
-    // Consumer task  
+    // コンシューマタスク  
     let consumer = tokio::spawn(async move {
         while let Some(value) = rx.recv().await {
-            println!("Received: {}", value);
+            println!("受信: {}", value);
         }
     });
     
-    // Wait for both tasks
+    // 両方のタスクを待機
     let (producer_result, consumer_result) = tokio::join!(producer, consumer);
     producer_result.unwrap();
     consumer_result.unwrap();
@@ -221,15 +219,15 @@ struct User {
 
 ```mermaid
 graph TD
-    subgraph "C# Thread Safety Challenges"
-        CS_MANUAL["Manual synchronization"]
-        CS_LOCKS["lock statements"]
+    subgraph "C# におけるスレッドセーフの課題"
+        CS_MANUAL["手動による同期"]
+        CS_LOCKS["lock 文"]
         CS_CONCURRENT["ConcurrentCollections"]
-        CS_VOLATILE["volatile fields"]
-        CS_FORGET["😰 Easy to forget locks"]
-        CS_DEADLOCK["💀 Deadlock possible"]
-        CS_RACE["🏃 Race conditions"]
-        CS_OVERHEAD["⚡ Runtime overhead"]
+        CS_VOLATILE["volatile フィールド"]
+        CS_FORGET["😰 ロックの掛け忘れが発生しやすい"]
+        CS_DEADLOCK["💀 デッドロックの可能性"]
+        CS_RACE["🏃 競合状態（レイスコンディション）"]
+        CS_OVERHEAD["⚡ 実行時オーバーヘッド"]
         
         CS_MANUAL --> CS_LOCKS
         CS_MANUAL --> CS_CONCURRENT
@@ -240,15 +238,15 @@ graph TD
         CS_LOCKS --> CS_OVERHEAD
     end
     
-    subgraph "Rust Type System Guarantees"
-        RUST_OWNERSHIP["Ownership system"]
-        RUST_BORROWING["Borrow checker"]
-        RUST_SEND["Send trait"]
-        RUST_SYNC["Sync trait"]
+    subgraph "Rust の型システムによる保証"
+        RUST_OWNERSHIP["所有権システム"]
+        RUST_BORROWING["借用チェッカー"]
+        RUST_SEND["Send トレイト"]
+        RUST_SYNC["Sync トレイト"]
         RUST_ARC["Arc<Mutex<T>>"]
-        RUST_CHANNELS["Message passing"]
-        RUST_SAFE["✅ Data races impossible"]
-        RUST_FAST["⚡ Zero-cost abstractions"]
+        RUST_CHANNELS["メッセージパッシング"]
+        RUST_SAFE["✅ データ競合が原理的に不可能"]
+        RUST_FAST["⚡ ゼロコスト抽象化"]
         
         RUST_OWNERSHIP --> RUST_BORROWING
         RUST_BORROWING --> RUST_SEND
@@ -270,12 +268,12 @@ graph TD
 
 
 <details>
-<summary><strong>🏋️ Exercise: Thread-Safe Counter</strong> (click to expand)</summary>
+<summary><strong>🏋️ 演習問題: スレッドセーフなカウンタ</strong> (クリックして展開)</summary>
 
-**Challenge**: Implement a thread-safe counter that can be incremented from 10 threads simultaneously. Each thread increments 1000 times. The final count should be exactly 10,000.
+**課題**: 10個のスレッドから同時にインクリメントできるスレッドセーフなカウンタを実装してください。各スレッドは1000回インクリメントします。最終的なカウントは正確に 10,000 になる必要があります。
 
 <details>
-<summary>🔑 Solution</summary>
+<summary>🔑 解答例</summary>
 
 ```rust
 use std::sync::{Arc, Mutex};
@@ -297,11 +295,11 @@ fn main() {
 
     for h in handles { h.join().unwrap(); }
     assert_eq!(*counter.lock().unwrap(), 10_000);
-    println!("Final count: {}", counter.lock().unwrap());
+    println!("最終カウント: {}", counter.lock().unwrap());
 }
 ```
 
-**Or with atomics (faster, no locking):**
+**アトミック操作を使用する場合（より高速、ロック不要）:**
 ```rust
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -323,28 +321,28 @@ fn main() {
 }
 ```
 
-**Key takeaway**: `Arc<Mutex<T>>` is the general pattern. For simple counters, `AtomicU64` avoids lock overhead entirely.
+**重要なポイント**: `Arc<Mutex<T>>` は汎用的なパターンです。単純なカウンタの場合は、`AtomicU64` を使用することでロックのオーバーヘッドを完全に回避できます。
 
 </details>
 </details>
 
-### Why Rust prevents data races: Send and Sync
+### なぜRustはデータ競合を防げるのか: SendとSync
 
-Rust uses two marker traits to enforce thread safety **at compile time** — there is no C# equivalent:
+Rust は **コンパイル時に** スレッドセーフ性を強制するために2つのマーカートレイトを使用します — C# にこれに相当するものはありません:
 
-- `Send`: A type can be safely **transferred** to another thread (e.g., moved into a closure passed to `thread::spawn`)
-- `Sync`: A type can be safely **shared** (via `&T`) between threads
+- `Send`: その型が安全に別のスレッドへ **転送（ムーブ）** できることを示します（例: `thread::spawn` に渡すクロージャ内にムーブするなど）
+- `Sync`: その型がスレッド間で（`&T` を通じて）安全に **共有** できることを示します
 
-Most types are automatically `Send + Sync`. Notable exceptions:
-- `Rc<T>` is **neither** Send nor Sync — the compiler will refuse to let you pass it to `thread::spawn` (use `Arc<T>` instead)
-- `Cell<T>` and `RefCell<T>` are **not** Sync — use `Mutex<T>` or `RwLock<T>` for thread-safe interior mutability
-- Raw pointers (`*const T`, `*mut T`) are **neither** Send nor Sync
+大半の型は自動的に `Send + Sync` になります。主な例外は以下のとおりです:
+- `Rc<T>` は Send でも Sync でも **ありません** — コンパイラはこれを `thread::spawn` に渡すことを拒絶します（代わりに `Arc<T>` を使用してください）
+- `Cell<T>` および `RefCell<T>` は Sync **ではありません** — スレッドセーフな内部可変性には `Mutex<T>` または `RwLock<T>` を使用してください
+- 生ポインタ（`*const T`, `*mut T`）は Send でも Sync でも **ありません**
 
-In C#, `List<T>` is not thread-safe but the compiler won't stop you from sharing it across threads. In Rust, the equivalent mistake is a **compile error**, not a runtime race condition.
+C# では `List<T>` はスレッドセーフではありませんが、コンパイラはそれをスレッド間で共有することを止めません。Rust では、同様の間違いは実行時の競合状態ではなく、**コンパイルエラー** になります。
 
-### Scoped threads: borrowing from the stack
+### スコープ付きスレッド: スタックからの借用
 
-`thread::scope()` lets spawned threads borrow local variables — no `Arc` needed:
+`thread::scope()` を使用すると、生成されたスレッドがローカル変数を借用できます — `Arc` は不要です:
 
 ```rust
 use std::thread;
@@ -352,30 +350,29 @@ use std::thread;
 fn main() {
     let data = vec![1, 2, 3, 4, 5];
     
-    // Scoped threads can borrow 'data' — scope waits for all threads to finish
+    // スコープ付きスレッドは 'data' を借用できます — スコープはすべてのスレッドが完了するのを待機します
     thread::scope(|s| {
-        s.spawn(|| println!("Thread 1: {data:?}"));
-        s.spawn(|| println!("Thread 2: sum = {}", data.iter().sum::<i32>()));
+        s.spawn(|| println!("スレッド 1: {data:?}"));
+        s.spawn(|| println!("スレッド 2: 合計 = {}", data.iter().sum::<i32>()));
     });
-    // 'data' is still valid here — threads are guaranteed to have finished
+    // ここでも 'data' は有効です — スレッドが完了していることが保証されています
 }
 ```
 
-This is similar to C#'s `Parallel.ForEach` in that the calling code waits for completion, but Rust's borrow checker **proves** there are no data races at compile time.
+これは呼び出し側のコードが完了を待機するという点で C# の `Parallel.ForEach` に似ていますが、Rust の借用チェッカーはコンパイル時にデータ競合が存在しないことを **証明** します。
 
-### Bridging to async/await
+### async/await への橋渡し
 
-C# developers typically reach for `Task` and `async/await` rather than raw threads. Rust has both paradigms:
+C# 開発者は生のスレッドよりも `Task` や `async/await` を好んで使用する傾向があります。Rust にも両方のパラダイムが存在します:
 
-| C# | Rust | When to use |
+| C# | Rust | 使い分けの目安 |
 |----|------|-------------|
-| `Thread` | `std::thread::spawn` | CPU-bound work, OS thread per task |
-| `Task.Run` | `tokio::spawn` | Async task on a runtime |
-| `async/await` | `async/await` | I/O-bound concurrency |
-| `lock` | `Mutex<T>` | Sync mutual exclusion |
-| `SemaphoreSlim` | `tokio::sync::Semaphore` | Async concurrency limiting |
-| `Interlocked` | `std::sync::atomic` | Lock-free atomic operations |
-| `CancellationToken` | `tokio_util::sync::CancellationToken` | Cooperative cancellation |
+| `Thread` | `std::thread::spawn` | CPU バウンドな処理、タスクごとの OS スレッド |
+| `Task.Run` | `tokio::spawn` | ランタイム上の非同期タスク |
+| `async/await` | `async/await` | I/O バウンドな並行処理 |
+| `lock` | `Mutex<T>` | 同期的な相互排他 |
+| `SemaphoreSlim` | `tokio::sync::Semaphore` | 非同期の同時実行数制限 |
+| `Interlocked` | `std::sync::atomic` | ロックフリーなアトミック操作 |
+| `CancellationToken` | `tokio_util::sync::CancellationToken` | 協調的キャンセル |
 
-> The next chapter ([Async/Await Deep Dive](ch13-1-asyncawait-deep-dive.md)) covers Rust's async model in detail — including how it differs from C#'s `Task`-based model.
-
+> 次章（[非同期（Async/Await）の詳細](ch13-1-asyncawait-deep-dive.md)）では、C# の `Task` ベースのモデルとの違いを含め、Rust の非同期モデルについて詳しく解説します。

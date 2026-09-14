@@ -1,35 +1,35 @@
-## Avoiding excessive clone()
+## 過剰な clone() の回避
 
-> **What you'll learn:** Why `.clone()` is a code smell in Rust, how to restructure ownership to eliminate unnecessary copies, and the specific patterns that signal an ownership design problem.
+> **学習内容:** Rustにおいて `.clone()` がなぜコードの不吉な臭い（コードスメル）となるのか、不要なコピーを排除するために所有権をどう再設計すべきか、そして所有権の設計上の問題を示す具体的なパターンについて学びます。
 
-- Coming from C++, `.clone()` feels like a safe default — "just copy it". But excessive cloning hides ownership problems and hurts performance.
-- **Rule of thumb**: If you're cloning to satisfy the borrow checker, you probably need to restructure ownership instead.
+- C++出身者にとって、`.clone()` は「とりあえずコピーしておけばいい」という安全なデフォルトのように感じられがちです。しかし、過剰なクローンは所有権に関する設計上の問題を隠蔽し、パフォーマンスを低下させます。
+- **経験則**: 借用チェッカを満足させるためだけにクローンしているなら、代わりに所有権の構造を見直すべきである可能性が高いです。
 
-### When clone() is wrong
+### clone() が不適切なケース
 
 ```rust
-// BAD: Cloning a String just to pass it to a function that only reads it
-fn log_message(msg: String) {  // Takes ownership unnecessarily
+// 悪い例: 読み取るだけの関数に渡すためだけに String をクローンしている
+fn log_message(msg: String) {  // 不要に所有権を要求している
     println!("[LOG] {}", msg);
 }
-let message = String::from("GPU test passed");
-log_message(message.clone());  // Wasteful: allocates a whole new String
-log_message(message);           // Original consumed — clone was pointless
+let message = String::from("GPUテストに合格しました");
+log_message(message.clone());  // 無駄: 新しい String のためのメモリを丸ごと確保している
+log_message(message);           // 元の値が消費される — クローンした意味がなかった
 ```
 
 ```rust
-// GOOD: Accept a borrow — zero allocation
-fn log_message(msg: &str) {    // Borrows, doesn't own
+// 良い例: 借用を受け取る — メモリ確保はゼロ
+fn log_message(msg: &str) {    // 所有せず借用する
     println!("[LOG] {}", msg);
 }
-let message = String::from("GPU test passed");
-log_message(&message);          // No clone, no allocation
-log_message(&message);          // Can call again — message not consumed
+let message = String::from("GPUテストに合格しました");
+log_message(&message);          // クローンなし、メモリ確保なし
+log_message(&message);          // 再度呼び出し可能 — message は消費されていない
 ```
 
-### Real example: returning `&str` instead of cloning
+### 実例: クローンする代わりに `&str` を返す
 ```rust
-// Example: healthcheck.rs — returns a borrowed view, zero allocation
+// 実装例: healthcheck.rs — 借用ビューを返す、メモリ確保ゼロ
 pub fn serial_or_unknown(&self) -> &str {
     self.serial.as_deref().unwrap_or(UNKNOWN_VALUE)
 }
@@ -38,97 +38,94 @@ pub fn model_or_unknown(&self) -> &str {
     self.model.as_deref().unwrap_or(UNKNOWN_VALUE)
 }
 ```
-The C++ equivalent would return `const std::string&` or `std::string_view` — but in C++ neither is lifetime-checked. In Rust, the borrow checker guarantees the returned `&str` can't outlive `self`.
+C++でこれに相当するものは `const std::string&` や `std::string_view` を返すことですが、C++ではどちらもライフタイムのチェックが行われません。Rustでは、借用チェッカによって返された `&str` が `self` より長く生存できないことが保証されます。
 
-### Real example: static string slices — no heap at all
+### 実例: 静的文字列スライス — ヒープを一切使用しない
 ```rust
-// Example: healthcheck.rs — compile-time string tables
+// 実装例: healthcheck.rs — コンパイル時文字列テーブル
 const HBM_SCREEN_RECIPES: &[&str] = &[
     "hbm_ds_ntd", "hbm_ds_ntd_gfx", "hbm_dt_ntd", "hbm_dt_ntd_gfx",
     "hbm_burnin_8h", "hbm_burnin_24h",
 ];
 ```
-In C++ this would typically be `std::vector<std::string>` (heap-allocated on first use). Rust's `&'static [&'static str]` lives in read-only memory — zero runtime cost.
+C++では通常 `std::vector<std::string>`（初回使用時にヒープ確保）になるでしょう。Rustの `&'static [&'static str]` は読み取り専用メモリに配置されるため、実行時コストはゼロです。
 
-### When clone() IS appropriate
+### clone() が「適切」なケース
 
-| **Situation** | **Why clone is OK** | **Example** |
+| **状況** | **クローンが問題ない理由** | **例** |
 |--------------|--------------------|-----------|
-| `Arc::clone()` for threading | Bumps ref count (~1 ns), doesn't copy data | `let flag = stop_flag.clone();` |
-| Moving data into a spawned thread | Thread needs its own copy | `let ctx = ctx.clone(); thread::spawn(move \|\| { ... })` |
-| Extracting from `&self` fields | Can't move out of a borrow | `self.name.clone()` when returning owned `String` |
-| Small `Copy` types wrapped in `Option` | `.copied()` is clearer than `.clone()` | `opt.get(0).copied()` for `Option<&u32>` → `Option<u32>` |
+| スレッド間共有のための `Arc::clone()` | 参照カウントをインクリメントするだけ（約1ナノ秒）で、データはコピーしない | `let flag = stop_flag.clone();` |
+| 生成されたスレッドへのデータの移動 | スレッドが独自のコピーを必要とするため | `let ctx = ctx.clone(); thread::spawn(move \|\| { ... })` |
+| `&self` フィールドからの抽出 | 借用からムーブすることはできないため | 所有型 `String` を返す場合の `self.name.clone()` |
+| `Option` でラップされた小さな `Copy` 型 | `.clone()` よりも `.copied()` の方が明確 | `Option<&u32>` → `Option<u32>` のための `opt.get(0).copied()` |
 
-### Real example: Arc::clone for thread sharing
+### 実例: スレッド共有のための Arc::clone
 ```rust
-// Example: workload.rs — Arc::clone is cheap (ref count bump)
+// 実装例: workload.rs — Arc::clone は安価（参照カウントをインクリメントするだけ）
 let stop_flag = Arc::new(AtomicBool::new(false));
-let stop_flag_clone = stop_flag.clone();   // ~1 ns, no data copied
-let ctx_clone = ctx.clone();               // Clone context for move into thread
+let stop_flag_clone = stop_flag.clone();   // 約1ナノ秒、データコピーなし
+let ctx_clone = ctx.clone();               // スレッド内へムーブするためにコンテキストをクローン
 
 let sensor_handle = thread::spawn(move || {
-    // ...uses stop_flag_clone and ctx_clone
+    // ...stop_flag_clone と ctx_clone を使用
 });
 ```
 
-### Checklist: Should I clone?
-1. **Can I accept `&str` / `&T` instead of `String` / `T`?** → Borrow, don't clone
-2. **Can I restructure to avoid needing two owners?** → Pass by reference or use scopes
-3. **Is this `Arc::clone()`?** → That's fine, it's O(1)
-4. **Am I moving data into a thread/closure?** → Clone is necessary
-5. **Am I cloning in a hot loop?** → Profile and consider borrowing or `Cow<T>`
+### チェックリスト: クローンすべきか否か？
+1. **`String` / `T` の代わりに `&str` / `&T` を受け取ることはできないか？** → クローンせず、借用する
+2. **2つの所有者を必要としないように構造を再設計できないか？** → 参照渡しにするか、スコープを利用する
+3. **これは `Arc::clone()` か？** → それならば問題ありません。計算量は O(1) です
+4. **スレッドやクロージャ内にデータをムーブしようとしているか？** → クローンが必要です
+5. **ホットループ内でクローンしているか？** → プロファイリングを行い、借用や `Cow<T>` の使用を検討する
 
 ----
 
-## `Cow<'a, T>`: Clone-on-Write — borrow when you can, clone when you must
+## `Cow<'a, T>`: Clone-on-Write — 可能な限り借用し、必要な時だけクローンする
 
-`Cow` (Clone on Write) is an enum that holds **either** a borrowed reference **or**
-an owned value. It's the Rust equivalent of "avoid allocation when possible, but
-allocate if you need to modify." C++ has no direct equivalent — the closest is a function
-that returns `const std::string&` sometimes and `std::string` other times.
+`Cow`（Clone on Write：書き込み時クローン）は、借用参照**または**所有値の**いずれか**を保持する enum です。「可能な限りメモリ確保を避け、変更が必要な場合にのみ確保する」というアプローチを実現するRustの機能です。C++に直接の対応物はありませんが、最も近いのは状況に応じて `const std::string&` を返したり `std::string` を返したりする関数です。
 
-### Why `Cow` exists
+### なぜ `Cow` が存在するのか
 
 ```rust
-// Without Cow — you must choose: always borrow OR always clone
-fn normalize(s: &str) -> String {          // Always allocates!
+// Cow を使わない場合 — 常に借用するか、常にクローンするかの二者択一になる
+fn normalize(s: &str) -> String {          // 常にメモリ確保が発生！
     if s.contains(' ') {
-        s.replace(' ', "_")               // New String (allocation needed)
+        s.replace(' ', "_")               // 新しい String（メモリ確保が必要）
     } else {
-        s.to_string()                     // Unnecessary allocation!
+        s.to_string()                     // 不要なメモリ確保！
     }
 }
 
-// With Cow — borrow when unchanged, allocate only when modified
+// Cow を使う場合 — 変更がなければ借用し、変更時のみメモリ確保する
 use std::borrow::Cow;
 
 fn normalize(s: &str) -> Cow<'_, str> {
     if s.contains(' ') {
-        Cow::Owned(s.replace(' ', "_"))    // Allocates (must modify)
+        Cow::Owned(s.replace(' ', "_"))    // メモリ確保（変更が必要なため）
     } else {
-        Cow::Borrowed(s)                   // Zero allocation (passthrough)
+        Cow::Borrowed(s)                   // メモリ確保ゼロ（そのまま通過）
     }
 }
 ```
 
-### How `Cow` works
+### `Cow` の仕組み
 
 ```rust
 use std::borrow::Cow;
 
-// Cow<'a, str> is essentially:
+// Cow<'a, str> の本質的な構造:
 // enum Cow<'a, str> {
-//     Borrowed(&'a str),     // Zero-cost reference
-//     Owned(String),          // Heap-allocated owned value
+//     Borrowed(&'a str),     // ゼロコストの参照
+//     Owned(String),          // ヒープに確保された所有値
 // }
 
 fn greet(name: &str) -> Cow<'_, str> {
     if name.is_empty() {
-        Cow::Borrowed("stranger")         // Static string — no allocation
+        Cow::Borrowed("stranger")         // 静的文字列 — メモリ確保なし
     } else if name.starts_with(' ') {
-        Cow::Owned(name.trim().to_string()) // Modified — allocation needed
+        Cow::Owned(name.trim().to_string()) // 変更あり — メモリ確保が必要
     } else {
-        Cow::Borrowed(name)               // Passthrough — no allocation
+        Cow::Borrowed(name)               // そのまま通過 — メモリ確保なし
     }
 }
 
@@ -137,62 +134,57 @@ fn main() {
     let g2 = greet("");          // Cow::Borrowed("stranger")
     let g3 = greet(" Bob ");     // Cow::Owned("Bob")
     
-    // Cow<str> implements Deref<Target = str>, so you can use it as &str:
-    println!("Hello, {g1}!");    // Works — Cow auto-derefs to &str
-    println!("Hello, {g2}!");
-    println!("Hello, {g3}!");
+    // Cow<str> は Deref<Target = str> を実装しているため、&str として扱えます:
+    println!("こんにちは、{g1}！");    // 動作する — Cow は自動的に &str へ参照外しされる
+    println!("こんにちは、{g2}！");
+    println!("こんにちは、{g3}！");
 }
 ```
 
-### Real-world use case: config value normalization
+### 実世界のユースケース: 設定値の正規化
 
 ```rust
 use std::borrow::Cow;
 
-/// Normalize a SKU name: trim whitespace, lowercase.
-/// Returns Cow::Borrowed if already normalized (zero allocation).
+/// SKU名を正規化する: 空白のトリムと小文字化。
+/// 既に正規化されている場合は Cow::Borrowed を返す（メモリ確保ゼロ）。
 fn normalize_sku(sku: &str) -> Cow<'_, str> {
     let trimmed = sku.trim();
     if trimmed == sku && sku.chars().all(|c| c.is_lowercase() || !c.is_alphabetic()) {
-        Cow::Borrowed(sku)   // Already normalized — no allocation
+        Cow::Borrowed(sku)   // 既に正規化済み — メモリ確保なし
     } else {
-        Cow::Owned(trimmed.to_lowercase())  // Needs modification — allocate
+        Cow::Owned(trimmed.to_lowercase())  // 変更が必要 — メモリ確保
     }
 }
 
 fn main() {
-    let s1 = normalize_sku("server-x1");   // Borrowed — zero alloc
-    let s2 = normalize_sku("  Server-X1 "); // Owned — must allocate
+    let s1 = normalize_sku("server-x1");   // Borrowed — メモリ確保ゼロ
+    let s2 = normalize_sku("  Server-X1 "); // Owned — メモリ確保が発生
     println!("{s1}, {s2}"); // "server-x1, server-x1"
 }
 ```
 
-### When to use `Cow`
+### `Cow` を使うべき場面
 
-| **Situation** | **Use `Cow`?** |
+| **状況** | **`Cow` を使うべきか？** |
 |--------------|---------------|
-| Function returns input unchanged most of the time | ✅ Yes — avoid unnecessary clones |
-| Parsing/normalizing strings (trim, lowercase, replace) | ✅ Yes — often input is already valid |
-| Always modifying — every code path allocates | ❌ No — just return `String` |
-| Simple pass-through (never modifies) | ❌ No — just return `&str` |
-| Data stored in a struct long-term | ❌ No — use `String` (owned) |
+| ほとんどの場合に入力をそのまま返す関数 | ✅ Yes — 不要なクローンを回避できる |
+| 文字列のパースや正規化（trim, 小文字化, 置換など） | ✅ Yes — 入力がすでに有効な場合が多い |
+| 常に変更される（すべてのコードパスでメモリ確保が発生する） | ❌ No — 素直に `String` を返せばよい |
+| 単なるパススルー（一切変更しない） | ❌ No — 素直に `&str` を返せばよい |
+| 構造体に長期間データを保持する | ❌ No — 所有型の `String` を使用する |
 
-> **C++ comparison**: `Cow<str>` is like a function that returns `std::variant<std::string_view, std::string>`
-> — except with automatic deref and no boilerplate to access the value.
+> **C++との比較**: `Cow<str>` は、`std::variant<std::string_view, std::string>` を返す関数に似ています — ただし、自動的な参照外し（Deref）が機能し、値へのアクセスに定型文（ボイラープレート）を必要としません。
 
 ----
 
-## `Weak<T>`: Breaking Reference Cycles — Rust's `weak_ptr`
+## `Weak<T>`: 循環参照の解消 — Rustにおける `weak_ptr`
 
-`Weak<T>` is the Rust equivalent of C++ `std::weak_ptr<T>`. It holds a non-owning
-reference to an `Rc<T>` or `Arc<T>` value. The value can be deallocated while
-`Weak` references still exist — calling `upgrade()` returns `None` if the value is gone.
+`Weak<T>` は、C++の `std::weak_ptr<T>` に相当するRustの型です。`Rc<T>` または `Arc<T>` の値に対する非所有の参照を保持します。`Weak` 参照が存在していても元の値は解放される可能性があり、値が既に解放されている場合に `upgrade()` を呼び出すと `None` が返されます。
 
-### Why `Weak` exists
+### なぜ `Weak` が存在するのか
 
-`Rc<T>` and `Arc<T>` create reference cycles if two values point to each
-other — neither ever reaches refcount 0, so neither is dropped (memory leak).
-`Weak` breaks the cycle:
+2つの値が互いを指し合っている場合、`Rc<T>` や `Arc<T>` は循環参照を引き起こします。参照カウントがゼロにならなくなるため、どちらもドロップされずメモリリークが発生します。`Weak` はこの循環を解消します：
 
 ```rust
 use std::rc::{Rc, Weak};
@@ -201,8 +193,8 @@ use std::cell::RefCell;
 #[derive(Debug)]
 struct Node {
     value: String,
-    parent: RefCell<Weak<Node>>,      // Weak — doesn't prevent parent from dropping
-    children: RefCell<Vec<Rc<Node>>>,  // Strong — parent owns children
+    parent: RefCell<Weak<Node>>,      // Weak — 親がドロップされるのを妨げない
+    children: RefCell<Vec<Rc<Node>>>,  // Strong — 親が子を所有する
 }
 
 impl Node {
@@ -215,9 +207,9 @@ impl Node {
     }
 
     fn add_child(parent: &Rc<Node>, child: &Rc<Node>) {
-        // Child gets a weak reference to parent (no cycle)
+        // 子は親への弱い参照（Weak）を取得（循環なし）
         *child.parent.borrow_mut() = Rc::downgrade(parent);
-        // Parent gets a strong reference to child
+        // 親は子への強い参照（Strong）を取得
         parent.children.borrow_mut().push(Rc::clone(child));
     }
 }
@@ -227,24 +219,24 @@ fn main() {
     let child = Node::new("child");
     Node::add_child(&root, &child);
 
-    // Access parent from child via upgrade()
+    // upgrade() を介して子から親にアクセス
     if let Some(parent) = child.parent.borrow().upgrade() {
-        println!("Child's parent: {}", parent.value); // "root"
+        println!("子の親: {}", parent.value); // "root"
     }
     
-    println!("Root strong count: {}", Rc::strong_count(&root));  // 1
-    println!("Root weak count: {}", Rc::weak_count(&root));      // 1
+    println!("Root の強参照カウント: {}", Rc::strong_count(&root));  // 1
+    println!("Root の弱参照カウント: {}", Rc::weak_count(&root));      // 1
 }
 ```
 
-### C++ comparison
+### C++との比較
 
 ```cpp
-// C++ — weak_ptr to break shared_ptr cycle
+// C++ — shared_ptr の循環を解消するための weak_ptr
 struct Node {
     std::string value;
-    std::weak_ptr<Node> parent;                  // Weak — no ownership
-    std::vector<std::shared_ptr<Node>> children;  // Strong — owns children
+    std::weak_ptr<Node> parent;                  // Weak — 所有権なし
+    std::vector<std::shared_ptr<Node>> children;  // Strong — 子を所有
 
     static auto create(const std::string& v) {
         return std::make_shared<Node>(Node{v, {}, {}});
@@ -253,57 +245,55 @@ struct Node {
 
 auto root = Node::create("root");
 auto child = Node::create("child");
-child->parent = root;          // weak_ptr assignment
+child->parent = root;          // weak_ptr の代入
 root->children.push_back(child);
 
-if (auto p = child->parent.lock()) {   // lock() → shared_ptr or null
-    std::cout << "Parent: " << p->value << std::endl;
+if (auto p = child->parent.lock()) {   // lock() → shared_ptr または nullptr
+    std::cout << "親: " << p->value << std::endl;
 }
 ```
 
-| C++ | Rust | Notes |
+| C++ | Rust | 備考 |
 |-----|------|-------|
-| `shared_ptr<T>` | `Rc<T>` (single-thread) / `Arc<T>` (multi-thread) | Same semantics |
-| `weak_ptr<T>` | `Weak<T>` from `Rc::downgrade()` / `Arc::downgrade()` | Same semantics |
-| `weak_ptr::lock()` → `shared_ptr` or null | `Weak::upgrade()` → `Option<Rc<T>>` | `None` if dropped |
-| `shared_ptr::use_count()` | `Rc::strong_count()` | Same meaning |
+| `shared_ptr<T>` | `Rc<T>`（シングルスレッド） / `Arc<T>`（マルチスレッド） | 同等のセマンティクス |
+| `weak_ptr<T>` | `Rc::downgrade()` / `Arc::downgrade()` による `Weak<T>` | 同等のセマンティクス |
+| `weak_ptr::lock()` → `shared_ptr` または null | `Weak::upgrade()` → `Option<Rc<T>>` | ドロップ済みなら `None` |
+| `shared_ptr::use_count()` | `Rc::strong_count()` | 同じ意味 |
 
-### When to use `Weak`
+### `Weak` を使うべき場面
 
-| **Situation** | **Pattern** |
+| **状況** | **パターン** |
 |--------------|-----------|
-| Parent ↔ child tree relationships | Parent holds `Rc<Child>`, child holds `Weak<Parent>` |
-| Observer pattern / event listeners | Event source holds `Weak<Observer>`, observer holds `Rc<Source>` |
-| Cache that doesn't prevent deallocation | `HashMap<Key, Weak<Value>>` — entries go stale naturally |
-| Breaking cycles in graph structures | Cross-links use `Weak`, tree edges use `Rc`/`Arc` |
+| 親 ↔ 子のツリー関係 | 親が `Rc<Child>` を保持し、子が `Weak<Parent>` を保持する |
+| オブザーバーパターン / イベントリスナー | イベント発生元が `Weak<Observer>` を保持し、オブザーバーが `Rc<Source>` を保持する |
+| メモリ解放を妨げないキャッシュ | `HashMap<Key, Weak<Value>>` — エントリが自然に無効化される |
+| グラフ構造における循環の解消 | 相互リンクに `Weak` を使い、ツリーのエッジに `Rc`/`Arc` を使う |
 
-> **Prefer the arena pattern** (Case Study 2) over `Rc/Weak` for tree structures in
-> new code. `Vec<T>` + indices is simpler, faster, and has zero reference-counting
-> overhead. Use `Rc/Weak` when you need shared ownership with dynamic lifetimes.
+> **新規コードにおけるツリー構造には、`Rc/Weak` よりもアリーナパターン**（ケーススタディ2）を優先してください。`Vec<T>` + インデックスによる構成の方がシンプルで高速であり、参照カウントのオーバーヘッドも一切ありません。`Rc/Weak` は動的なライフタイムを持つ所有権の共有が真に必要な場合に使用してください。
 
 ----
 
-## Copy vs Clone, PartialEq vs Eq — when to derive what
+## Copy 対 Clone、PartialEq 対 Eq — 何をいつ derive すべきか
 
-- **Copy ≈ C++ trivially copyable (no custom copy ctor/dtor).** Types like `int`, `enum`, and simple POD structs — the compiler generates a bitwise `memcpy` automatically. In Rust, `Copy` is the same idea: assignment `let b = a;` does an implicit bitwise copy and both variables remain valid.
-- **Clone ≈ C++ copy constructor / `operator=` deep-copy.** When a C++ class has a custom copy constructor (e.g., to deep-copy a `std::vector` member), the equivalent in Rust is implementing `Clone`. You must call `.clone()` explicitly — Rust never hides an expensive copy behind `=`.
-- **Key distinction:** In C++, both trivial copies and deep copies happen implicitly via the same `=` syntax. Rust forces you to choose: `Copy` types copy silently (cheap), non-`Copy` types **move** by default, and you must opt in to an expensive duplicate with `.clone()`.
-- Similarly, C++ `operator==` doesn't distinguish between types where `a == a` always holds (like integers) and types where it doesn't (like `float` with NaN). Rust encodes this in `PartialEq` vs `Eq`.
+- **Copy ≈ C++の trivially copyable（独自のコピーコンストラクタ/デストラクタを持たない型）。** `int`、`enum`、単純なPOD構造体のような型であり、コンパイラが自動的にビット単位の `memcpy` を生成します。Rustにおいて `Copy` も同様の概念です。代入 `let b = a;` によって暗黙的なビットコピーが行われ、両方の変数が有効なまま残ります。
+- **Clone ≈ C++のコピーコンストラクタ / `operator=` によるディープコピー。** C++のクラスが独自のコピーコンストラクタを持つ場合（例: `std::vector` メンバのディープコピーなど）、Rustでそれに相当するのが `Clone` の実装です。`.clone()` を明示的に呼び出す必要があります — Rustではコストの高いコピーが `=` の背後に暗黙的に隠されることは決してありません。
+- **重要な違い:** C++では、単純なコピーもディープコピーも同じ `=` 構文で暗黙的に発生します。Rustでは選択を強制されます。`Copy` 型は暗黙的にコピーされ（安価）、非 `Copy` 型はデフォルトで**ムーブ**され、高コストな複製を作成したい場合は明示的に `.clone()` を呼び出す必要があります。
+- 同様に、C++の `operator==` は、`a == a` が常に成り立つ型（整数など）と成り立たない型（NaN を含む `float` など）を区別しません。Rustではこれを `PartialEq` と `Eq` で区別して表現します。
 
-### Copy vs Clone
+### Copy 対 Clone
 
 | | **Copy** | **Clone** |
 |---|---------|----------|
-| **How it works** | Bitwise memcpy (implicit) | Custom logic (explicit `.clone()`) |
-| **When it happens** | On assignment: `let b = a;` | Only when you call `.clone()` |
-| **After copy/clone** | Both `a` and `b` are valid | Both `a` and `b` are valid |
-| **Without either** | `let b = a;` **moves** `a` (a is gone) | `let b = a;` **moves** `a` (a is gone) |
-| **Allowed for** | Types with no heap data | Any type |
-| **C++ analogy** | Trivially copyable / POD types (no custom copy ctor) | Custom copy constructor (deep copy) |
+| **動作** | ビット単位の memcpy（暗黙的） | カスタムロジック（明示的な `.clone()`） |
+| **発生タイミング** | 代入時: `let b = a;` | `.clone()` を明示的に呼び出した時のみ |
+| **コピー/クローン後** | `a` と `b` の双方が有効 | `a` と `b` の双方が有効 |
+| **どちらも未実装の場合** | `let b = a;` は `a` を**ムーブ**する（`a` は使用不可） | `let b = a;` は `a` を**ムーブ**する（`a` は使用不可） |
+| **実装可能な型** | ヒープデータを持たない型 | 任意の型 |
+| **C++における対応** | トリビアルにコピー可能な型 / POD型（独自のコピーコンストラクタなし） | 独自のコピーコンストラクタ（ディープコピー） |
 
-### Real example: Copy — simple enums
+### 実例: Copy — 単純な enum
 ```rust
-// From fan_diag/src/sensor.rs — all unit variants, fits in 1 byte
+// fan_diag/src/sensor.rs より — すべてユニットバリアントで、1バイトに収まる
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum FanStatus {
     #[default]
@@ -316,13 +306,13 @@ pub enum FanStatus {
 }
 
 let status = FanStatus::Normal;
-let copy = status;   // Implicit copy — status is still valid
-println!("{:?} {:?}", status, copy);  // Both work
+let copy = status;   // 暗黙的なコピー — status は依然として有効
+println!("{:?} {:?}", status, copy);  // 両方とも動作する
 ```
 
-### Real example: Copy — enum with integer payloads
+### 実例: Copy — 整数ペイロードを持つ enum
 ```rust
-// Example: healthcheck.rs — u32 payloads are Copy, so the whole enum is too
+// 実装例: healthcheck.rs — u32 ペイロードは Copy なので、enum 全体も Copy にできる
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum HealthcheckStatus {
     Pass,
@@ -334,41 +324,41 @@ pub enum HealthcheckStatus {
 }
 ```
 
-### Real example: Clone only — struct with heap data
+### 実例: Clone のみ — ヒープデータを持つ構造体
 ```rust
-// Example: components.rs — String prevents Copy
+// 実装例: components.rs — String があるため Copy にはできない
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FruData {
     pub technology: DeviceTechnology,
-    pub physical_location: String,      // ← String: heap-allocated, can't Copy
+    pub physical_location: String,      // ← String: ヒープ確保されるため Copy 不可
     pub expected: bool,
     pub removable: bool,
 }
-// let a = fru_data;   → MOVES (a is gone)
-// let a = fru_data.clone();  → CLONES (fru_data still valid, new heap allocation)
+// let a = fru_data;   → ムーブする（fru_data は使用不可）
+// let a = fru_data.clone();  → クローンする（fru_data は有効なまま、新たなヒープ確保が発生）
 ```
 
-### The rule: Can it be Copy?
+### ルール: Copy にできるか？
 ```text
-Does the type contain String, Vec, Box, HashMap,
-Rc, Arc, or any other heap-owning type?
-    YES → Clone only (cannot be Copy)
-    NO  → You CAN derive Copy (and should, if the type is small)
+その型は String, Vec, Box, HashMap,
+Rc, Arc などのヒープを所有する型を含んでいるか？
+    はい  → Clone のみ（Copy にはできない）
+    いいえ → Copy を derive 可能（型が小さければ推奨）
 ```
 
-### PartialEq vs Eq
+### PartialEq 対 Eq
 
 | | **PartialEq** | **Eq** |
 |---|--------------|-------|
-| **What it gives you** | `==` and `!=` operators | Marker: "equality is reflexive" |
-| **Reflexive? (a == a)** | Not guaranteed | **Guaranteed** |
-| **Why it matters** | `f32::NAN != f32::NAN` | `HashMap` keys **require** `Eq` |
-| **When to derive** | Almost always | When the type has no `f32`/`f64` fields |
-| **C++ analogy** | `operator==` | No direct equivalent (C++ doesn't check) |
+| **提供される機能** | `==` および `!=` 演算子 | マーカー: 「同値性が反射的である」ことの表明 |
+| **反射律（a == a）** | 保証されない | **保証される** |
+| **なぜ重要か** | `f32::NAN != f32::NAN` となるため | `HashMap` のキーには `Eq` が**必須** |
+| **derive すべき時** | ほぼ常に | その型が `f32`/`f64` フィールドを持たない場合 |
+| **C++における対応** | `operator==` | 直接の対応物なし（C++はチェックしない） |
 
-### Real example: Eq — used as HashMap key
+### 実例: Eq — HashMapのキーとして使用
 ```rust
-// From hms_trap/src/cpu_handler.rs — Hash requires Eq
+// hms_trap/src/cpu_handler.rs より — Hash は Eq を要求する
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CpuFaultType {
     InvalidFaultType,
@@ -377,100 +367,98 @@ pub enum CpuFaultType {
     CpuC2CUceFatalErr,
     // ...
 }
-// Used as: HashMap<CpuFaultType, FaultHandler>
-// HashMap keys must be Eq + Hash — PartialEq alone won't compile
+// 使用例: HashMap<CpuFaultType, FaultHandler>
+// HashMapのキーは Eq + Hash でなければならない — PartialEq だけではコンパイルエラーになる
 ```
 
-### Real example: No Eq possible — type contains f32
+### 実例: Eq を実装できない例 — 型が f32 を含む
 ```rust
-// Example: types.rs — f32 prevents Eq
+// 実装例: types.rs — f32 があるため Eq は不可
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TemperatureSensors {
-    pub warning_threshold: Option<f32>,   // ← f32 has NaN ≠ NaN
-    pub critical_threshold: Option<f32>,  // ← can't derive Eq
+    pub warning_threshold: Option<f32>,   // ← f32 は NaN ≠ NaN となる
+    pub critical_threshold: Option<f32>,  // ← Eq を derive できない
     pub sensor_names: Vec<String>,
 }
-// Cannot be used as HashMap key. Cannot derive Eq.
-// Because: f32::NAN == f32::NAN is false, violating reflexivity.
+// HashMap のキーとして使用できない。Eq を derive できない。
+// 理由: f32::NAN == f32::NAN が false となり、反射律を満たさないため。
 ```
 
-### PartialOrd vs Ord
+### PartialOrd 対 Ord
 
 | | **PartialOrd** | **Ord** |
 |---|---------------|--------|
-| **What it gives you** | `<`, `>`, `<=`, `>=` | `.sort()`, `BTreeMap` keys |
-| **Total ordering?** | No (some pairs may be incomparable) | **Yes** (every pair is comparable) |
-| **f32/f64?** | PartialOrd only (NaN breaks ordering) | Cannot derive Ord |
+| **提供される機能** | `<`, `>`, `<=`, `>=` 演算子 | `.sort()`, `BTreeMap` のキー |
+| **全順序か？** | いいえ（比較不可能なペアが存在し得る） | **はい**（あらゆるペアが比較可能） |
+| **f32/f64 の場合** | PartialOrd のみ（NaN が順序を壊す） | Ord を derive できない |
 
-### Real example: Ord — severity ranking
+### 実例: Ord — 重要度（深刻度）の順位付け
 ```rust
-// From hms_trap/src/fault.rs — variant order defines severity
+// hms_trap/src/fault.rs より — バリアントの定義順が重要度を決定する
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum FaultSeverity {
-    Info,      // lowest  (discriminant 0)
-    Warning,   //         (discriminant 1)
-    Error,     //         (discriminant 2)
-    Critical,  // highest (discriminant 3)
+    Info,      // 最低  (判別子 0)
+    Warning,   //       (判別子 1)
+    Error,     //       (判別子 2)
+    Critical,  // 最高  (判別子 3)
 }
 // FaultSeverity::Info < FaultSeverity::Critical → true
-// Enables: if severity >= FaultSeverity::Error { escalate(); }
+// 可能になる表現: if severity >= FaultSeverity::Error { escalate(); }
 ```
 
-### Real example: Ord — diagnostic levels for comparison
+### 実例: Ord — 診断レベルの比較
 ```rust
-// Example: orchestration.rs
+// 実装例: orchestration.rs
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub enum GpuDiagLevel {
     #[default]
-    Quick,     // lowest
+    Quick,     // 最低
     Standard,
     Extended,
-    Full,      // highest
+    Full,      // 最高
 }
-// Enables: if requested_level >= GpuDiagLevel::Extended { run_extended_tests(); }
+// 可能になる表現: if requested_level >= GpuDiagLevel::Extended { run_extended_tests(); }
 ```
 
-### Derive decision tree
+### Derive 決定木
 
 ```text
-                        Your new type
-                            │
-                   Contains String/Vec/Box?
-                      /              \
-                    YES                NO
-                     │                  │
-              Clone only          Clone + Copy
-                     │                  │
-              Contains f32/f64?    Contains f32/f64?
-                /          \         /          \
-              YES           NO     YES           NO
-               │             │      │             │
-         PartialEq       PartialEq  PartialEq  PartialEq
-         only            + Eq       only       + Eq
-                          │                      │
-                    Need sorting?           Need sorting?
-                      /       \               /       \
-                    YES        NO            YES        NO
-                     │          │              │          │
-               PartialOrd    Done        PartialOrd    Done
-               + Ord                     + Ord
-                     │                        │
-               Need as                  Need as
-               map key?                 map key?
-                  │                        │
-                + Hash                   + Hash
+                         作成した新しい型
+                                │
+                    String/Vec/Box を含むか？
+                       /              \
+                     はい            いいえ
+                      │                  │
+                 Clone のみ         Clone + Copy
+                      │                  │
+                f32/f64 を含むか？  f32/f64 を含むか？
+                 /          \         /          \
+               はい        いいえ    はい        いいえ
+                │             │      │             │
+          PartialEq       PartialEq  PartialEq  PartialEq
+          のみ            + Eq       のみ       + Eq
+                           │                      │
+                     ソートが必要か？       ソートが必要か？
+                       /       \               /       \
+                     はい     いいえ         はい     いいえ
+                      │          │              │          │
+                PartialOrd      完了       PartialOrd     完了
+                + Ord                     + Ord
+                      │                        │
+                 マップのキー            マップのキー
+                 として必要か？          として必要か？
+                   │                        │
+                 + Hash                   + Hash
 ```
 
-### Quick reference: common derive combos from production Rust code
+### クイックリファレンス: プロダクション環境で頻出する derive の組み合わせ
 
-| **Type category** | **Typical derive** | **Example** |
+| **型のカテゴリ** | **典型的な derive** | **例** |
 |-------------------|--------------------|------------|
-| Simple status enum | `Copy, Clone, PartialEq, Eq, Default` | `FanStatus` |
-| Enum used as HashMap key | `Copy, Clone, PartialEq, Eq, Hash` | `CpuFaultType`, `SelComponent` |
-| Sortable severity enum | `Copy, Clone, PartialEq, Eq, PartialOrd, Ord` | `FaultSeverity`, `GpuDiagLevel` |
-| Data struct with Strings | `Clone, Debug, Serialize, Deserialize` | `FruData`, `OverallSummary` |
-| Serializable config | `Clone, Debug, Default, Serialize, Deserialize` | `DiagConfig` |
+| 単純なステータス enum | `Copy, Clone, PartialEq, Eq, Default` | `FanStatus` |
+| HashMapのキーとして使う enum | `Copy, Clone, PartialEq, Eq, Hash` | `CpuFaultType`, `SelComponent` |
+| ソート可能な重要度 enum | `Copy, Clone, PartialEq, Eq, PartialOrd, Ord` | `FaultSeverity`, `GpuDiagLevel` |
+| 文字列を含むデータ構造体 | `Clone, Debug, Serialize, Deserialize` | `FruData`, `OverallSummary` |
+| シリアライズ可能な設定 | `Clone, Debug, Default, Serialize, Deserialize` | `DiagConfig` |
 
 ----
-
-

@@ -1,15 +1,14 @@
-## Incremental Adoption Strategy
+## 段階的な導入戦略
 
-> **What you'll learn:** A phased approach to introducing Rust in a C#/.NET organization —
-> from learning exercises (weeks 1–4) to performance-critical replacements (weeks 5–8)
-> to new microservices (weeks 9–12), with concrete team adoption timelines.
+> **ここで学ぶこと:** C# / .NET 組織に Rust を導入するためのフェーズ分けされたアプローチ — 学習と実験（1〜4週目）から、パフォーマンスが重要なコンポーネントの置き換え（5〜8週目）、新規マイクロサービスの開発（9〜12週目）まで、具体的なチーム導入タイムラインとともに解説します。
 >
-> **Difficulty:** 🟡 Intermediate
+> **難易度:** 🟡 中級
 
-### Phase 1: Learning and Experimentation (Weeks 1-4)
+### フェーズ1: 学習と実験（1〜4週目）
+
 ```rust
-// Start with command-line tools and utilities
-// Example: Log file analyzer
+// コマンドラインツールやユーティリティから始める
+// 例: ログファイルアナライザ
 use std::fs;
 use std::collections::HashMap;
 use clap::Parser;
@@ -48,10 +47,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-### Phase 2: Replace Performance-Critical Components (Weeks 5-8)
+### フェーズ2: パフォーマンスが重要なコンポーネントの置き換え（5〜8週目）
+
 ```rust
-// Replace CPU-intensive data processing
-// Example: Image processing microservice
+// CPU集約型のデータ処理を置き換える
+// 例: 画像処理マイクロサービス
 use image::{DynamicImage, ImageBuffer, Rgb};
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -120,10 +120,11 @@ struct ProcessingError(String);
 impl warp::reject::Reject for ProcessingError {}
 ```
 
-### Phase 3: New Microservices (Weeks 9-12)
+### フェーズ3: 新規マイクロサービスの構築（9〜12週目）
+
 ```rust
-// Build new services from scratch in Rust
-// Example: Authentication service
+// Rust でゼロから新しいサービスを構築する
+// 例: 認証サービス
 use axum::{
     extract::{Query, State},
     http::StatusCode,
@@ -165,9 +166,9 @@ async fn login(
     State(state): State<AppState>,
     Json(request): Json<LoginRequest>,
 ) -> Result<Json<LoginResponse>, StatusCode> {
-    // Note: sqlx::query!() is compile-time checked and requires DATABASE_URL
-    // pointing to a live database during build. For runtime-checked queries,
-    // use sqlx::query() or sqlx::query_as() instead.
+    // 注: sqlx::query!() はコンパイル時に検証されるため、ビルド時に稼働中のデータベースを
+    // 指す DATABASE_URL が必要です。実行時検証クエリの場合は、代わりに sqlx::query() や
+    // sqlx::query_as() を使用します。
     let user = sqlx::query!(
         "SELECT id, password_hash FROM users WHERE email = $1",
         request.email
@@ -230,22 +231,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ***
 
-## Team Adoption Timeline
+## チーム導入タイムライン
 
-### Month 1: Foundation
-**Week 1-2: Syntax and Ownership**
-- Basic syntax differences from C#
-- Understanding ownership, borrowing, and lifetimes
-- Small exercises: CLI tools, file processing
+### 1か月目: 基礎固め
 
-**Week 3-4: Error Handling and Types**
-- `Result<T, E>` vs exceptions
-- `Option<T>` vs nullable types
-- Pattern matching and exhaustive checking
+**1〜2週目: 構文と所有権**
+- C# との基本的な構文の違い
+- 所有権、借用、ライフタイムの理解
+- 小さな演習: CLI ツール、ファイル処理
 
-**Recommended exercises:**
+**3〜4週目: エラー処理と型システム**
+- 例外 vs `Result<T, E>`
+- null 許容型 vs `Option<T>`
+- パターンマッチングと網羅的チェック
+
+**推奨される演習課題:**
+
 ```rust
-// Week 1-2: File processor
+// 1〜2週目: ファイルプロセッサ
 fn process_log_file(path: &str) -> Result<Vec<String>, std::io::Error> {
     let content = std::fs::read_to_string(path)?;
     let errors: Vec<String> = content
@@ -256,7 +259,7 @@ fn process_log_file(path: &str) -> Result<Vec<String>, std::io::Error> {
     Ok(errors)
 }
 
-// Week 3-4: JSON processor with error handling
+// 3〜4週目: エラー処理を伴う JSON プロセッサ
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -272,20 +275,22 @@ fn parse_log_entries(json_str: &str) -> Result<Vec<LogEntry>, Box<dyn std::error
 }
 ```
 
-### Month 2: Practical Applications
-**Week 5-6: Traits and Generics**
-- Trait system vs interfaces
-- Generic constraints and bounds
-- Common patterns and idioms
+### 2か月目: 実践的な応用
 
-**Week 7-8: Async Programming and Concurrency**
-- `async`/`await` similarities and differences
-- Channels for communication
-- Thread safety guarantees
+**5〜6週目: トレイトとジェネリクス**
+- インターフェース vs トレイトシステム
+- ジェネリクスの制約（境界）
+- 一般的なパターンとイディオム
 
-**Recommended projects:**
+**7〜8週目: 非同期プログラミングと並行性**
+- `async`/`await` の類似点と相違点
+- スレッド間通信のためのチャネル（Channel）
+- スレッド安全性の保証機構
+
+**推奨されるプロジェクト課題:**
+
 ```rust
-// Week 5-6: Generic data processor
+// 5〜6週目: ジェネリックデータプロセッサ
 trait DataProcessor<T> {
     type Output;
     type Error;
@@ -304,7 +309,7 @@ impl DataProcessor<&str> for JsonProcessor {
     }
 }
 
-// Week 7-8: Async web client
+// 7〜8週目: 非同期 Web クライアント
 async fn fetch_and_process_data(urls: Vec<&str>) -> Result<(), Box<dyn std::error::Error>> {
     let client = reqwest::Client::new();
     
@@ -315,7 +320,7 @@ async fn fetch_and_process_data(urls: Vec<&str>) -> Result<(), Box<dyn std::erro
             tokio::spawn(async move {
                 let response = client.get(url).send().await?;
                 let text = response.text().await?;
-                println!("Fetched {} bytes from {}", text.len(), url);
+                println!("{} から {} バイトを取得しました", url, text.len());
                 Ok::<(), reqwest::Error>(())
             })
         })
@@ -329,18 +334,17 @@ async fn fetch_and_process_data(urls: Vec<&str>) -> Result<(), Box<dyn std::erro
 }
 ```
 
-### Month 3+: Production Integration
-**Week 9-12: Real Project Work**
-- Choose a non-critical component to rewrite
-- Implement comprehensive error handling
-- Add logging, metrics, and testing
-- Performance profiling and optimization
+### 3か月目以降: 本番環境への統合
 
-**Ongoing: Team Review and Mentoring**
-- Code reviews focusing on Rust idioms
-- Pair programming sessions
-- Knowledge sharing sessions
+**9〜12週目: 実際のプロジェクトでの開発**
+- 非クリティカルなコンポーネントを選定して書き直しを実施
+- 包括的なエラー処理の実装
+- ロギング、メトリクス、テストの追加
+- パフォーマンスプロファイリングと最適化
+
+**継続的取り組み: チームレビューとメンタリング**
+- Rust のイディオムに焦点を当てたコードレビュー
+- ペアプログラミングセッション
+- ナレッジ共有セッション
 
 ***
-
-

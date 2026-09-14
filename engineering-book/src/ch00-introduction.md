@@ -1,126 +1,121 @@
-# Rust Engineering Practices — Beyond `cargo build`
+# Rustエンジニアリングプラクティス — `cargo build`の先へ
 
-## Speaker Intro
+## 著者（講師）紹介
 
-- Principal Firmware Architect in Microsoft SCHIE (Silicon and Cloud Hardware Infrastructure Engineering) team
-- Industry veteran with expertise in security, systems programming (firmware, operating systems, hypervisors), CPU and platform architecture, and C++ systems
-- Started programming in Rust in 2017 (@AWS EC2), and have been in love with the language ever since
+- マイクロソフト SCHIE (Silicon and Cloud Hardware Infrastructure Engineering) チーム プリンシパルファームウェアアーキテクト
+- セキュリティ、システムプログラミング（ファームウェア、オペレーティングシステム、ハイパーバイザ）、CPUおよびプラットフォームアーキテクチャ、C++システムに関する深い専門知識を持つ業界のベテラン
+- 2017年（AWS EC2在籍時）にRustを使い始め、以来この言語に魅了され続けている
 
 ---
 
-> A practical guide to the Rust toolchain features that most teams discover too late:
-> build scripts, cross-compilation, benchmarking, code coverage, and safety verification
-> with Miri and Valgrind. Each chapter uses concrete examples drawn from
-> a real hardware-diagnostics codebase —
-> a large multi-crate workspace — so every technique maps directly to production code.
+> 本書は、多くのチームがつまずいてから初めて気づくRustツールチェーンの機能（ビルドスクリプト、クロスコンパイル、ベンチマーク、コードカバレッジ、MiriやValgrindによる安全性検証など）を網羅した実践ガイドです。各章では、実際のハードウェア診断コードベース（大規模なマルチクレートワークスペース）から抽出した具体例を使用しているため、すべてのテクニックを本番コードにそのまま適用できます。
 
-## How to Use This Book
+## 本書の使い方
 
-This book is designed for **self-paced study or team workshops**. Each chapter is largely independent — read them in order or jump to the topic you need.
+本書は、**個人学習またはチームでのワークショップ**向けに設計されています。各章は概ね独立しているため、最初から順番に読み進めることも、必要なトピックに直接ジャンプすることも可能です。
 
-### Difficulty Legend
+### 難易度の凡例
 
-| Symbol | Level | Meaning |
+| 記号 | レベル | 意味 |
 |:------:|-------|---------|
-| 🟢 | Starter | Straightforward tools with clear patterns — useful on day one |
-| 🟡 | Intermediate | Requires understanding of toolchain internals or platform concepts |
-| 🔴 | Advanced | Deep toolchain knowledge, nightly features, or multi-tool orchestration |
+| 🟢 | 初級 (Starter) | 明確なパターンを持つ扱いやすいツール — 今日からすぐに役立つ内容 |
+| 🟡 | 中級 (Intermediate) | ツールチェーンの内部構造やプラットフォーム概念の理解が必要 |
+| 🔴 | 上級 (Advanced) | 深いツールチェーン知識、Nightly機能、または複数ツールのオーケストレーションが必要 |
 
-### Pacing Guide
+### 学習ペースの目安
 
-| Part | Chapters | Est. Time | Key Outcome |
+| 部 | 該当章 | 目安時間 | 主な成果 |
 |------|----------|:---------:|-------------|
-| **I — Build & Ship** | ch01–02 | 3–4 h | Build metadata, cross-compilation, static binaries |
-| **II — Measure & Verify** | ch03–05 | 4–5 h | Statistical benchmarking, coverage gates, Miri/sanitizers |
-| **III — Harden & Optimize** | ch06–10 | 6–8 h | Supply chain security, release profiles, compile-time tools, `no_std`, Windows |
-| **IV — Integrate** | ch11–13 | 3–4 h | Production CI/CD pipeline, tricks, capstone exercise |
-| | | **16–21 h** | **Full production engineering pipeline** |
+| **I — ビルド＆シップ** | ch01–02 | 3–4 時間 | ビルドメタデータ、クロスコンパイル、静的バイナリ |
+| **II — 計測＆検証** | ch03–05 | 4–5 時間 | 統計的ベンチマーク、カバレッジゲート、Miri/サニタイザ |
+| **III — 堅牢化＆最適化** | ch06–10 | 6–8 時間 | サプライチェーンセキュリティ、リリースプロファイル、コンパイル時ツール、`no_std`、Windows |
+| **IV — 統合** | ch11–13 | 3–4 時間 | 本番CI/CDパイプライン、現場のTips、総合演習 |
+| | | **16–21 時間** | **完全なプロダクションエンジニアリングパイプラインの習得** |
 
-### Working Through Exercises
+### 演習問題への取り組み方
 
-Each chapter contains **🏋️ exercises** with difficulty indicators. Solutions are provided in expandable `<details>` blocks — try the exercise first, then check your work.
+各章には難易度表記付きの **🏋️ 演習問題** が含まれています。解答は折りたたみ式の `<details>` ブロック内に用意されています。まずは自力で演習に取り組み、その後に解答を確認してください。
 
-- 🟢 exercises can often be done in 10–15 minutes
-- 🟡 exercises require 20–40 minutes and may involve running tools locally
-- 🔴 exercises require significant setup and experimentation (1+ hour)
+- 🟢 の演習は通常 10〜15 分程度で完了できます
+- 🟡 の演習は 20〜40 分程度を要し、ローカル環境でツールを実行する場合があります
+- 🔴 の演習は本格的なセットアップや実験が必要となります（1時間以上）
 
-## Prerequisites
+## 前提知識
 
-| Concept | Where to learn it |
+| 概念 | 学習リソース |
 |---------|-------------------|
-| Cargo workspace layout | [Rust Book ch14.3](https://doc.rust-lang.org/book/ch14-03-cargo-workspaces.html) |
-| Feature flags | [Cargo Reference — Features](https://doc.rust-lang.org/cargo/reference/features.html) |
-| `#[cfg(test)]` and basic testing | Rust Patterns ch12 |
-| `unsafe` blocks and FFI basics | Rust Patterns ch10 |
+| Cargo ワークスペースの構成 | [The Rust Programming Language 第14章3節](https://doc.rust-lang.org/book/ch14-03-cargo-workspaces.html) |
+| 機能フラグ（Feature flags） | [Cargo Reference — Features](https://doc.rust-lang.org/cargo/reference/features.html) |
+| `#[cfg(test)]` とテストの基礎 | Rust Patterns 第12章 |
+| `unsafe` ブロックと FFI の基礎 | Rust Patterns 第10章 |
 
-## Chapter Dependency Map
+## 章の依存関係マップ
 
 ```text
                  ┌──────────┐
                  │ ch00     │
-                 │  Intro   │
+                 │ はじめに │
                  └────┬─────┘
         ┌─────┬───┬──┴──┬──────┬──────┐
         ▼     ▼   ▼     ▼      ▼      ▼
       ch01  ch03 ch04  ch05   ch06   ch09
-      Build Bench Cov  Miri   Deps   no_std
+     ビルド ベンチ カバレッジ Miri  依存関係 no_std
         │     │    │    │      │      │
         │     └────┴────┘      │      ▼
         │          │           │    ch10
         ▼          ▼           ▼   Windows
        ch02      ch07        ch07    │
-       Cross    RelProf     RelProf  │
+     クロス   プロファイル プロファイル │
         │          │           │     │
         │          ▼           │     │
         │        ch08          │     │
-        │      CompTime        │     │
+        │     ビルド時間       │     │
         └──────────┴───────────┴─────┘
                    │
                    ▼
                  ch11
-               CI/CD Pipeline
+             CI/CD パイプライン
                    │
                    ▼
                 ch12 ─── ch13
-              Tricks    Quick Ref
+              Tips集   リファレンス
 ```
 
-**Read in any order**: ch01, ch03, ch04, ch05, ch06, ch09 are independent.
-**Read after prerequisites**: ch02 (needs ch01), ch07–ch08 (benefit from ch03–ch06), ch10 (benefits from ch09).
-**Read last**: ch11 (ties everything together), ch12 (tricks), ch13 (reference).
+- **任意の順序で学習可能**: ch01, ch03, ch04, ch05, ch06, ch09 は互いに独立しています。
+- **前提知識の後に学習**: ch02（ch01の知識が必要）、ch07–ch08（ch03–ch06を先に読むと効果的）、ch10（ch09を先に読むと効果的）。
+- **最後に学習**: ch11（全体を統合）、ch12（現場のTips）、ch13（クイックリファレンス）。
 
-## Annotated Table of Contents
+## 章の概要一覧
 
-### Part I — Build & Ship
+### 第I部 — ビルド＆シップ
 
-| # | Chapter | Difficulty | Description |
+| # | 章 | 難易度 | 説明 |
 |---|---------|:----------:|-------------|
-| 1 | [Build Scripts — `build.rs` in Depth](ch01-build-scripts-buildrs-in-depth.md) | 🟢 | Compile-time constants, compiling C code, protobuf generation, system library linking, anti-patterns |
-| 2 | [Cross-Compilation — One Source, Many Targets](ch02-cross-compilation-one-source-many-target.md) | 🟡 | Target triples, musl static binaries, ARM cross-compile, `cross` tool, `cargo-zigbuild`, GitHub Actions |
+| 1 | [ビルドスクリプト — `build.rs` 徹底解説](ch01-build-scripts-buildrs-in-depth.md) | 🟢 | コンパイル時定数、Cコードのコンパイル、protobuf生成、システムライブラリのリンク、アンチパターン |
+| 2 | [クロスコンパイル — 1つのソースから複数のターゲットへ](ch02-cross-compilation-one-source-many-target.md) | 🟡 | ターゲットトリプル、musl静的バイナリ、ARMクロスコンパイル、`cross` ツール、`cargo-zigbuild`、GitHub Actions |
 
-### Part II — Measure & Verify
+### 第II部 — 計測＆検証
 
-| # | Chapter | Difficulty | Description |
+| # | 章 | 難易度 | 説明 |
 |---|---------|:----------:|-------------|
-| 3 | [Benchmarking — Measuring What Matters](ch03-benchmarking-measuring-what-matters.md) | 🟡 | Criterion.rs, Divan, `perf` flamegraphs, PGO, continuous benchmarking in CI |
-| 4 | [Code Coverage — Seeing What Tests Miss](ch04-code-coverage-seeing-what-tests-miss.md) | 🟢 | `cargo-llvm-cov`, `cargo-tarpaulin`, `grcov`, Codecov/Coveralls CI integration |
-| 5 | [Miri, Valgrind, and Sanitizers](ch05-miri-valgrind-and-sanitizers-verifying-u.md) | 🔴 | MIR interpreter, Valgrind memcheck/Helgrind, ASan/MSan/TSan, cargo-fuzz, loom |
+| 3 | [ベンチマーク — 本質的な性能を測る](ch03-benchmarking-measuring-what-matters.md) | 🟡 | Criterion.rs、Divan、`perf` フレームグラフ、PGO（プロファイル誘導最適化）、CIでの継続的ベンチマーク |
+| 4 | [コードカバレッジ — テストが見逃した箇所の可視化](ch04-code-coverage-seeing-what-tests-miss.md) | 🟢 | `cargo-llvm-cov`、`cargo-tarpaulin`、`grcov`、Codecov/CoverallsによるCI統合 |
+| 5 | [Miri・Valgrind・サニタイザ](ch05-miri-valgrind-and-sanitizers-verifying-u.md) | 🔴 | MIRインタープリタ、Valgrind memcheck/Helgrind、ASan/MSan/TSan、cargo-fuzz、loom |
 
-### Part III — Harden & Optimize
+### 第III部 — 堅牢化＆最適化
 
-| # | Chapter | Difficulty | Description |
+| # | 章 | 難易度 | 説明 |
 |---|---------|:----------:|-------------|
-| 6 | [Dependency Management and Supply Chain Security](ch06-dependency-management-and-supply-chain-s.md) | 🟢 | `cargo-audit`, `cargo-deny`, `cargo-vet`, `cargo-outdated`, `cargo-semver-checks` |
-| 7 | [Release Profiles and Binary Size](ch07-release-profiles-and-binary-size.md) | 🟡 | Release profile anatomy, LTO trade-offs, `cargo-bloat`, `cargo-udeps` |
-| 8 | [Compile-Time and Developer Tools](ch08-compile-time-and-developer-tools.md) | 🟡 | `sccache`, `mold`, `cargo-nextest`, `cargo-expand`, `cargo-geiger`, workspace lints, MSRV |
-| 9 | [`no_std` and Feature Verification](ch09-no-std-and-feature-verification.md) | 🔴 | `cargo-hack`, `core`/`alloc`/`std` layers, custom panic handlers, testing `no_std` code |
-| 10 | [Windows and Conditional Compilation](ch10-windows-and-conditional-compilation.md) | 🟡 | `#[cfg]` patterns, `windows-sys`/`windows` crates, `cargo-xwin`, platform abstraction |
+| 6 | [依存関係管理とサプライチェーンセキュリティ](ch06-dependency-management-and-supply-chain-s.md) | 🟢 | `cargo-audit`、`cargo-deny`、`cargo-vet`、`cargo-outdated`、`cargo-semver-checks` |
+| 7 | [リリースプロファイルとバイナリサイズ](ch07-release-profiles-and-binary-size.md) | 🟡 | リリースプロファイルの構造、LTOのトレードオフ、`cargo-bloat`、`cargo-udeps` |
+| 8 | [コンパイル時間短縮と開発者ツール](ch08-compile-time-and-developer-tools.md) | 🟡 | `sccache`、`mold`、`cargo-nextest`、`cargo-expand`、`cargo-geiger`、ワークスペースlint、MSRV |
+| 9 | [`no_std` と機能フラグの検証](ch09-no-std-and-feature-verification.md) | 🔴 | `cargo-hack`、`core`/`alloc`/`std` レイヤー、カスタムパニックハンドラ、`no_std` コードのテスト |
+| 10 | [Windows環境と条件付きコンパイル](ch10-windows-and-conditional-compilation.md) | 🟡 | `#[cfg]` パターン、`windows-sys`/`windows` クレート、`cargo-xwin`、プラットフォーム抽象化 |
 
-### Part IV — Integrate
+### 第IV部 — 統合
 
-| # | Chapter | Difficulty | Description |
+| # | 章 | 難易度 | 説明 |
 |---|---------|:----------:|-------------|
-| 11 | [Putting It All Together — A Production CI/CD Pipeline](ch11-putting-it-all-together-a-production-cic.md) | 🟡 | GitHub Actions workflow, `cargo-make`, pre-commit hooks, `cargo-dist`, capstone |
-| 12 | [Tricks from the Trenches](ch12-tricks-from-the-trenches.md) | 🟡 | 10 battle-tested patterns: `deny(warnings)` trap, cache tuning, dep dedup, RUSTFLAGS, more |
-| 13 | [Quick Reference Card](ch13-quick-reference-card.md) | — | Commands at a glance, 60+ decision table entries, further reading links |
-
+| 11 | [すべてを統合する — 本番向けCI/CDパイプライン](ch11-putting-it-all-together-a-production-cic.md) | 🟡 | GitHub Actionsワークフロー、`cargo-make`、pre-commitフック、`cargo-dist`、総合演習 |
+| 12 | [現場のプラクティス・実践テクニック](ch12-tricks-from-the-trenches.md) | 🟡 | 実戦で検証された10のパターン：`deny(warnings)` の罠、キャッシュ調整、依存関係の重複排除、RUSTFLAGS など |
+| 13 | [クイックリファレンスカード](ch13-quick-reference-card.md) | — | コマンド一覧、60以上の決定テーブル、参考資料リンク |

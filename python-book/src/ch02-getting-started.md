@@ -1,106 +1,105 @@
-## Installation and Setup
+## インストールとセットアップ
 
-> **What you'll learn:** How to install Rust and its toolchain, the Cargo build system vs pip/Poetry,
-> IDE setup, your first `Hello, world!` program, and essential Rust keywords mapped to Python equivalents.
+> **この章で学ぶこと:** Rustとそのツールチェーンのインストール方法、Cargoビルドシステムとpip/Poetryの比較、IDEの環境構築、最初の「Hello, world!」プログラム、そしてPythonの対応概念と紐付けたRustの必須キーワードについて学びます。
 >
-> **Difficulty:** 🟢 Beginner
+> **難易度:** 🟢 初級
 
-### Installing Rust
+### Rustのインストール
 ```bash
-# Install Rust via rustup (Linux/macOS/WSL)
+# rustup 経由で Rust をインストール（Linux/macOS/WSL）
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-# Verify installation
-rustc --version     # Rust compiler
-cargo --version     # Build tool + package manager (like pip + setuptools combined)
+# インストールの確認
+rustc --version     # Rust コンパイラ
+cargo --version     # ビルドツール兼パッケージマネージャ（pip + setuptools を統合したようなツール）
 
-# Update Rust
+# Rust のアップデート
 rustup update
 ```
 
-### Rust Tools vs Python Tools
+### RustツールとPythonツールの比較
 
-| Purpose | Python | Rust |
-|---------|--------|------|
-| Language runtime | `python` (interpreter) | `rustc` (compiler, rarely called directly) |
-| Package manager | `pip` / `poetry` / `uv` | `cargo` (built-in) |
-| Project config | `pyproject.toml` | `Cargo.toml` |
-| Lock file | `poetry.lock` / `requirements.txt` | `Cargo.lock` |
-| Virtual env | `venv` / `conda` | Not needed (deps are per-project) |
-| Formatter | `black` / `ruff format` | `rustfmt` (built-in: `cargo fmt`) |
-| Linter | `ruff` / `flake8` / `pylint` | `clippy` (built-in: `cargo clippy`) |
-| Type checker | `mypy` / `pyright` | Built into compiler (always on) |
-| Test runner | `pytest` | `cargo test` (built-in) |
-| Docs | `sphinx` / `mkdocs` | `cargo doc` (built-in) |
-| REPL | `python` / `ipython` | None (use `cargo test` or Rust Playground) |
+| 用途 | Python | Rust |
+|---|---|---|
+| 言語ランタイム | `python`（インタプリタ） | `rustc`（コンパイラ、直接呼び出すことは稀） |
+| パッケージマネージャ | `pip` / `poetry` / `uv` | `cargo`（標準搭載） |
+| プロジェクト設定 | `pyproject.toml` | `Cargo.toml` |
+| ロックファイル | `poetry.lock` / `requirements.txt` | `Cargo.lock` |
+| 仮想環境 | `venv` / `conda` | 不要（依存関係はプロジェクト単位で独立管理） |
+| フォーマッタ | `black` / `ruff format` | `rustfmt`（標準搭載: `cargo fmt`） |
+| リンター | `ruff` / `flake8` / `pylint` | `clippy`（標準搭載: `cargo clippy`） |
+| 型チェッカー | `mypy` / `pyright` | コンパイラに内蔵（常に有効） |
+| テストランナー | `pytest` | `cargo test`（標準搭載） |
+| ドキュメント生成 | `sphinx` / `mkdocs` | `cargo doc`（標準搭載） |
+| REPL | `python` / `ipython` | なし（`cargo test` や Rust Playground を活用） |
 
-### IDE Setup
+### IDEのセットアップ
 
-**VS Code** (recommended):
+**VS Code**（推奨）:
 ```text
-Extensions to install:
-- rust-analyzer        ← Essential: IDE features, type hints, completions
-- Even Better TOML     ← Syntax highlighting for Cargo.toml
-- CodeLLDB             ← Debugger support
+推奨拡張機能:
+- rust-analyzer        ← 必須: IDE機能、型ヒントのインライン表示、コード補完
+- Even Better TOML     ← Cargo.toml の構文ハイライト
+- CodeLLDB             ← デバッガサポート
 
-# Python equivalent mapping:
-# rust-analyzer ≈ Pylance (but with 100% type coverage, always)
-# cargo clippy  ≈ ruff (but checks correctness, not just style)
+# Python における対応関係:
+# rust-analyzer ≈ Pylance（ただし常に100%の型カバレッジを提供）
+# cargo clippy  ≈ ruff（ただしスタイルだけでなくコードの正しさも検証）
 ```
 
 ***
 
-## Your First Rust Program
+## 最初のRustプログラム
 
-### Python Hello World
+### Pythonの Hello World
 ```python
-# hello.py — just run it
+# hello.py — スクリプトを直接実行
 print("Hello, World!")
 
-# Run:
+# 実行方法:
 # python hello.py
 ```
 
-### Rust Hello World
+### Rustの Hello World
 ```rust
-// src/main.rs — must be compiled first
+// src/main.rs — 最初にコンパイルが必要
 fn main() {
-    println!("Hello, World!");   // println! is a macro (note the !)
+    println!("Hello, World!");   // println! はマクロ（! が目印）
 }
 
-// Build and run:
+// ビルドして実行:
 // cargo run
 ```
 
-### Key Differences for Python Developers
+### Python開発者から見た主な相違点
 
 ```text
 Python:                              Rust:
 ─────────                            ─────
-- No main() needed                   - fn main() is the entry point
-- Indentation = blocks               - Curly braces {} = blocks
-- print() is a function              - println!() is a macro (the ! matters)
-- No semicolons                      - Semicolons end statements
-- No type declarations               - Types inferred but always known
-- Interpreted (run directly)         - Compiled (cargo build, then run)
-- Errors at runtime                  - Most errors at compile time
+- main() 関数は必須ではない          - fn main() が実行のエントリポイント
+- インデントでブロックを表現         - 中括弧 {} でブロックを表現
+- print() は通常の関数               - println!() はマクロ（末尾の ! が必須）
+- セミコロン不要                     - 文の終端にセミコロン (;) が必要
+- 型宣言は任意                       - 型推論されるが、すべての型が静的に決定される
+- インタプリタ実行（即座に実行）     - コンパイル実行（cargo build で生成してから実行）
+- エラーは実行時に発覚               - 大半のエラーがコンパイル時に検出される
 ```
 
-### Creating Your First Project
+### 最初のプロジェクトを作成する
 ```bash
 # Python                              # Rust
 mkdir myproject                        cargo new myproject
 cd myproject                           cd myproject
-python -m venv .venv                   # No virtual env needed
-source .venv/bin/activate              # No activation needed
-# Create files manually               # src/main.rs already created
+python -m venv .venv                   # 仮想環境の作成は不要
+source .venv/bin/activate              # 仮想環境の有効化も不要
+# ファイルを手動作成                  # src/main.rs が自動生成される
 
-# Python project structure:            Rust project structure:
+# Python プロジェクト構造:             Rust プロジェクト構造:
 # myproject/                           myproject/
-# ├── pyproject.toml                   ├── Cargo.toml        (like pyproject.toml)
+# ├── pyproject.toml                   ├── Cargo.toml        (pyproject.toml に相当)
 # ├── src/                             ├── src/
-# │   └── myproject/                   │   └── main.rs       (entry point)
-# │       ├── __init__.py              └── (no __init__.py needed)
+# │   └── myproject/                   │   └── main.rs       (エントリポイント)
+# │       ├── __init__.py              └── (各フォルダへの __init__.py は不要)
 # │       └── main.py
 # └── tests/
 #     └── test_main.py
@@ -108,30 +107,30 @@ source .venv/bin/activate              # No activation needed
 
 ```mermaid
 graph LR
-    subgraph Python ["Python Project"]
+    subgraph Python ["Python プロジェクト"]
         PP["pyproject.toml"] --- PS["src/"]
         PS --- PM["myproject/"]
         PM --- PI["__init__.py"]
         PM --- PMN["main.py"]
         PP --- PT["tests/"]
     end
-    subgraph Rust ["Rust Project"]
+    subgraph Rust ["Rust プロジェクト"]
         RC["Cargo.toml"] --- RS["src/"]
         RS --- RM["main.rs"]
-        RC --- RTG["target/ (auto-generated)"]
+        RC --- RTG["target/（自動生成）"]
     end
     Python ~~~ Rust
     style Python fill:#ffeeba
     style Rust fill:#d4edda
 ```
 
-> **Key difference**: Rust projects are simpler — no `__init__.py`, no virtual environments, no `setup.py` vs `setup.cfg` vs `pyproject.toml` confusion. Just `Cargo.toml` + `src/`.
+> **大きな違い**: Rustのプロジェクト構造ははるかにシンプルです — `__init__.py` も、仮想環境も、`setup.py` / `setup.cfg` / `pyproject.toml` のどれを使うべきかという混乱もありません。`Cargo.toml` と `src/` だけで完結します。
 
 ***
 
-## Cargo vs pip/Poetry
+## Cargo と pip/Poetry の比較
 
-### Project Configuration
+### プロジェクト設定ファイル
 
 ```toml
 # Python — pyproject.toml
@@ -153,170 +152,170 @@ dev = ["pytest", "ruff", "mypy"]
 [package]
 name = "myproject"
 version = "0.1.0"
-edition = "2021"          # Rust edition (like Python version)
+edition = "2021"          # Rustのエディション（Pythonのバージョン指定に相当）
 
 [dependencies]
-reqwest = "0.12"          # HTTP client (like requests)
-serde = { version = "1.0", features = ["derive"] }  # Serialization (like pydantic)
+reqwest = "0.12"          # HTTPクライアント（requestsに相当）
+serde = { version = "1.0", features = ["derive"] }  # シリアライズ（pydanticに相当）
 
 [dev-dependencies]
-# Test dependencies — only compiled for `cargo test`
-# (No separate test config needed — `cargo test` is built in)
+# テスト用依存関係 — `cargo test` の実行時のみコンパイルされる
+# （テスト専用の追加設定は不要 — `cargo test` が標準機能として統合されている）
 ```
 
-### Common Cargo Commands
+### よく使われるCargoコマンド
+
 ```bash
-# Python equivalent                # Rust
+# Python における対応操作            # Rust
 pip install requests               cargo add reqwest
-pip install -r requirements.txt    cargo build           # auto-installs deps
-pip install -e .                   cargo build            # always "editable"
+pip install -r requirements.txt    cargo build           # 依存関係を自動インストールしてビルド
+pip install -e .                   cargo build           # 常に「編集可能（editable）」同等の状態
 python -m pytest                   cargo test
-python -m mypy .                   # Built into compiler — always runs
+python -m mypy .                   # コンパイラに内蔵 — 常に実行される
 ruff check .                       cargo clippy
 ruff format .                      cargo fmt
 python main.py                     cargo run
-python -c "..."                    # No equivalent — use cargo run or tests
+python -c "..."                    # 直接の対応機能なし — cargo run かテストコードを使用
 
-# Rust-specific:
-cargo new myproject                # Create new project
-cargo build --release              # Optimized build (10-100x faster than debug)
-cargo doc --open                   # Generate and browse API docs
-cargo update                       # Update deps (like pip install --upgrade)
+# Rust 固有のコマンド:
+cargo new myproject                # 新規プロジェクトの作成
+cargo build --release              # リリースビルド（デバッグビルドより10〜100倍高速）
+cargo doc --open                   # ドキュメントを自動生成してブラウザで開く
+cargo update                       # 依存関係を更新（pip install --upgrade に相当）
 ```
 
 ***
 
+## Python開発者のための必須Rustキーワード
 
-## Essential Rust Keywords for Python Developers
-
-### Variable and Mutability Keywords
+### 変数と可変性に関するキーワード
 
 ```rust
-// let — declare a variable (like Python assignment, but immutable by default)
-let name = "Alice";          // Python: name = "Alice" (but mutable)
-// name = "Bob";             // ❌ Compile error! Immutable by default
+// let — 変数を宣言（Pythonの変数代入に似ているが、デフォルトで不変）
+let name = "Alice";          // Python: name = "Alice"（ただしPythonでは常に可変）
+// name = "Bob";             // ❌ コンパイルエラー！デフォルトでは変更不可
 
-// mut — opt into mutability
-let mut count = 0;           // Python: count = 0 (always mutable in Python)
-count += 1;                  // ✅ Allowed because of `mut`
+// mut — 明示的に可変性を有効化
+let mut count = 0;           // Python: count = 0（Pythonでは常に可変）
+count += 1;                  // ✅ `mut` を付けて宣言しているため変更可能
 
-// const — compile-time constant (like Python's convention of UPPER_CASE, but enforced)
-const MAX_SIZE: usize = 1024;   // Python: MAX_SIZE = 1024 (convention only)
+// const — コンパイル時定数（Pythonの大文字スネークケース慣習と異なり、コンパイラが強制）
+const MAX_SIZE: usize = 1024;   // Python: MAX_SIZE = 1024（単なる慣習）
 
-// static — global variable (use sparingly; Python has module-level globals)
+// static — グローバル変数（使用は控えめに；Pythonのモジュールレベル大域変数に相当）
 static VERSION: &str = "1.0";
 ```
 
-### Ownership and Borrowing Keywords
+### 所有権と借用に関するキーワード
 
 ```rust
-// These have NO Python equivalents — they're Rust-specific concepts
+// これらには Python に直接対応する概念がありません — Rust 独自の核心概念です
 
-// & — borrow (read-only reference)
-fn print_name(name: &str) { }    // Python: def print_name(name: str) — but Python passes ref always
+// & — 借用（不変参照 / 読み取り専用参照）
+fn print_name(name: &str) { }    // Python: def print_name(name: str) — ただしPythonは常に参照渡し
 
-// &mut — mutable borrow
-fn append(list: &mut Vec<i32>) { }  // Python: def append(lst: list) — always mutable in Python
+// &mut — 可変の借用（変更可能な参照）
+fn append(list: &mut Vec<i32>) { }  // Python: def append(lst: list) — Pythonのリストは常に変更可能
 
-// move — transfer ownership (happens implicitly in Rust, never in Python)
+// move — 所有権の移動（Rustでは代入時に暗黙的に発生するが、Pythonには存在しない）
 let s1 = String::from("hello");
-let s2 = s1;    // s1 is MOVED to s2 — s1 is no longer valid
-// println!("{}", s1);  // ❌ Compile error: value moved
+let s2 = s1;    // s1 の所有権が s2 に移動（ムーブ） — s1 は以降無効になる
+// println!("{}", s1);  // ❌ コンパイルエラー: 所有権が移動済み（value moved）
 ```
 
-### Type Definition Keywords
+### 型定義に関するキーワード
 
 ```rust
-// struct — like a Python dataclass or NamedTuple
+// struct — Pythonの dataclass や NamedTuple に相当
 struct Point {               // @dataclass
     x: f64,                  // class Point:
     y: f64,                  //     x: float
 }                            //     y: float
 
-// enum — like Python's enum but MUCH more powerful (carries data)
-enum Shape {                 // No direct Python equivalent
-    Circle(f64),             // Each variant can hold different data
+// enum — Pythonの Enum よりも遥かに強力（各バリアントが固有のデータを持てる）
+enum Shape {                 // Pythonに直接の対応概念なし
+    Circle(f64),             // 各バリアントに異なるデータ型を持たせられる
     Rectangle(f64, f64),
 }
 
-// impl — attach methods to a type (like defining methods in a class)
+// impl — 型にメソッドを定義（クラス定義内のメソッド記述に相当）
 impl Point {                 // class Point:
     fn distance(&self) -> f64 {  //     def distance(self) -> float:
         (self.x.powi(2) + self.y.powi(2)).sqrt()
     }
 }
 
-// trait — like Python's ABC or Protocol (PEP 544)
+// trait — Pythonの ABC（抽象基底クラス）や Protocol（PEP 544）に相当
 trait Drawable {             // class Drawable(Protocol):
     fn draw(&self);          //     def draw(self) -> None: ...
 }
 
-// type — type alias (like Python's TypeAlias)
-type UserId = i64;           // UserId = int  (or TypeAlias)
+// type — 型エイリアス（Pythonの TypeAlias に相当）
+type UserId = i64;           // UserId = int（または TypeAlias）
 ```
 
-### Control Flow Keywords
+### 制御フローに関するキーワード
 
 ```rust
-// match — exhaustive pattern matching (like Python 3.10+ match, but enforced)
+// match — 網羅的パターンマッチング（Python 3.10+ の match に似ているが、全パターンの網羅が強制される）
 match value {
     1 => println!("one"),
     2 | 3 => println!("two or three"),
-    _ => println!("other"),          // _ = wildcard (like Python's case _:)
+    _ => println!("other"),          // _ = ワイルドカード（Pythonの case _: に相当）
 }
 
-// if let — destructure + conditional (Pythonic: if (m := regex.match(s)):)
+// if let — パターンの分解 ＋ 条件分岐（Pythonの代入演算子イディオム if (m := regex.match(s)): に相当）
 if let Some(x) = optional_value {
     println!("{}", x);
 }
 
-// loop — infinite loop (like while True:)
+// loop — 無限ループ（while True: に相当）
 loop {
-    break;  // Must break to exit
+    break;  // 脱出には break が必要
 }
 
-// for — iteration (like Python's for, but needs .iter() more often)
+// for — 反復処理（Pythonの for に似ているが、明示的に .iter() が必要な場合が多い）
 for item in collection.iter() {      // for item in collection:
     println!("{}", item);
 }
 
-// while let — loop with destructuring
+// while let — パターン分解を伴うループ
 while let Some(item) = stack.pop() {
     process(item);
 }
 ```
 
-### Visibility Keywords
+### 可視性に関するキーワード
 
 ```rust
-// pub — public (Python has no real private; uses _ convention)
-pub fn greet() { }           // def greet():  — everything is "public" in Python
+// pub — 公開（Pythonには真の非公開は存在せず、_ の慣習に頼る）
+pub fn greet() { }           // def greet(): — Pythonではすべてが「public」
 
-// pub(crate) — visible within the crate only
-pub(crate) fn internal() { } // def _internal():  — single underscore convention
+// pub(crate) — 同一クレート（パッケージ）内からのみアクセス可能
+pub(crate) fn internal() { } // def _internal(): — アンダースコア1つの慣習に相当
 
-// (no keyword) — private to the module
-fn private_helper() { }      // def __private():  — double underscore name mangling
+// （キーワードなし） — モジュール内限定のプライベート（非公開）
+fn private_helper() { }      // def __private(): — アンダースコア2つのマングリングに相当
 
-// In Python, "private" is a gentleman's agreement.
-// In Rust, private is enforced by the compiler.
+// Python において「プライベート」は紳士協定にすぎません。
+// Rust では、プライベートな可視性はコンパイラによって厳格に強制されます。
 ```
 
 ---
 
-## Exercises
+## 演習問題
 
 <details>
-<summary><strong>🏋️ Exercise: First Rust Program</strong> (click to expand)</summary>
+<summary><strong>🏋️ 演習: 最初のRustプログラム</strong>（クリックして展開）</summary>
 
-**Challenge**: Create a new Rust project and write a program that:
-1. Declares a variable `name` with your name (type `&str`)
-2. Declares a mutable variable `count` starting at 0
-3. Uses a `for` loop from 1..=5 to increment `count` and print `"Hello, {name}! (count: {count})"`
-4. After the loop, print whether count is even or odd using a `match` expression
+**課題**: 新しいRustプロジェクトを作成し、以下の要件を満たすプログラムを記述してください：
+1. あなたの名前を格納した変数 `name`（型 `&str`）を宣言する
+2. 0から始まる可変の変数 `count` を宣言する
+3. `1..=5` の範囲の `for` ループを使い、`count` をインクリメントしながら `"Hello, {name}! (count: {count})"` と出力する
+4. ループ終了後、`match` 式を使って `count` が偶数（even）か奇数（odd）かを判定して出力する
 
 <details>
-<summary>🔑 Solution</summary>
+<summary>🔑 解答</summary>
 
 ```bash
 cargo new hello_rust && cd hello_rust
@@ -341,15 +340,13 @@ fn main() {
 }
 ```
 
-**Key takeaways**:
-- `let` is immutable by default (you need `mut` to change `count`)
-- `1..=5` is inclusive range (Python's `range(1, 6)`)
-- `match` is an expression that returns a value
-- No `self`, no `if __name__ == "__main__"` — just `fn main()`
+**重要ポイント**:
+- `let` はデフォルトで不変（`count` を変更するには `mut` が必要）
+- `1..=5` は終端を含む範囲（Pythonの `range(1, 6)` に相当）
+- `match` は値を返す「式」として扱える
+- `self` や `if __name__ == "__main__":` は不要 — 単に `fn main()` を定義するだけ
 
 </details>
 </details>
 
 ***
-
-

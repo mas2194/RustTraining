@@ -1,29 +1,27 @@
-## Exceptions vs `Result<T, E>`
+## 例外 vs `Result<T, E>`
 
-> **What you'll learn:** Why Rust replaces exceptions with `Result<T, E>` and `Option<T>`,
-> the `?` operator for concise error propagation, and how explicit error handling
-> eliminates hidden control flow that plagues C# `try`/`catch` code.
+> **学べること:** Rust が例外の代わりに `Result<T, E>` や `Option<T>` を採用している理由、簡潔なエラー伝播のための `?` 演算子、そして明示的なエラーハンドリングによって C# の `try`/`catch` コードに潜む隠れた制御フローがどのように排除されるかについて学びます。
 >
-> **Difficulty:** 🟡 Intermediate
+> **難易度:** 🟡 中級
 >
-> **See also**: [Crate-Level Error Types](ch09-1-crate-level-error-types-and-result-alias.md) for production error patterns with `thiserror` and `anyhow`, and [Essential Crates](ch15-1-essential-crates-for-c-developers.md) for the error crate ecosystem.
+> **関連項目**: `thiserror` や `anyhow` を使った本番環境向けエラーパターンについては [クレートレベルのエラー型](ch09-1-crate-level-error-types-and-result-alias.md) を、エラー処理関連のクレートエコシステムについては [主要クレート](ch15-1-essential-crates-for-c-developers.md) を参照してください。
 
-### C# Exception-Based Error Handling
+### C# の例外ベースのエラーハンドリング
 ```csharp
-// C# - Exception-based error handling
+// C# - 例外ベースのエラーハンドリング
 public class UserService
 {
     public User GetUser(int userId)
     {
         if (userId <= 0)
         {
-            throw new ArgumentException("User ID must be positive");
+            throw new ArgumentException("ユーザーIDは正の数である必要があります");
         }
         
         var user = database.FindUser(userId);
         if (user == null)
         {
-            throw new UserNotFoundException($"User {userId} not found");
+            throw new UserNotFoundException($"ユーザー {userId} が見つかりません");
         }
         
         return user;
@@ -34,23 +32,23 @@ public class UserService
         try
         {
             var user = GetUser(userId);
-            return user.Email ?? throw new InvalidOperationException("User has no email");
+            return user.Email ?? throw new InvalidOperationException("ユーザーにメールアドレスが設定されていません");
         }
         catch (UserNotFoundException ex)
         {
-            logger.Warning("User not found: {UserId}", userId);
+            logger.Warning("ユーザーが見つかりません: {UserId}", userId);
             return "noreply@company.com";
         }
         catch (Exception ex)
         {
-            logger.Error(ex, "Unexpected error getting user email");
-            throw; // Re-throw
+            logger.Error(ex, "ユーザーメールの取得中に予期しないエラーが発生しました");
+            throw; // 再スロー
         }
     }
 }
 ```
 
-### Rust Result-Based Error Handling
+### Rust の Result ベースのエラーハンドリング
 ```rust
 use std::fmt;
 
@@ -65,10 +63,10 @@ pub enum UserError {
 impl fmt::Display for UserError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            UserError::InvalidId(id) => write!(f, "Invalid user ID: {}", id),
-            UserError::NotFound(id) => write!(f, "User {} not found", id),
-            UserError::NoEmail => write!(f, "User has no email address"),
-            UserError::DatabaseError(msg) => write!(f, "Database error: {}", msg),
+            UserError::InvalidId(id) => write!(f, "無効なユーザーID: {}", id),
+            UserError::NotFound(id) => write!(f, "ユーザー {} が見つかりません", id),
+            UserError::NoEmail => write!(f, "ユーザーにメールアドレスが設定されていません"),
+            UserError::DatabaseError(msg) => write!(f, "データベースエラー: {}", msg),
         }
     }
 }
@@ -82,7 +80,7 @@ pub struct User {
 }
 
 pub struct UserService {
-    users: Vec<User>,  // Simulated database
+    users: Vec<User>,  // 模擬データベース
 }
 
 impl UserService {
@@ -95,13 +93,13 @@ impl UserService {
             return Err(UserError::InvalidId(user_id));
         }
         
-        // Simulate database lookup
+        // データベース検索のシミュレーション
         self.database_find_user(user_id)
             .ok_or(UserError::NotFound(user_id))
     }
     
     pub fn get_user_email(&self, user_id: i32) -> Result<String, UserError> {
-        let user = self.get_user(user_id)?; // ? operator propagates errors
+        let user = self.get_user(user_id)?; // ? 演算子でエラーを伝播
         
         user.email
             .ok_or(UserError::NoEmail)
@@ -111,11 +109,11 @@ impl UserService {
         match self.get_user_email(user_id) {
             Ok(email) => email,
             Err(UserError::NotFound(_)) => {
-                log::warn!("User not found: {}", user_id);
+                log::warn!("ユーザーが見つかりません: {}", user_id);
                 "noreply@company.com".to_string()
             }
             Err(err) => {
-                log::error!("Error getting user email: {}", err);
+                log::error!("ユーザーメールの取得エラー: {}", err);
                 "error@company.com".to_string()
             }
         }
@@ -125,13 +123,13 @@ impl UserService {
 
 ```mermaid
 graph TD
-    subgraph "C# Exception Model"
-        CS_CALL["Method Call"]
-        CS_SUCCESS["Success Path"]
-        CS_EXCEPTION["throw Exception"]
-        CS_STACK["Stack unwinding<br/>(Runtime cost)"]
-        CS_CATCH["try/catch block"]
-        CS_HIDDEN["[ERROR] Hidden control flow<br/>[ERROR] Performance cost<br/>[ERROR] Easy to ignore"]
+    subgraph "C# の例外モデル"
+        CS_CALL["メソッド呼び出し"]
+        CS_SUCCESS["成功パス"]
+        CS_EXCEPTION["throw Exception（例外のスロー）"]
+        CS_STACK["スタックの巻き戻し<br/>（ランタイムコスト）"]
+        CS_CATCH["try/catch ブロック"]
+        CS_HIDDEN["[エラー] 隠れた制御フロー<br/>[エラー] パフォーマンスコスト<br/>[エラー] 見落としやすい"]
         
         CS_CALL --> CS_SUCCESS
         CS_CALL --> CS_EXCEPTION
@@ -140,13 +138,13 @@ graph TD
         CS_EXCEPTION --> CS_HIDDEN
     end
     
-    subgraph "Rust Result Model"
-        RUST_CALL["Function Call"]
+    subgraph "Rust の Result モデル"
+        RUST_CALL["関数呼び出し"]
         RUST_OK["Ok(value)"]
         RUST_ERR["Err(error)"]
-        RUST_MATCH["match result"]
-        RUST_QUESTION["? operator<br/>(early return)"]
-        RUST_EXPLICIT["[OK] Explicit error handling<br/>[OK] Zero runtime cost<br/>[OK] Cannot ignore errors"]
+        RUST_MATCH["match による結果処理"]
+        RUST_QUESTION["? 演算子<br/>（早期リターン）"]
+        RUST_EXPLICIT["[OK] 明示的なエラーハンドリング<br/>[OK] ゼロランタイムコスト<br/>[OK] エラーを無視できない"]
         
         RUST_CALL --> RUST_OK
         RUST_CALL --> RUST_ERR
@@ -165,23 +163,23 @@ graph TD
 
 ***
 
-### The ? Operator: Propagating Errors Concisely
+### ? 演算子：簡潔なエラー伝播
 ```csharp
-// C# - Exception propagation (implicit)
+// C# - 例外の伝播（暗黙的）
 public async Task<string> ProcessFileAsync(string path)
 {
-    var content = await File.ReadAllTextAsync(path);  // Throws on error
-    var processed = ProcessContent(content);          // Throws on error
+    var content = await File.ReadAllTextAsync(path);  // エラー時にスローされる
+    var processed = ProcessContent(content);          // エラー時にスローされる
     return processed;
 }
 ```
 
 ```rust
-// Rust - Error propagation with ?
+// Rust - ? によるエラー伝播
 fn process_file(path: &str) -> Result<String, ConfigError> {
-    let content = read_config(path)?;  // ? propagates error if Err
-    let processed = process_content(&content)?;  // ? propagates error if Err
-    Ok(processed)  // Wrap success value in Ok
+    let content = read_config(path)?;  // Err の場合、? がエラーを早期リターン（伝播）
+    let processed = process_content(&content)?;  // Err の場合、? がエラーを早期リターン（伝播）
+    Ok(processed)  // 成功値を Ok でラップ
 }
 
 fn process_content(content: &str) -> Result<String, ConfigError> {
@@ -193,13 +191,13 @@ fn process_content(content: &str) -> Result<String, ConfigError> {
 }
 ```
 
-### `Option<T>` for Nullable Values
+### null 許容値に対する `Option<T>`
 ```csharp
-// C# - Nullable reference types
+// C# - null 許容参照型
 public string? FindUserName(int userId)
 {
     var user = database.FindUser(userId);
-    return user?.Name;  // Returns null if user not found
+    return user?.Name;  // ユーザーが見つからない場合は null を返す
 }
 
 public void ProcessUser(int userId)
@@ -217,9 +215,9 @@ public void ProcessUser(int userId)
 ```
 
 ```rust
-// Rust - Option<T> for optional values
+// Rust - オプショナル値のための Option<T>
 fn find_user_name(user_id: u32) -> Option<String> {
-    // Simulate database lookup
+    // データベース検索のシミュレーション
     if user_id == 1 {
         Some("Alice".to_string())
     } else {
@@ -229,20 +227,20 @@ fn find_user_name(user_id: u32) -> Option<String> {
 
 fn process_user(user_id: u32) {
     match find_user_name(user_id) {
-        Some(name) => println!("User: {}", name),
-        None => println!("User not found"),
+        Some(name) => println!("ユーザー: {}", name),
+        None => println!("ユーザーが見つかりません"),
     }
     
-    // Or use if let (pattern matching shorthand)
+    // または if let（パターンマッチングの省略記法）を使用
     if let Some(name) = find_user_name(user_id) {
-        println!("User: {}", name);
+        println!("ユーザー: {}", name);
     } else {
-        println!("User not found");
+        println!("ユーザーが見つかりません");
     }
 }
 ```
 
-### Combining Option and Result
+### Option と Result の組み合わせ
 ```rust
 fn safe_divide(a: f64, b: f64) -> Option<f64> {
     if b != 0.0 {
@@ -253,18 +251,18 @@ fn safe_divide(a: f64, b: f64) -> Option<f64> {
 }
 
 fn parse_and_divide(a_str: &str, b_str: &str) -> Result<Option<f64>, ParseFloatError> {
-    let a: f64 = a_str.parse()?;  // Return parse error if invalid
-    let b: f64 = b_str.parse()?;  // Return parse error if invalid
-    Ok(safe_divide(a, b))         // Return Ok(Some(result)) or Ok(None)
+    let a: f64 = a_str.parse()?;  // 不正な場合はパースエラーを返す
+    let b: f64 = b_str.parse()?;  // 不正な場合はパースエラーを返す
+    Ok(safe_divide(a, b))         // Ok(Some(result)) または Ok(None) を返す
 }
 
 use std::num::ParseFloatError;
 
 fn main() {
     match parse_and_divide("10.0", "2.0") {
-        Ok(Some(result)) => println!("Result: {}", result),
-        Ok(None) => println!("Division by zero"),
-        Err(error) => println!("Parse error: {}", error),
+        Ok(Some(result)) => println!("計算結果: {}", result),
+        Ok(None) => println!("ゼロ除算"),
+        Err(error) => println!("パースエラー: {}", error),
     }
 }
 ```
@@ -273,32 +271,32 @@ fn main() {
 
 
 <details>
-<summary><strong>🏋️ Exercise: Build a Crate-Level Error Type</strong> (click to expand)</summary>
+<summary><strong>🏋️ 演習：クレートレベルのエラー型の構築</strong>（クリックして展開）</summary>
 
-**Challenge**: Create an `AppError` enum for a file processing application that can fail due to I/O errors, JSON parse errors, and validation errors. Implement `From` conversions for automatic `?` propagation.
+**課題**: I/O エラー、JSON パースエラー、バリデーションエラーによって失敗する可能性のあるファイル処理アプリケーション用の `AppError` 列挙型を作成してください。自動的な `?` 伝播のための `From` 変換を実装します。
 
 ```rust
-// Starter code
+// スターターコード
 use std::io;
 
-// TODO: Define AppError with variants:
+// TODO: 以下のバリアントを持つ AppError を定義:
 //   Io(io::Error), Json(serde_json::Error), Validation(String)
-// TODO: Implement Display and Error traits
-// TODO: Implement From<io::Error> and From<serde_json::Error>
-// TODO: Define type alias: type Result<T> = std::result::Result<T, AppError>;
+// TODO: Display トレイトと Error トレイトを実装
+// TODO: From<io::Error> と From<serde_json::Error> を実装
+// TODO: 型エイリアスを定義: type Result<T> = std::result::Result<T, AppError>;
 
 fn load_config(path: &str) -> Result<Config> {
     let content = std::fs::read_to_string(path)?;  // io::Error → AppError
-    let config: Config = serde_json::from_str(&content)?;  // serde error → AppError
+    let config: Config = serde_json::from_str(&content)?;  // serde エラー → AppError
     if config.name.is_empty() {
-        return Err(AppError::Validation("name cannot be empty".into()));
+        return Err(AppError::Validation("名前を空にすることはできません".into()));
     }
     Ok(config)
 }
 ```
 
 <details>
-<summary>🔑 Solution</summary>
+<summary>🔑 解答例</summary>
 
 ```rust
 use std::io;
@@ -306,13 +304,13 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum AppError {
-    #[error("I/O error: {0}")]
+    #[error("I/O エラー: {0}")]
     Io(#[from] io::Error),
 
-    #[error("JSON error: {0}")]
+    #[error("JSON エラー: {0}")]
     Json(#[from] serde_json::Error),
 
-    #[error("Validation: {0}")]
+    #[error("バリデーション: {0}")]
     Validation(String),
 }
 
@@ -328,19 +326,17 @@ fn load_config(path: &str) -> Result<Config> {
     let content = std::fs::read_to_string(path)?;
     let config: Config = serde_json::from_str(&content)?;
     if config.name.is_empty() {
-        return Err(AppError::Validation("name cannot be empty".into()));
+        return Err(AppError::Validation("名前を空にすることはできません".into()));
     }
     Ok(config)
 }
 ```
 
-**Key takeaways**:
-- `thiserror` generates `Display` and `Error` impls from attributes
-- `#[from]` generates `From<T>` impls, enabling automatic `?` conversion
-- The `Result<T>` alias eliminates boilerplate throughout your crate
-- Unlike C# exceptions, the error type is visible in every function signature
+**要点**:
+- `thiserror` は属性から `Display` および `Error` の実装を生成します
+- `#[from]` は `From<T>` の実装を生成し、`?` による自動変換を可能にします
+- `Result<T>` エイリアスにより、クレート全体でボイラープレートを排除できます
+- C# の例外とは異なり、エラー型はすべての関数シグネチャで明示されます
 
 </details>
 </details>
-
-

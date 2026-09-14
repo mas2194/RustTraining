@@ -1,40 +1,40 @@
-# Summary
+# 目次
 
-[Introduction](ch00-introduction.md)
-
----
-
-# Part I: How Async Works
-
-- [1. Why Async is Different in Rust](ch01-why-async-is-different-in-rust.md)
-- [2. The Future Trait](ch02-the-future-trait.md)
-- [3. How Poll Works](ch03-how-poll-works.md)
-- [4. Pin and Unpin](ch04-pin-and-unpin.md)
-- [5. The State Machine Reveal](ch05-the-state-machine-reveal.md)
+[はじめに](ch00-introduction.md)
 
 ---
 
-# Part II: The Ecosystem
+# 第I部: 非同期処理の仕組み
 
-- [6. Building Futures by Hand](ch06-building-futures-by-hand.md)
-- [7. Executors and Runtimes](ch07-executors-and-runtimes.md)
-- [8. Tokio Deep Dive](ch08-tokio-deep-dive.md)
-- [9. When Tokio Isn't the Right Fit](ch09-when-tokio-isnt-the-right-fit.md)
-- [10. Async Traits](ch10-async-traits.md)
-
----
-
-# Part III: Production Async
-
-- [11. Streams and AsyncIterator](ch11-streams-and-asynciterator.md)
-- [12. Common Pitfalls](ch12-common-pitfalls.md)
-- [13. Production Patterns](ch13-production-patterns.md)
-- [14. Async Is an Optimization, Not an Architecture](ch14-async-is-an-optimization-not-an-architecture.md)
-- [15. Exercises](ch15-exercises.md)
+- [1. なぜRustの非同期処理は特別なのか](ch01-why-async-is-different-in-rust.md)
+- [2. Future トレイト](ch02-the-future-trait.md)
+- [3. Poll の仕組み](ch03-how-poll-works.md)
+- [4. Pin と Unpin](ch04-pin-and-unpin.md)
+- [5. ステートマシンの全貌](ch05-the-state-machine-reveal.md)
 
 ---
 
-# Appendices
+# 第II部: エコシステム
 
-- [Summary and Reference Card](ch16-summary-and-reference-card.md)
-- [Capstone Project: Async Chat Server](ch17-capstone-project.md)
+- [6. 手動でのFuture構築](ch06-building-futures-by-hand.md)
+- [7. エグゼキュータとランタイム](ch07-executors-and-runtimes.md)
+- [8. Tokio ディープダイブ](ch08-tokio-deep-dive.md)
+- [9. Tokio が適さないケース](ch09-when-tokio-isnt-the-right-fit.md)
+- [10. 非同期トレイト](ch10-async-traits.md)
+
+---
+
+# 第III部: プロダクションにおける非同期処理
+
+- [11. ストリームと AsyncIterator](ch11-streams-and-asynciterator.md)
+- [12. よくある落とし穴](ch12-common-pitfalls.md)
+- [13. プロダクションパターン](ch13-production-patterns.md)
+- [14. 非同期処理は最適化手段であり、アーキテクチャではない](ch14-async-is-an-optimization-not-an-architecture.md)
+- [15. 演習問題](ch15-exercises.md)
+
+---
+
+# 付録
+
+- [まとめとリファレンスカード](ch16-summary-and-reference-card.md)
+- [最終プロジェクト: 非同期チャットサーバー](ch17-capstone-project.md)

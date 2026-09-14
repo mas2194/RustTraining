@@ -1,96 +1,96 @@
-# Rust Training for C# Programmers
+# C# プログラマのための Rust 入門
 
-A comprehensive guide to learning Rust for developers with C# experience, focusing on the conceptual shifts and practical differences between the two languages.
+C# の経験を持つ開発者を対象に、Rust を学ぶための包括的なガイドです。2つの言語間における概念の転換と実践的な相違点に焦点を当てています。
 
-## Table of Contents
+## 目次
 
-### 1. Introduction and Philosophy
-- [Language Philosophy Comparison](#language-philosophy-comparison)
-- [Memory Management: GC vs RAII](#memory-management-gc-vs-raii)
-- [Performance Characteristics](#performance-characteristics)
+### 1. はじめにと哲学
+- [言語哲学の比較](#language-philosophy-comparison)
+- [メモリ管理: GC vs RAII](#memory-management-gc-vs-raii)
+- [パフォーマンス特性](#performance-characteristics)
 
-### 2. Type System Differences
-- [Null Safety: Nullable<T> vs Option<T>](#null-safety-nullablet-vs-optiont)
-- [Value Types vs Reference Types vs Ownership](#value-types-vs-reference-types-vs-ownership)
-- [Algebraic Data Types vs C# Unions](#algebraic-data-types-vs-c-unions)
-- [Exhaustive Pattern Matching: Compiler Guarantees vs Runtime Errors](#exhaustive-pattern-matching-compiler-guarantees-vs-runtime-errors)
-- [True Immutability vs Record Illusions](#true-immutability-vs-record-illusions)
-- [Memory Safety: Runtime Checks vs Compile-Time Proofs](#memory-safety-runtime-checks-vs-compile-time-proofs)
+### 2. 型システムの相違点
+- [Null 安全性: Nullable<T> vs Option<T>](#null-safety-nullablet-vs-optiont)
+- [値型 vs 参照型 vs 所有権](#value-types-vs-reference-types-vs-ownership)
+- [代数的データ型 vs C# 共用体](#algebraic-data-types-vs-c-unions)
+- [網羅的パターンマッチング: コンパイラの保証 vs 実行時エラー](#exhaustive-pattern-matching-compiler-guarantees-vs-runtime-errors)
+- [真の不変性 vs レコードの錯覚](#true-immutability-vs-record-illusions)
+- [メモリ安全性: 実行時チェック vs コンパイル時証明](#memory-safety-runtime-checks-vs-compile-time-proofs)
 
-### 3. Object-Oriented vs Functional Paradigms
-- [Inheritance vs Composition](#inheritance-vs-composition)
-- [Interfaces vs Traits](#interfaces-vs-traits)
-- [Virtual Methods vs Static Dispatch](#virtual-methods-vs-static-dispatch)
-- [Sealed Classes vs Rust Immutability](#sealed-classes-vs-rust-immutability)
+### 3. オブジェクト指向 vs 関数型パラダイム
+- [継承 vs 合成](#inheritance-vs-composition)
+- [インターフェース vs トレイト](#interfaces-vs-traits)
+- [仮想メソッド vs 静的ディスパッチ](#virtual-methods-vs-static-dispatch)
+- [sealed クラス vs Rust の不変性](#sealed-classes-vs-rust-immutability)
 
-### 4. Error Handling Philosophy
-- [Exceptions vs Result<T, E>](#exceptions-vs-resultt-e)
-- [Try-Catch vs Pattern Matching](#try-catch-vs-pattern-matching)
-- [Error Propagation Patterns](#error-propagation-patterns)
+### 4. エラー処理の哲学
+- [例外 vs Result<T, E>](#exceptions-vs-resultt-e)
+- [try-catch vs パターンマッチング](#try-catch-vs-pattern-matching)
+- [エラー伝播パターン](#error-propagation-patterns)
 
-### 5. Concurrency and Safety
-- [Thread Safety: Convention vs Type System Guarantees](#thread-safety-convention-vs-type-system-guarantees)
-- [async/await Comparison](#asyncawait-comparison)
-- [Data Race Prevention](#data-race-prevention)
+### 5. 並行性と安全性
+- [スレッド安全性: 慣例 vs 型システムによる保証](#thread-safety-convention-vs-type-system-guarantees)
+- [async/await の比較](#asyncawait-comparison)
+- [データ競合の防止](#data-race-prevention)
 
-### 6. Collections and Iterators
-- [LINQ vs Rust Iterators](#linq-vs-rust-iterators)
-- [Collection Ownership](#collection-ownership)
-- [Lazy Evaluation Patterns](#lazy-evaluation-patterns)
+### 6. コレクションとイテレータ
+- [LINQ vs Rust イテレータ](#linq-vs-rust-iterators)
+- [コレクションの所有権](#collection-ownership)
+- [遅延評価パターン](#lazy-evaluation-patterns)
 
-### 7. Generics and Constraints
-- [Generic Constraints: where vs trait bounds](#generic-constraints-where-vs-trait-bounds)
-- [Variance in Generics](#variance-in-generics)
-- [Higher-Kinded Types](#higher-kinded-types)
+### 7. ジェネリクスと制約
+- [ジェネリック制約: where vs トレイト境界](#generic-constraints-where-vs-trait-bounds)
+- [ジェネリクスの変性（Variance）](#variance-in-generics)
+- [高カインド型（Higher-Kinded Types）](#higher-kinded-types)
 
-### 8. Practical Migration Patterns
-- [Incremental Adoption Strategy](#incremental-adoption-strategy)
-- [C# to Rust Concept Mapping](#c-to-rust-concept-mapping)
-- [Team Adoption Timeline](#team-adoption-timeline)
-- [Common C# Patterns in Rust](#common-c-patterns-in-rust)
-- [Ecosystem Comparison](#ecosystem-comparison)
-- [Testing and Documentation](#testing-and-documentation)
+### 8. 実践的な移行パターン
+- [段階的な導入戦略](#incremental-adoption-strategy)
+- [C# から Rust への概念マッピング](#c-to-rust-concept-mapping)
+- [チーム導入のタイムライン](#team-adoption-timeline)
+- [Rust における一般的な C# パターン](#common-c-patterns-in-rust)
+- [エコシステムの比較](#ecosystem-comparison)
+- [テストとドキュメント](#testing-and-documentation)
 
-### 9. Performance and Adoption
-- [Performance Comparison: Managed vs Native](#performance-comparison-managed-vs-native)
-- [When to Choose Each Language](#when-to-choose-each-language)
+### 9. パフォーマンスと導入判断
+- [パフォーマンス比較: マネージド vs ネイティブ](#performance-comparison-managed-vs-native)
+- [各言語の選定基準](#when-to-choose-each-language)
 
-### 10. Advanced Topics
-- [Unsafe Code: When and Why](#unsafe-code-when-and-why)
-- [Interop Considerations](#interop-considerations)
-- [Performance Optimization](#performance-optimization)
+### 10. 高度なトピック
+- [Unsafe コード: いつ、なぜ使うのか](#unsafe-code-when-and-why)
+- [相互運用の考慮事項](#interop-considerations)
+- [パフォーマンス最適化](#performance-optimization)
 
-### 11. Best Practices for C# Developers
-- [Idiomatic Rust for C# Developers](#idiomatic-rust-for-c-developers)
-- [Common Mistakes and Solutions](#common-mistakes-and-solutions)
-- [Essential Crates for C# Developers](#essential-crates-for-c-developers)
+### 11. C# 開発者のためのベストプラクティス
+- [C# 開発者のための慣用的な Rust](#idiomatic-rust-for-c-developers)
+- [よくある間違いと解決策](#common-mistakes-and-solutions)
+- [C# 開発者に不可欠なクレート](#essential-crates-for-c-developers)
 
 ***
 
-## Language Philosophy Comparison
+## 言語哲学の比較
 
-### C# Philosophy
-- **Productivity first**: Rich tooling, extensive framework, "pit of success"
-- **Managed runtime**: Garbage collection handles memory automatically
-- **Enterprise-focused**: Strong typing with reflection, extensive standard library
-- **Object-oriented**: Classes, inheritance, interfaces as primary abstractions
+### C# の哲学
+- **生産性第一**: 充実したツール群、広範なフレームワーク、「成功の落とし穴（Pit of success: 自然と正しく安全に書ける設計）」
+- **マネージドランタイム**: ガベージコレクション（GC）が自動的にメモリを管理
+- **エンタープライズ指向**: リフレクションを備えた強い型付け、広範な標準ライブラリ
+- **オブジェクト指向**: 主要な抽象化としてのクラス、継承、インターフェース
 
-### Rust Philosophy
-- **Performance without sacrifice**: Zero-cost abstractions, no runtime overhead
-- **Memory safety**: Compile-time guarantees prevent crashes and security vulnerabilities
-- **Systems programming**: Direct hardware access with high-level abstractions
-- **Functional + systems**: Immutability by default, ownership-based resource management
+### Rust の哲学
+- **犠牲のないパフォーマンス**: ゼロコスト抽象化、ランタイムオーバーヘッドなし
+- **メモリ安全性**: クラッシュやセキュリティ脆弱性を防ぐコンパイル時保証
+- **システムプログラミング**: 高レベルな抽象化を備えつつ直接的なハードウェアアクセスを提供
+- **関数型 ＋ システムプログラミング**: デフォルトで不変、所有権に基づくリソース管理
 
 ```mermaid
 graph TD
-    subgraph "C# Development Model"
-        CS_CODE["C# Source Code<br/>Classes, Methods, Properties"]
-        CS_COMPILE["C# Compiler<br/>(csc.exe)"]
-        CS_IL["Intermediate Language<br/>(IL bytecode)"]
-        CS_RUNTIME[".NET Runtime<br/>(CLR)"]
-        CS_JIT["Just-In-Time Compiler"]
-        CS_NATIVE["Native Machine Code"]
-        CS_GC["Garbage Collector<br/>(Memory management)"]
+    subgraph "C# の開発モデル"
+        CS_CODE["C# ソースコード<br/>クラス、メソッド、プロパティ"]
+        CS_COMPILE["C# コンパイラ<br/>(csc.exe)"]
+        CS_IL["中間言語<br/>(IL バイトコード)"]
+        CS_RUNTIME[".NET ランタイム<br/>(CLR)"]
+        CS_JIT["JIT コンパイラ"]
+        CS_NATIVE["ネイティブマシンコード"]
+        CS_GC["ガベージコレクタ<br/>(メモリ管理)"]
         
         CS_CODE --> CS_COMPILE
         CS_COMPILE --> CS_IL
@@ -99,20 +99,20 @@ graph TD
         CS_JIT --> CS_NATIVE
         CS_RUNTIME --> CS_GC
         
-        CS_BENEFITS["[OK] Fast development<br/>[OK] Rich ecosystem<br/>[OK] Automatic memory management<br/>[ERROR] Runtime overhead<br/>[ERROR] GC pauses<br/>[ERROR] Platform dependency"]
+        CS_BENEFITS["[OK] 高速な開発速度<br/>[OK] 豊富なエコシステム<br/>[OK] 自動メモリ管理<br/>[ERROR] ランタイムオーバーヘッド<br/>[ERROR] GC による一時停止（GC ポーズ）<br/>[ERROR] プラットフォーム依存関係"]
     end
     
-    subgraph "Rust Development Model"
-        RUST_CODE["Rust Source Code<br/>Structs, Enums, Functions"]
-        RUST_COMPILE["Rust Compiler<br/>(rustc)"]
-        RUST_NATIVE["Native Machine Code<br/>(Direct compilation)"]
-        RUST_ZERO["Zero Runtime<br/>(No VM, No GC)"]
+    subgraph "Rust の開発モデル"
+        RUST_CODE["Rust ソースコード<br/>構造体、列挙型、関数"]
+        RUST_COMPILE["Rust コンパイラ<br/>(rustc)"]
+        RUST_NATIVE["ネイティブマシンコード<br/>(直接コンパイル)"]
+        RUST_ZERO["ゼロランタイム<br/>(VM なし、GC なし)"]
         
         RUST_CODE --> RUST_COMPILE
         RUST_COMPILE --> RUST_NATIVE
         RUST_NATIVE --> RUST_ZERO
         
-        RUST_BENEFITS["[OK] Maximum performance<br/>[OK] Memory safety<br/>[OK] No runtime dependencies<br/>[ERROR] Steeper learning curve<br/>[ERROR] Longer compile times<br/>[ERROR] More explicit code"]
+        RUST_BENEFITS["[OK] 最大限のパフォーマンス<br/>[OK] メモリ安全性<br/>[OK] ランタイム依存関係なし<br/>[ERROR] 学習曲線が急峻<br/>[ERROR] コンパイル時間が長め<br/>[ERROR] より明示的なコード記述が必要"]
     end
     
     style CS_BENEFITS fill:#e3f2fd
@@ -123,11 +123,11 @@ graph TD
 
 ***
 
-## Memory Management: GC vs RAII
+## メモリ管理: GC vs RAII
 
-### C# Garbage Collection
+### C# のガベージコレクション
 ```csharp
-// C# - Automatic memory management
+// C# - 自動メモリ管理
 public class Person
 {
     public string Name { get; set; }
@@ -135,20 +135,20 @@ public class Person
     
     public void AddHobby(string hobby)
     {
-        Hobbies.Add(hobby);  // Memory allocated automatically
+        Hobbies.Add(hobby);  // メモリは自動的に確保される
     }
     
-    // No explicit cleanup needed - GC handles it
-    // But IDisposable pattern for resources
+    // 明示的なクリーンアップは不要 - GC が処理する
+    // ただしリソース管理には IDisposable パターンを使用
 }
 
 using var file = new FileStream("data.txt", FileMode.Open);
-// 'using' ensures Dispose() is called
+// 'using' により Dispose() の呼び出しが保証される
 ```
 
-### Rust Ownership and RAII
+### Rust の所有権と RAII
 ```rust
-// Rust - Compile-time memory management
+// Rust - コンパイル時のメモリ管理
 pub struct Person {
     name: String,
     hobbies: Vec<String>,
@@ -156,29 +156,29 @@ pub struct Person {
 
 impl Person {
     pub fn add_hobby(&mut self, hobby: String) {
-        self.hobbies.push(hobby);  // Memory management tracked at compile time
+        self.hobbies.push(hobby);  // メモリ管理はコンパイル時に追跡される
     }
     
-    // Drop trait automatically implemented - cleanup is guaranteed
+    // Drop トレイトが自動実装される - クリーンアップは保証される
 }
 
-// RAII - Resource Acquisition Is Initialization
+// RAII - Resource Acquisition Is Initialization (リソース取得は初期化である)
 {
     let file = std::fs::File::open("data.txt")?;
-    // File automatically closed when 'file' goes out of scope
-    // No 'using' statement needed - handled by type system
+    // 'file' がスコープを抜けると自動的にファイルが閉じられる
+    // 'using' 文は不要 - 型システムによって処理される
 }
 ```
 
 ```mermaid
 graph TD
-    subgraph "C# Memory Management"
-        CS_ALLOC["Object Allocation<br/>new Person()"]
-        CS_HEAP["Managed Heap"]
-        CS_REF["References point to heap"]
-        CS_GC_CHECK["GC periodically checks<br/>for unreachable objects"]
-        CS_SWEEP["Mark and sweep<br/>collection"]
-        CS_PAUSE["[ERROR] GC pause times"]
+    subgraph "C# のメモリ管理"
+        CS_ALLOC["オブジェクトの割り当て<br/>new Person()"]
+        CS_HEAP["マネージドヒープ"]
+        CS_REF["参照がヒープを指す"]
+        CS_GC_CHECK["GC が定期的に到達不能な<br/>オブジェクトをチェック"]
+        CS_SWEEP["マーク＆スイープ<br/>回収"]
+        CS_PAUSE["[ERROR] GC による一時停止時間"]
         
         CS_ALLOC --> CS_HEAP
         CS_HEAP --> CS_REF
@@ -186,22 +186,22 @@ graph TD
         CS_GC_CHECK --> CS_SWEEP
         CS_SWEEP --> CS_PAUSE
         
-        CS_ISSUES["[ERROR] Non-deterministic cleanup<br/>[ERROR] Memory pressure<br/>[ERROR] Finalization complexity<br/>[OK] Easy to use"]
+        CS_ISSUES["[ERROR] 非決定的なクリーンアップ<br/>[ERROR] メモリプレッシャー<br/>[ERROR] ファイナライザの複雑さ<br/>[OK] 扱いが容易"]
     end
     
-    subgraph "Rust Ownership System"
-        RUST_ALLOC["Value Creation<br/>Person { ... }"]
-        RUST_OWNER["Single owner<br/>on stack or heap"]
-        RUST_BORROW["Borrowing system<br/>&T, &mut T"]
-        RUST_SCOPE["Scope-based cleanup<br/>Drop trait"]
-        RUST_COMPILE["Compile-time verification"]
+    subgraph "Rust の所有権システム"
+        RUST_ALLOC["値の生成<br/>Person { ... }"]
+        RUST_OWNER["単一の所有者<br/>(スタックまたはヒープ)"]
+        RUST_BORROW["借用システム<br/>&T, &mut T"]
+        RUST_SCOPE["スコープベースのクリーンアップ<br/>Drop トレイト"]
+        RUST_COMPILE["コンパイル時の検証"]
         
         RUST_ALLOC --> RUST_OWNER
         RUST_OWNER --> RUST_BORROW
         RUST_BORROW --> RUST_SCOPE
         RUST_SCOPE --> RUST_COMPILE
         
-        RUST_BENEFITS["[OK] Deterministic cleanup<br/>[OK] Zero runtime cost<br/>[OK] No memory leaks<br/>[ERROR] Learning curve"]
+        RUST_BENEFITS["[OK] 決定的なクリーンアップ<br/>[OK] ゼロランタイムコスト<br/>[OK] メモリリークの防止<br/>[ERROR] 学習コスト"]
     end
     
     style CS_ISSUES fill:#ffebee
@@ -212,34 +212,34 @@ graph TD
 
 ***
 
-## Null Safety: Nullable<T> vs Option<T>
+## Null 安全性: Nullable<T> vs Option<T>
 
-### C# Null Handling Evolution
+### C# における Null 処理の進化
 ```csharp
-// C# - Traditional null handling (error-prone)
+// C# - 従来の null 処理（エラーが発生しやすい）
 public class User
 {
-    public string Name { get; set; }  // Can be null!
-    public string Email { get; set; } // Can be null!
+    public string Name { get; set; }  // null になり得る！
+    public string Email { get; set; } // null になり得る！
 }
 
 public string GetUserDisplayName(User user)
 {
-    if (user?.Name != null)  // Null conditional operator
+    if (user?.Name != null)  // null 条件演算子
     {
         return user.Name;
     }
     return "Unknown User";
 }
 
-// C# 8+ Nullable Reference Types
+// C# 8+ の Null 許容参照型 (Nullable Reference Types)
 public class User
 {
-    public string Name { get; set; }    // Non-nullable
-    public string? Email { get; set; }  // Explicitly nullable
+    public string Name { get; set; }    // 非 null
+    public string? Email { get; set; }  // 明示的に null 許容
 }
 
-// C# Nullable<T> for value types
+// 値型に対する C# の Nullable<T>
 int? maybeNumber = GetNumber();
 if (maybeNumber.HasValue)
 {
@@ -247,18 +247,18 @@ if (maybeNumber.HasValue)
 }
 ```
 
-### Rust Option<T> System
+### Rust の Option<T> システム
 ```rust
-// Rust - Explicit null handling with Option<T>
+// Rust - Option<T> による明示的な null 処理
 #[derive(Debug)]
 pub struct User {
-    name: String,           // Never null
-    email: Option<String>,  // Explicitly optional
+    name: String,           // 決して null にはならない
+    email: Option<String>,  // 明示的にオプショナル
 }
 
 impl User {
     pub fn get_display_name(&self) -> &str {
-        &self.name  // No null check needed - guaranteed to exist
+        &self.name  // null チェック不要 - 存在することが保証されている
     }
     
     pub fn get_email_or_default(&self) -> String {
@@ -269,41 +269,41 @@ impl User {
     }
 }
 
-// Pattern matching forces handling of None case
+// パターンマッチングにより None ケースの処理が強制される
 fn handle_optional_user(user: Option<User>) {
     match user {
         Some(u) => println!("User: {}", u.get_display_name()),
         None => println!("No user found"),
-        // Compiler error if None case is not handled!
+        // None ケースを処理しないとコンパイルエラーになる！
     }
 }
 ```
 
 ```mermaid
 graph TD
-    subgraph "C# Null Handling Evolution"
-        CS_NULL["Traditional: string name<br/>[ERROR] Can be null"]
-        CS_NULLABLE["Nullable<T>: int? value<br/>[OK] Explicit for value types"]
-        CS_NRT["Nullable Reference Types<br/>string? name<br/>[WARNING] Compile-time warnings only"]
+    subgraph "C# の Null 処理の進化"
+        CS_NULL["従来: string name<br/>[ERROR] null になり得る"]
+        CS_NULLABLE["Nullable<T>: int? value<br/>[OK] 値型に対して明示的"]
+        CS_NRT["Null 許容参照型<br/>string? name<br/>[WARNING] コンパイル時の警告のみ"]
         
-        CS_RUNTIME["Runtime NullReferenceException<br/>[ERROR] Can still crash"]
+        CS_RUNTIME["実行時の NullReferenceException<br/>[ERROR] 依然としてクラッシュの可能性あり"]
         CS_NULL --> CS_RUNTIME
         CS_NRT -.-> CS_RUNTIME
         
-        CS_CHECKS["Manual null checks<br/>if (obj?.Property != null)"]
+        CS_CHECKS["手動の null チェック<br/>if (obj?.Property != null)"]
     end
     
-    subgraph "Rust Option<T> System"
+    subgraph "Rust の Option<T> システム"
         RUST_OPTION["Option<T><br/>Some(value) | None"]
-        RUST_FORCE["Compiler forces handling<br/>[OK] Cannot ignore None"]
-        RUST_MATCH["Pattern matching<br/>match option { ... }"]
-        RUST_METHODS["Rich API<br/>.map(), .unwrap_or(), .and_then()"]
+        RUST_FORCE["コンパイラが処理を強制<br/>[OK] None を無視できない"]
+        RUST_MATCH["パターンマッチング<br/>match option { ... }"]
+        RUST_METHODS["豊富な API<br/>.map(), .unwrap_or(), .and_then()"]
         
         RUST_OPTION --> RUST_FORCE
         RUST_FORCE --> RUST_MATCH
         RUST_FORCE --> RUST_METHODS
         
-        RUST_SAFE["Compile-time null safety<br/>[OK] No null pointer exceptions"]
+        RUST_SAFE["コンパイル時の null 安全性<br/>[OK] ヌルポインタ例外が発生しない"]
         RUST_MATCH --> RUST_SAFE
         RUST_METHODS --> RUST_SAFE
     end
@@ -316,11 +316,11 @@ graph TD
 
 ***
 
-## Algebraic Data Types vs C# Unions
+## 代数的データ型 vs C# 共用体
 
-### C# Discriminated Unions (Limited)
+### C# の判別共用体（制限付き）
 ```csharp
-// C# - Limited union support with inheritance
+// C# - 継承を用いた制限付きの共用体サポート
 public abstract class Result
 {
     public abstract T Match<T>(Func<Success, T> onSuccess, Func<Error, T> onError);
@@ -344,7 +344,7 @@ public class Error : Result
         => onError(this);
 }
 
-// C# 9+ Records with pattern matching (better)
+// C# 9+ パターンマッチングを備えたレコード（改善版）
 public abstract record Shape;
 public record Circle(double Radius) : Shape;
 public record Rectangle(double Width, double Height) : Shape;
@@ -353,13 +353,13 @@ public static double Area(Shape shape) => shape switch
 {
     Circle(var radius) => Math.PI * radius * radius,
     Rectangle(var width, var height) => width * height,
-    _ => throw new ArgumentException("Unknown shape")  // [ERROR] Runtime error possible
+    _ => throw new ArgumentException("Unknown shape")  // [ERROR] 実行時エラーの可能性
 };
 ```
 
-### Rust Algebraic Data Types (Enums)
+### Rust の代数的データ型（列挙型）
 ```rust
-// Rust - True algebraic data types with exhaustive pattern matching
+// Rust - 網羅的なパターンマッチングを備えた真の代数的データ型
 #[derive(Debug, Clone)]
 pub enum Result<T, E> {
     Ok(T),
@@ -379,19 +379,19 @@ impl Shape {
             Shape::Circle { radius } => std::f64::consts::PI * radius * radius,
             Shape::Rectangle { width, height } => width * height,
             Shape::Triangle { base, height } => 0.5 * base * height,
-            // [OK] Compiler error if any variant is missing!
+            // [OK] バリアントが1つでも不足していればコンパイルエラー！
         }
     }
 }
 
-// Advanced: Enums can hold different types
+// 応用: 列挙型は異なる型を保持可能
 #[derive(Debug)]
 pub enum Value {
     Integer(i64),
     Float(f64),
     Text(String),
     Boolean(bool),
-    List(Vec<Value>),  // Recursive types!
+    List(Vec<Value>),  // 再帰的な型！
 }
 
 impl Value {
@@ -409,13 +409,13 @@ impl Value {
 
 ```mermaid
 graph TD
-    subgraph "C# Discriminated Unions (Workarounds)"
+    subgraph "C# の判別共用体 (回避策)"
         CS_ABSTRACT["abstract class Result"]
         CS_SUCCESS["class Success : Result"]
         CS_ERROR["class Error : Result"]
-        CS_MATCH["Manual Match method<br/>or switch expressions"]
-        CS_RUNTIME["[ERROR] Runtime exceptions<br/>for missing cases"]
-        CS_HEAP["[ERROR] Heap allocation<br/>for class inheritance"]
+        CS_MATCH["手動の Match メソッド<br/>または switch 式"]
+        CS_RUNTIME["[ERROR] ケース漏れによる<br/>実行時例外"]
+        CS_HEAP["[ERROR] クラス継承による<br/>ヒープ割り当て"]
         
         CS_ABSTRACT --> CS_SUCCESS
         CS_ABSTRACT --> CS_ERROR
@@ -425,13 +425,13 @@ graph TD
         CS_ABSTRACT --> CS_HEAP
     end
     
-    subgraph "Rust Algebraic Data Types"
+    subgraph "Rust の代数的データ型"
         RUST_ENUM["enum Shape { ... }"]
         RUST_VARIANTS["Circle { radius }<br/>Rectangle { width, height }<br/>Triangle { base, height }"]
         RUST_MATCH["match shape { ... }"]
-        RUST_EXHAUSTIVE["[OK] Exhaustive checking<br/>Compile-time guarantee"]
-        RUST_STACK["[OK] Stack allocation<br/>Efficient memory use"]
-        RUST_ZERO["[OK] Zero-cost abstraction"]
+        RUST_EXHAUSTIVE["[OK] 網羅性チェック<br/>コンパイル時の保証"]
+        RUST_STACK["[OK] スタック割り当て<br/>効率的なメモリ利用"]
+        RUST_ZERO["[OK] ゼロコスト抽象化"]
         
         RUST_ENUM --> RUST_VARIANTS
         RUST_VARIANTS --> RUST_MATCH
@@ -449,11 +449,11 @@ graph TD
 
 ***
 
-## Exhaustive Pattern Matching: Compiler Guarantees vs Runtime Errors
+## 網羅的パターンマッチング: コンパイラの保証 vs 実行時エラー
 
-### C# Switch Expressions - Still Incomplete
+### C# の switch 式 - 依然として不完全
 ```csharp
-// C# switch expressions look exhaustive but aren't guaranteed
+// C# の switch 式は網羅的に見えますが、完全には保証されません
 public enum HttpStatus { Ok, NotFound, ServerError, Unauthorized }
 
 public string HandleResponse(HttpStatus status) => status switch
@@ -461,11 +461,11 @@ public string HandleResponse(HttpStatus status) => status switch
     HttpStatus.Ok => "Success",
     HttpStatus.NotFound => "Resource not found",
     HttpStatus.ServerError => "Internal error",
-    // Missing Unauthorized case - compiles fine!
-    // Runtime: System.InvalidOperationException at runtime
+    // Unauthorized のケースが欠落しているが、問題なくコンパイルできてしまう！
+    // 実行時: 実行時に System.InvalidOperationException が発生
 };
 
-// Even with nullable warnings, this compiles:
+// null 許容の警告があっても、以下はコンパイルに通ります:
 public class User 
 {
     public string Name { get; set; }
@@ -476,22 +476,22 @@ public string ProcessUser(User? user) => user switch
 {
     { IsActive: true } => $"Active: {user.Name}",
     { IsActive: false } => $"Inactive: {user.Name}",
-    // Missing null case - warning only, not error
-    // Runtime: NullReferenceException possible
+    // null のケースが欠落 - 警告のみでエラーにはならない
+    // 実行時: NullReferenceException が発生する可能性
 };
 
-// Adding enum values breaks existing code silently
+// enum に値を追加すると既存コードが暗黙的に壊れる
 public enum HttpStatus 
 { 
     Ok, 
     NotFound, 
     ServerError, 
     Unauthorized,
-    Forbidden  // Adding this doesn't break compilation of HandleResponse()!
+    Forbidden  // これを追加しても HandleResponse() のコンパイルは通ってしまう！
 }
 ```
 
-### Rust Pattern Matching - True Exhaustiveness
+### Rust のパターンマッチング - 真の網羅性
 ```rust
 #[derive(Debug)]
 enum HttpStatus {
@@ -507,41 +507,41 @@ fn handle_response(status: HttpStatus) -> &'static str {
         HttpStatus::NotFound => "Resource not found", 
         HttpStatus::ServerError => "Internal error",
         HttpStatus::Unauthorized => "Authentication required",
-        // Compiler ERROR if any case is missing!
-        // This literally will not compile
+        // ケースが1つでも欠けていればコンパイルエラー！
+        // 文字通りコンパイルすら通りません
     }
 }
 
-// Adding a new variant breaks compilation everywhere it's used
+// 新しいバリアントを追加すると、それが使われているすべての箇所でコンパイルが失敗する
 #[derive(Debug)]
 enum HttpStatus {
     Ok,
-    NotFound,
+    NotFound, 
     ServerError, 
     Unauthorized,
-    Forbidden,  // Adding this breaks compilation in handle_response()
+    Forbidden,  // これを追加すると handle_response() でコンパイルエラーが発生
 }
-// The compiler forces you to handle ALL cases
+// コンパイラが「すべての」ケースを処理するよう強制します
 
-// Option<T> pattern matching is also exhaustive
+// Option<T> のパターンマッチングも同様に網羅的
 fn process_optional_value(value: Option<i32>) -> String {
     match value {
         Some(n) => format!("Got value: {}", n),
         None => "No value".to_string(),
-        // Forgetting either case = compilation error
+        // どちらか一方でも忘れるとコンパイルエラー
     }
 }
 ```
 
 ```mermaid
 graph TD
-    subgraph "C# Pattern Matching Limitations"
-        CS_SWITCH["switch expression"]
-        CS_WARNING["⚠️ Compiler warnings only"]
-        CS_COMPILE["✅ Compiles successfully"]
-        CS_RUNTIME["💥 Runtime exceptions"]
-        CS_DEPLOY["❌ Bugs reach production"]
-        CS_SILENT["😰 Silent failures on enum changes"]
+    subgraph "C# のパターンマッチングの限界"
+        CS_SWITCH["switch 式"]
+        CS_WARNING["⚠️ コンパイル時警告のみ"]
+        CS_COMPILE["✅ コンパイルは成功する"]
+        CS_RUNTIME["💥 実行時例外"]
+        CS_DEPLOY["❌ バグが本番環境へ流出"]
+        CS_SILENT["😰 enum 変更時の暗黙の不具合"]
         
         CS_SWITCH --> CS_WARNING
         CS_WARNING --> CS_COMPILE
@@ -550,13 +550,13 @@ graph TD
         CS_SWITCH --> CS_SILENT
     end
     
-    subgraph "Rust Exhaustive Matching"
-        RUST_MATCH["match expression"]
-        RUST_ERROR["🛑 Compilation fails"]
-        RUST_FIX["✅ Must handle all cases"]
-        RUST_SAFE["✅ Zero runtime surprises"]
-        RUST_EVOLUTION["🔄 Enum changes break compilation"]
-        RUST_REFACTOR["🛠️ Forced refactoring"]
+    subgraph "Rust の網羅的マッチング"
+        RUST_MATCH["match 式"]
+        RUST_ERROR["🛑 コンパイル失敗"]
+        RUST_FIX["✅ 全ケースの処理が必須"]
+        RUST_SAFE["✅ 実行時の不意なクラッシュなし"]
+        RUST_EVOLUTION["🔄 enum 変更時にコンパイルエラー検知"]
+        RUST_REFACTOR["🛠️ 強制的なリファクタリング誘導"]
         
         RUST_MATCH --> RUST_ERROR
         RUST_ERROR --> RUST_FIX
@@ -574,41 +574,41 @@ graph TD
 
 ***
 
-## True Immutability vs Record Illusions
+## 真の不変性 vs レコードの錯覚
 
-### C# Records - Immutability Theater
+### C# のレコード - 不変性のまやかし
 ```csharp
-// C# records look immutable but have escape hatches
+// C# のレコードは不変に見えますが、抜け穴が存在します
 public record Person(string Name, int Age, List<string> Hobbies);
 
 var person = new Person("John", 30, new List<string> { "reading" });
 
-// These all "look" like they create new instances:
-var older = person with { Age = 31 };  // New record
-var renamed = person with { Name = "Jonathan" };  // New record
+// これらはすべて新しいインスタンスを生成しているように「見えます」:
+var older = person with { Age = 31 };  // 新しいレコード
+var renamed = person with { Name = "Jonathan" };  // 新しいレコード
 
-// But the reference types are still mutable!
-person.Hobbies.Add("gaming");  // Mutates the original!
-Console.WriteLine(older.Hobbies.Count);  // 2 - older person affected!
-Console.WriteLine(renamed.Hobbies.Count); // 2 - renamed person also affected!
+// しかし参照型のフィールドは依然として変更可能です！
+person.Hobbies.Add("gaming");  // 元のオブジェクトを変更！
+Console.WriteLine(older.Hobbies.Count);  // 2 - older の趣味も影響を受ける！
+Console.WriteLine(renamed.Hobbies.Count); // 2 - renamed の趣味も同様に影響を受ける！
 
-// Init-only properties can still be set via reflection
+// init 専用プロパティであっても、リフレクションを使えば変更可能
 typeof(Person).GetProperty("Age")?.SetValue(person, 25);
 
-// Collection expressions help but don't solve the fundamental issue
+// コレクション式は役立ちますが、根本的な問題は解決しません
 public record BetterPerson(string Name, int Age, IReadOnlyList<string> Hobbies);
 
 var betterPerson = new BetterPerson("Jane", 25, new List<string> { "painting" });
-// Still mutable via casting: 
+// キャストすることで依然として変更可能:
 ((List<string>)betterPerson.Hobbies).Add("hacking the system");
 
-// Even "immutable" collections aren't truly immutable
+// いわゆる「不変」コレクションも、真の不変性を保証するわけではありません
 using System.Collections.Immutable;
 public record SafePerson(string Name, int Age, ImmutableList<string> Hobbies);
-// This is better, but requires discipline and has performance overhead
+// これは改善されていますが、規律が必要であり、パフォーマンス上のオーバーヘッドも伴います
 ```
 
-### Rust - True Immutability by Default
+### Rust - デフォルトで真の不変性
 ```rust
 #[derive(Debug, Clone)]
 struct Person {
@@ -623,34 +623,34 @@ let person = Person {
     hobbies: vec!["reading".to_string()],
 };
 
-// This simply won't compile:
-// person.age = 31;  // ERROR: cannot assign to immutable field
-// person.hobbies.push("gaming".to_string());  // ERROR: cannot borrow as mutable
+// これは単純にコンパイルが通りません:
+// person.age = 31;  // エラー: 不変フィールドへの代入は不可
+// person.hobbies.push("gaming".to_string());  // エラー: 可変として借用不可
 
-// To modify, you must explicitly opt-in with 'mut':
+// 変更するには、'mut' を付けて明示的に宣言する必要があります:
 let mut older_person = person.clone();
-older_person.age = 31;  // Now it's clear this is mutation
+older_person.age = 31;  // これにより変更であることが明確になる
 
-// Or use functional update patterns:
+// または関数型の更新パターンを使用:
 let renamed = Person {
     name: "Jonathan".to_string(),
-    ..person  // Copies other fields (move semantics apply)
+    ..person  // 他のフィールドをコピー（ムーブセマンティクスが適用される）
 };
 
-// The original is guaranteed unchanged (until moved):
-println!("{:?}", person.hobbies);  // Always ["reading"] - immutable
+// 元のオブジェクトは（ムーブされない限り）変更されないことが保証される:
+println!("{:?}", person.hobbies);  // 常に ["reading"] - 不変
 
-// Structural sharing with efficient immutable data structures
+// 効率的な不変データ構造による構造共有
 use std::rc::Rc;
 
 #[derive(Debug, Clone)]
 struct EfficientPerson {
     name: String,
     age: u32,
-    hobbies: Rc<Vec<String>>,  // Shared, immutable reference
+    hobbies: Rc<Vec<String>>,  // 共有される不変の参照
 }
 
-// Creating new versions shares data efficiently
+// 新しいバージョンを作成する際、データを効率的に共有
 let person1 = EfficientPerson {
     name: "Alice".to_string(),
     age: 30,
@@ -660,20 +660,20 @@ let person1 = EfficientPerson {
 let person2 = EfficientPerson {
     name: "Bob".to_string(),
     age: 25,
-    hobbies: Rc::clone(&person1.hobbies),  // Shared reference, no deep copy
+    hobbies: Rc::clone(&person1.hobbies),  // 共有参照であり、ディープコピーは不要
 };
 ```
 
 ```mermaid
 graph TD
-    subgraph "C# Records - Shallow Immutability"
+    subgraph "C# のレコード - 浅い不変性"
         CS_RECORD["record Person(...)"]
-        CS_WITH["with expressions"]
-        CS_SHALLOW["⚠️ Only top-level immutable"]
-        CS_REF_MUT["❌ Reference types still mutable"]
-        CS_REFLECTION["❌ Reflection can bypass"]
-        CS_RUNTIME["❌ Runtime surprises"]
-        CS_DISCIPLINE["😓 Requires team discipline"]
+        CS_WITH["with 式"]
+        CS_SHALLOW["⚠️ トップレベルのみ不変"]
+        CS_REF_MUT["❌ 参照型は依然として可変"]
+        CS_REFLECTION["❌ リフレクションで回避可能"]
+        CS_RUNTIME["❌ 実行時の予期せぬ挙動"]
+        CS_DISCIPLINE["😓 チームの規律に依存"]
         
         CS_RECORD --> CS_WITH
         CS_WITH --> CS_SHALLOW
@@ -683,14 +683,14 @@ graph TD
         CS_RUNTIME --> CS_DISCIPLINE
     end
     
-    subgraph "Rust - True Immutability"
+    subgraph "Rust - 真の不変性"
         RUST_STRUCT["struct Person { ... }"]
-        RUST_DEFAULT["✅ Immutable by default"]
-        RUST_COMPILE["✅ Compile-time enforcement"]
-        RUST_MUT["🔒 Explicit 'mut' required"]
-        RUST_MOVE["🔄 Move semantics"]
-        RUST_ZERO["⚡ Zero runtime overhead"]
-        RUST_SAFE["🛡️ Memory safe"]
+        RUST_DEFAULT["✅ デフォルトで不変"]
+        RUST_COMPILE["✅ コンパイル時による強制"]
+        RUST_MUT["🔒 明示的な 'mut' が必要"]
+        RUST_MOVE["🔄 ムーブセマンティクス"]
+        RUST_ZERO["⚡ ゼロランタイムオーバーヘッド"]
+        RUST_SAFE["🛡️ メモリ安全"]
         
         RUST_STRUCT --> RUST_DEFAULT
         RUST_DEFAULT --> RUST_COMPILE
@@ -710,11 +710,11 @@ graph TD
 
 ***
 
-## Memory Safety: Runtime Checks vs Compile-Time Proofs
+## メモリ安全性: 実行時チェック vs コンパイル時証明
 
-### C# - Runtime Safety Net
+### C# - 実行時セーフティネット
 ```csharp
-// C# relies on runtime checks and GC
+// C# は実行時チェックと GC に依存
 public class Buffer
 {
     private byte[] data;
@@ -726,39 +726,39 @@ public class Buffer
     
     public void ProcessData(int index)
     {
-        // Runtime bounds checking
+        // 実行時の境界チェック
         if (index >= data.Length)
             throw new IndexOutOfRangeException();
             
-        data[index] = 42;  // Safe, but checked at runtime
+        data[index] = 42;  // 安全だが、実行時にチェックされる
     }
     
-    // Memory leaks still possible with events/static references
+    // イベントや静的参照によるメモリリークの可能性
     public static event Action<string> GlobalEvent;
     
     public void Subscribe()
     {
-        GlobalEvent += HandleEvent;  // Can create memory leaks
-        // Forgot to unsubscribe - object won't be collected
+        GlobalEvent += HandleEvent;  // メモリリークを引き起こす可能性あり
+        // イベント購読の解除を忘れるとオブジェクトが回収されない
     }
     
     private void HandleEvent(string message) { /* ... */ }
     
-    // Null reference exceptions are still possible
+    // null 参照例外の可能性は依然として存在
     public void ProcessUser(User user)
     {
-        Console.WriteLine(user.Name.ToUpper());  // NullReferenceException if user.Name is null
+        Console.WriteLine(user.Name.ToUpper());  // user.Name が null だと NullReferenceException
     }
     
-    // Array access can fail at runtime
+    // 配列アクセスは実行時に失敗する可能性あり
     public int GetValue(int[] array, int index)
     {
-        return array[index];  // IndexOutOfRangeException possible
+        return array[index];  // IndexOutOfRangeException の可能性
     }
 }
 ```
 
-### Rust - Compile-Time Guarantees
+### Rust - コンパイル時の保証
 ```rust
 struct Buffer {
     data: Vec<u8>,
@@ -772,72 +772,72 @@ impl Buffer {
     }
     
     fn process_data(&mut self, index: usize) {
-        // Bounds checking can be optimized away by compiler when proven safe
+        // 安全性が証明された場合、コンパイラによって境界チェックを最適化（省略）可能
         if let Some(item) = self.data.get_mut(index) {
-            *item = 42;  // Safe access, proven at compile time
+            *item = 42;  // 安全なアクセス、コンパイル時に証明
         }
-        // Or use indexing with explicit bounds check:
-        // self.data[index] = 42;  // Panics in debug, but memory-safe
+        // または明示的な境界チェックを伴うインデックスアクセス:
+        // self.data[index] = 42;  // デバッグビルドでパニックするが、メモリ安全
     }
     
-    // Memory leaks impossible - ownership system prevents them
+    // メモリリークは基本的に不可能 - 所有権システムがそれを防ぐ
     fn process_with_closure<F>(&mut self, processor: F) 
     where F: FnOnce(&mut Vec<u8>)
     {
         processor(&mut self.data);
-        // When processor goes out of scope, it's automatically cleaned up
-        // No way to create dangling references or memory leaks
+        // processor がスコープを抜けると自動的にクリーンアップされる
+        // ダングリング参照やメモリリークを作り出す余地がない
     }
     
-    // Null pointer dereferences impossible - no null pointers!
+    // ヌルポインタの参照外しは不可能 - そもそも null ポインタが存在しない！
     fn process_user(&self, user: &User) {
-        println!("{}", user.name.to_uppercase());  // user.name cannot be null
+        println!("{}", user.name.to_uppercase());  // user.name は null になり得ない
     }
     
-    // Array access is bounds-checked or explicitly unsafe
+    // 配列アクセスは境界チェックされるか、明示的な unsafe を要する
     fn get_value(array: &[i32], index: usize) -> Option<i32> {
-        array.get(index).copied()  // Returns None if out of bounds
+        array.get(index).copied()  // 範囲外なら None を返す
     }
     
-    // Or explicitly unsafe if you know what you're doing:
+    // 確信がある場合は明示的に unsafe を使用することも可能:
     /// # Safety
-    /// `index` must be less than `array.len()`.
+    /// `index` は `array.len()` 未満である必要があります。
     unsafe fn get_value_unchecked(array: &[i32], index: usize) -> i32 {
-        *array.get_unchecked(index)  // Fast but must prove bounds manually
+        *array.get_unchecked(index)  // 高速だが手動で境界を証明する必要がある
     }
 }
 
 struct User {
-    name: String,  // String cannot be null in Rust
+    name: String,  // Rust では String が null になることはない
 }
 
-// Ownership prevents use-after-free
+// 所有権により解放後使用（Use-after-free）を防止
 fn ownership_example() {
     let data = vec![1, 2, 3, 4, 5];
-    let reference = &data[0];  // Borrow data
+    let reference = &data[0];  // data を借用
     
-    // drop(data);  // ERROR: cannot drop while borrowed
-    println!("{}", reference);  // This is guaranteed safe
+    // drop(data);  // エラー: 借用中にドロップすることはできない
+    println!("{}", reference);  // これは安全であることが保証されている
 }
 
-// Borrowing prevents data races
+// 借用チェッカによりデータ競合を防止
 fn borrowing_example(data: &mut Vec<i32>) {
-    let first = &data[0];  // Immutable borrow
-    // data.push(6);  // ERROR: cannot mutably borrow while immutably borrowed
-    println!("{}", first);  // Guaranteed no data race
+    let first = &data[0];  // 不変借用
+    // data.push(6);  // エラー: 不変借用中に可変借用することはできない
+    println!("{}", first);  // データ競合がないことが保証される
 }
 ```
 
 ```mermaid
 graph TD
-    subgraph "C# Runtime Safety"
-        CS_RUNTIME["Runtime Checks"]
-        CS_GC["Garbage Collector"]
-        CS_EXCEPTIONS["Exception Handling"]
-        CS_BOUNDS["Runtime bounds checking"]
-        CS_NULL["Null reference exceptions"]
-        CS_LEAKS["Memory leaks possible"]
-        CS_OVERHEAD["Performance overhead"]
+    subgraph "C# の実行時安全性"
+        CS_RUNTIME["実行時チェック"]
+        CS_GC["ガベージコレクタ"]
+        CS_EXCEPTIONS["例外処理"]
+        CS_BOUNDS["実行時境界チェック"]
+        CS_NULL["null 参照例外"]
+        CS_LEAKS["メモリリークの可能性"]
+        CS_OVERHEAD["パフォーマンスオーバーヘッド"]
         
         CS_RUNTIME --> CS_BOUNDS
         CS_RUNTIME --> CS_NULL
@@ -845,14 +845,14 @@ graph TD
         CS_EXCEPTIONS --> CS_OVERHEAD
     end
     
-    subgraph "Rust Compile-Time Safety"
-        RUST_OWNERSHIP["Ownership System"]
-        RUST_BORROWING["Borrow Checker"]
-        RUST_TYPES["Type System"]
-        RUST_ZERO_COST["Zero-cost abstractions"]
-        RUST_NO_NULL["No null pointers"]
-        RUST_NO_LEAKS["No memory leaks"]
-        RUST_FAST["Optimal performance"]
+    subgraph "Rust のコンパイル時安全性"
+        RUST_OWNERSHIP["所有権システム"]
+        RUST_BORROWING["借用チェッカ"]
+        RUST_TYPES["型システム"]
+        RUST_ZERO_COST["ゼロコスト抽象化"]
+        RUST_NO_NULL["null ポインタなし"]
+        RUST_NO_LEAKS["メモリリーク防止"]
+        RUST_FAST["最適なパフォーマンス"]
         
         RUST_OWNERSHIP --> RUST_NO_LEAKS
         RUST_BORROWING --> RUST_NO_NULL
@@ -870,9 +870,9 @@ graph TD
 
 ***
 
-## Inheritance vs Composition
+## 継承 vs 合成
 ```csharp
-// C# - Class-based inheritance
+// C# - クラスベースの継承
 public abstract class Animal
 {
     public string Name { get; protected set; }
@@ -899,7 +899,7 @@ public class Dog : Animal
     }
 }
 
-// Interface-based contracts
+// インターフェースベースの規約
 public interface IFlyable
 {
     void Fly();
@@ -921,14 +921,14 @@ public class Bird : Animal, IFlyable
 }
 ```
 
-### Rust Composition Model
+### Rust の合成モデル
 ```rust
-// Rust - Composition over inheritance with traits
+// Rust - トレイトを用いた「継承より合成」
 pub trait Animal {
     fn name(&self) -> &str;
     fn make_sound(&self);
     
-    // Default implementation (like C# virtual methods)
+    // デフォルト実装（C# の virtual メソッドに類似）
     fn sleep(&self) {
         println!("{} is sleeping", self.name());
     }
@@ -938,7 +938,7 @@ pub trait Flyable {
     fn fly(&self);
 }
 
-// Separate data from behavior
+// データと振る舞いを分離
 #[derive(Debug)]
 pub struct Dog {
     name: String,
@@ -950,7 +950,7 @@ pub struct Bird {
     wingspan: f64,
 }
 
-// Implement behaviors for types
+// 型に対して振る舞いを実装
 impl Animal for Dog {
     fn name(&self) -> &str {
         &self.name
@@ -987,7 +987,7 @@ impl Flyable for Bird {
     }
 }
 
-// Multiple trait bounds (like multiple interfaces)
+// 複数のトレイト境界（複数インターフェースの実装制約に類似）
 fn make_flying_animal_sound<T>(animal: &T) 
 where 
     T: Animal + Flyable,
@@ -999,12 +999,12 @@ where
 
 ```mermaid
 graph TD
-    subgraph "C# Inheritance Hierarchy"
-        CS_ANIMAL["Animal (abstract class)"]
+    subgraph "C# の継承階層"
+        CS_ANIMAL["Animal (抽象クラス)"]
         CS_DOG["Dog : Animal"]
         CS_BIRD["Bird : Animal, IFlyable"]
-        CS_VTABLE["Virtual method dispatch<br/>Runtime cost"]
-        CS_COUPLING["[ERROR] Tight coupling<br/>[ERROR] Diamond problem<br/>[ERROR] Deep hierarchies"]
+        CS_VTABLE["仮想メソッドのディスパッチ<br/>(実行時コスト)"]
+        CS_COUPLING["[ERROR] 密結合<br/>[ERROR] 菱形継承問題<br/>[ERROR] 深い階層構造"]
         
         CS_ANIMAL --> CS_DOG
         CS_ANIMAL --> CS_BIRD
@@ -1013,7 +1013,7 @@ graph TD
         CS_ANIMAL --> CS_COUPLING
     end
     
-    subgraph "Rust Composition Model"
+    subgraph "Rust の合成モデル"
         RUST_ANIMAL["trait Animal"]
         RUST_FLYABLE["trait Flyable"]
         RUST_DOG["struct Dog"]
@@ -1021,8 +1021,8 @@ graph TD
         RUST_IMPL1["impl Animal for Dog"]
         RUST_IMPL2["impl Animal for Bird"]
         RUST_IMPL3["impl Flyable for Bird"]
-        RUST_STATIC["Static dispatch<br/>Zero cost"]
-        RUST_FLEXIBLE["[OK] Flexible composition<br/>[OK] No hierarchy limits<br/>[OK] Mix and match traits"]
+        RUST_STATIC["静的ディスパッチ<br/>(ゼロコスト)"]
+        RUST_FLEXIBLE["[OK] 柔軟な合成<br/>[OK] 階層の制限なし<br/>[OK] トレイトの自由な組み合わせ"]
         
         RUST_DOG --> RUST_IMPL1
         RUST_BIRD --> RUST_IMPL2
@@ -1045,11 +1045,11 @@ graph TD
 
 ***
 
-## Exceptions vs Result<T, E>
+## 例外 vs Result<T, E>
 
-### C# Exception-Based Error Handling
+### C# の例外ベースのエラー処理
 ```csharp
-// C# - Exception-based error handling
+// C# - 例外ベースのエラー処理
 public class UserService
 {
     public User GetUser(int userId)
@@ -1083,13 +1083,13 @@ public class UserService
         catch (Exception ex)
         {
             logger.Error(ex, "Unexpected error getting user email");
-            throw; // Re-throw
+            throw; // 再スロー
         }
     }
 }
 ```
 
-### Rust Result-Based Error Handling
+### Rust の Result ベースのエラー処理
 ```rust
 use std::fmt;
 
@@ -1104,10 +1104,10 @@ pub enum UserError {
 impl fmt::Display for UserError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            UserError::InvalidId(id) => write!(f, "Invalid user ID: {}", id),
-            UserError::NotFound(id) => write!(f, "User {} not found", id),
-            UserError::NoEmail => write!(f, "User has no email address"),
-            UserError::DatabaseError(msg) => write!(f, "Database error: {}", msg),
+            UserError::InvalidId(id) => write!(f, "無効なユーザー ID: {}", id),
+            UserError::NotFound(id) => write!(f, "ユーザー {} が見つかりません", id),
+            UserError::NoEmail => write!(f, "ユーザーにメールアドレスが設定されていません"),
+            UserError::DatabaseError(msg) => write!(f, "データベースエラー: {}", msg),
         }
     }
 }
@@ -1121,7 +1121,7 @@ pub struct User {
 }
 
 pub struct UserService {
-    users: Vec<User>,  // Simulated database
+    users: Vec<User>,  // 模擬データベース
 }
 
 impl UserService {
@@ -1134,13 +1134,13 @@ impl UserService {
             return Err(UserError::InvalidId(user_id));
         }
         
-        // Simulate database lookup
+        // データベース検索のシミュレーション
         self.database_find_user(user_id)
             .ok_or(UserError::NotFound(user_id))
     }
     
     pub fn get_user_email(&self, user_id: i32) -> Result<String, UserError> {
-        let user = self.get_user(user_id)?; // ? operator propagates errors
+        let user = self.get_user(user_id)?; // ? 演算子でエラーを伝播
         
         user.email
             .ok_or(UserError::NoEmail)
@@ -1150,11 +1150,11 @@ impl UserService {
         match self.get_user_email(user_id) {
             Ok(email) => email,
             Err(UserError::NotFound(_)) => {
-                log::warn!("User not found: {}", user_id);
+                log::warn!("ユーザーが見つかりません: {}", user_id);
                 "noreply@company.com".to_string()
             }
             Err(err) => {
-                log::error!("Error getting user email: {}", err);
+                log::error!("ユーザーメールの取得エラー: {}", err);
                 "error@company.com".to_string()
             }
         }
@@ -1164,13 +1164,13 @@ impl UserService {
 
 ```mermaid
 graph TD
-    subgraph "C# Exception Model"
-        CS_CALL["Method Call"]
-        CS_SUCCESS["Success Path"]
+    subgraph "C# の例外モデル"
+        CS_CALL["メソッド呼び出し"]
+        CS_SUCCESS["成功パス"]
         CS_EXCEPTION["throw Exception"]
-        CS_STACK["Stack unwinding<br/>(Runtime cost)"]
-        CS_CATCH["try/catch block"]
-        CS_HIDDEN["[ERROR] Hidden control flow<br/>[ERROR] Performance cost<br/>[ERROR] Easy to ignore"]
+        CS_STACK["スタック巻き戻し<br/>(実行時コスト)"]
+        CS_CATCH["try/catch ブロック"]
+        CS_HIDDEN["[ERROR] 暗黙の制御フロー<br/>[ERROR] パフォーマンスコスト<br/>[ERROR] エラーの見落としやすさ"]
         
         CS_CALL --> CS_SUCCESS
         CS_CALL --> CS_EXCEPTION
@@ -1179,13 +1179,13 @@ graph TD
         CS_EXCEPTION --> CS_HIDDEN
     end
     
-    subgraph "Rust Result Model"
-        RUST_CALL["Function Call"]
+    subgraph "Rust の Result モデル"
+        RUST_CALL["関数呼び出し"]
         RUST_OK["Ok(value)"]
         RUST_ERR["Err(error)"]
         RUST_MATCH["match result"]
-        RUST_QUESTION["? operator<br/>(early return)"]
-        RUST_EXPLICIT["[OK] Explicit error handling<br/>[OK] Zero runtime cost<br/>[OK] Cannot ignore errors"]
+        RUST_QUESTION["? 演算子<br/>(早期リターン)"]
+        RUST_EXPLICIT["[OK] 明示的なエラー処理<br/>[OK] ゼロランタイムコスト<br/>[OK] エラーを無視できない"]
         
         RUST_CALL --> RUST_OK
         RUST_CALL --> RUST_ERR
@@ -1204,22 +1204,22 @@ graph TD
 
 ***
 
-## LINQ vs Rust Iterators
+## LINQ vs Rust イテレータ
 
-### C# LINQ (Language Integrated Query)
+### C# の LINQ (統合言語クエリ)
 ```csharp
-// C# LINQ - Declarative data processing
+// C# LINQ - 宣言的なデータ処理
 var numbers = new[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
 
 var result = numbers
-    .Where(n => n % 2 == 0)           // Filter even numbers
-    .Select(n => n * n)               // Square them
-    .Where(n => n > 10)               // Filter > 10
-    .OrderByDescending(n => n)        // Sort descending
-    .Take(3)                          // Take first 3
-    .ToList();                        // Materialize
+    .Where(n => n % 2 == 0)           // 偶数をフィルタリング
+    .Select(n => n * n)               // 2乗する
+    .Where(n => n > 10)               // 10より大きいものをフィルタリング
+    .OrderByDescending(n => n)        // 降順ソート
+    .Take(3)                          // 先頭3つを取得
+    .ToList();                        // 実体化
 
-// LINQ with complex objects
+// 複雑なオブジェクトに対する LINQ
 var users = GetUsers();
 var activeAdults = users
     .Where(u => u.IsActive && u.Age >= 18)
@@ -1232,7 +1232,7 @@ var activeAdults = users
     .OrderBy(x => x.Department)
     .ToList();
 
-// Async LINQ (with additional libraries)
+// 非同期 LINQ（追加ライブラリ利用時）
 var results = await users
     .ToAsyncEnumerable()
     .WhereAwait(async u => await IsActiveAsync(u.Id))
@@ -1240,23 +1240,23 @@ var results = await users
     .ToListAsync();
 ```
 
-### Rust Iterators
+### Rust のイテレータ
 ```rust
-// Rust iterators - Lazy, zero-cost abstractions
+// Rust イテレータ - 遅延評価、ゼロコスト抽象化
 let numbers = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 let result: Vec<i32> = numbers
     .iter()
-    .filter(|&&n| n % 2 == 0)        // Filter even numbers
-    .map(|&n| n * n)                 // Square them
-    .filter(|&n| n > 10)             // Filter > 10
-    .collect::<Vec<_>>()             // Collect to Vec
+    .filter(|&&n| n % 2 == 0)        // 偶数をフィルタリング
+    .map(|&n| n * n)                 // 2乗する
+    .filter(|&n| n > 10)             // 10より大きいものをフィルタリング
+    .collect::<Vec<_>>()             // Vec に収集
     .into_iter()
-    .rev()                           // Reverse (descending sort)
-    .take(3)                         // Take first 3
-    .collect();                      // Materialize
+    .rev()                           // 逆順（降順ソートに相当）
+    .take(3)                         // 先頭3つを取得
+    .collect();                      // 実体化
 
-// Complex iterator chains
+// 複雑なイテレータチェーン
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
@@ -1273,41 +1273,41 @@ fn process_users(users: Vec<User>) -> HashMap<String, (usize, f64)> {
         .filter(|u| u.is_active && u.age >= 18)
         .fold(HashMap::new(), |mut acc, user| {
             let entry = acc.entry(user.department.clone()).or_insert((0, 0.0));
-            entry.0 += 1;  // count
-            entry.1 += user.age as f64;  // sum of ages
+            entry.0 += 1;  // 件数カウント
+            entry.1 += user.age as f64;  // 年齢の合計
             acc
         })
         .into_iter()
-        .map(|(dept, (count, sum))| (dept, (count, sum / count as f64)))  // average
+        .map(|(dept, (count, sum))| (dept, (count, sum / count as f64)))  // 平均値の計算
         .collect()
 }
 
-// Parallel processing with rayon
+// rayon による並列処理
 use rayon::prelude::*;
 
 fn parallel_processing(numbers: Vec<i32>) -> Vec<i32> {
     numbers
-        .par_iter()                  // Parallel iterator
+        .par_iter()                  // 並列イテレータ
         .filter(|&&n| n % 2 == 0)
         .map(|&n| expensive_computation(n))
         .collect()
 }
 
 fn expensive_computation(n: i32) -> i32 {
-    // Simulate heavy computation
+    // 重い計算処理のシミュレーション
     (0..1000).fold(n, |acc, _| acc + 1)
 }
 ```
 
 ```mermaid
 graph TD
-    subgraph "C# LINQ Characteristics"
-        CS_LINQ["LINQ Expression"]
-        CS_EAGER["Often eager evaluation<br/>(ToList(), ToArray())"]
-        CS_REFLECTION["[ERROR] Some runtime reflection<br/>Expression trees"]
-        CS_ALLOCATIONS["[ERROR] Intermediate collections<br/>Garbage collection pressure"]
-        CS_ASYNC["[OK] Async support<br/>(with additional libraries)"]
-        CS_SQL["[OK] LINQ to SQL/EF integration"]
+    subgraph "C# LINQ の特徴"
+        CS_LINQ["LINQ 式"]
+        CS_EAGER["即時評価されることが多い<br/>(ToList(), ToArray())"]
+        CS_REFLECTION["[ERROR] 実行時リフレクションの発生<br/>(式ツリー)"]
+        CS_ALLOCATIONS["[ERROR] 中間コレクションの生成<br/>GC への負荷"]
+        CS_ASYNC["[OK] 非同期サポート<br/>(追加ライブラリ利用時)"]
+        CS_SQL["[OK] LINQ to SQL / EF との統合"]
         
         CS_LINQ --> CS_EAGER
         CS_LINQ --> CS_REFLECTION
@@ -1316,13 +1316,13 @@ graph TD
         CS_LINQ --> CS_SQL
     end
     
-    subgraph "Rust Iterator Characteristics"
-        RUST_ITER["Iterator Chain"]
-        RUST_LAZY["[OK] Lazy evaluation<br/>No work until .collect()"]
-        RUST_ZERO["[OK] Zero-cost abstractions<br/>Compiles to optimal loops"]
-        RUST_NO_ALLOC["[OK] No intermediate allocations<br/>Stack-based processing"]
-        RUST_PARALLEL["[OK] Easy parallelization<br/>(rayon crate)"]
-        RUST_FUNCTIONAL["[OK] Functional programming<br/>Immutable by default"]
+    subgraph "Rust イテレータの特徴"
+        RUST_ITER["イテレータチェーン"]
+        RUST_LAZY["[OK] 遅延評価<br/>.collect() まで処理されない"]
+        RUST_ZERO["[OK] ゼロコスト抽象化<br/>最適なループへとコンパイル"]
+        RUST_NO_ALLOC["[OK] 中間アロケーションなし<br/>スタックベースの処理"]
+        RUST_PARALLEL["[OK] 容易な並列化<br/>(rayon クレート)"]
+        RUST_FUNCTIONAL["[OK] 関数型プログラミング<br/>デフォルトで不変"]
         
         RUST_ITER --> RUST_LAZY
         RUST_ITER --> RUST_ZERO
@@ -1331,9 +1331,9 @@ graph TD
         RUST_ITER --> RUST_FUNCTIONAL
     end
     
-    subgraph "Performance Comparison"
-        CS_PERF["C# LINQ Performance<br/>[ERROR] Allocation overhead<br/>[ERROR] Virtual dispatch<br/>[OK] Good enough for most cases"]
-        RUST_PERF["Rust Iterator Performance<br/>[OK] Hand-optimized speed<br/>[OK] No allocations<br/>[OK] Compile-time optimization"]
+    subgraph "パフォーマンス比較"
+        CS_PERF["C# LINQ の性能<br/>[ERROR] アロケーションのオーバーヘッド<br/>[ERROR] 仮想ディスパッチ<br/>[OK] 多くのケースで十分な速度"]
+        RUST_PERF["Rust イテレータの性能<br/>[OK] 手動最適化並みの速度<br/>[OK] アロケーションなし<br/>[OK] コンパイル時最適化"]
     end
     
     style CS_REFLECTION fill:#ffcdd2
@@ -1347,29 +1347,29 @@ graph TD
 
 ***
 
-## Generic Constraints: where vs trait bounds
+## ジェネリック制約: where vs トレイト境界
 
-### C# Generic Constraints
+### C# のジェネリック制約
 ```csharp
-// C# Generic constraints with where clause
+// where 句を用いた C# のジェネリック制約
 public class Repository<T> where T : class, IEntity, new()
 {
     public T Create()
     {
-        return new T();  // new() constraint allows parameterless constructor
+        return new T();  // new() 制約により引数なしコンストラクタが許可される
     }
     
     public void Save(T entity)
     {
-        if (entity.Id == 0)  // IEntity constraint provides Id property
+        if (entity.Id == 0)  // IEntity 制約により Id プロパティが提供される
         {
             entity.Id = GenerateId();
         }
-        // Save to database
+        // データベースに保存
     }
 }
 
-// Multiple type parameters with constraints
+// 複数の型パラメータと制約
 public class Converter<TInput, TOutput> 
     where TInput : IConvertible
     where TOutput : class, new()
@@ -1377,29 +1377,29 @@ public class Converter<TInput, TOutput>
     public TOutput Convert(TInput input)
     {
         var output = new TOutput();
-        // Conversion logic using IConvertible
+        // IConvertible を用いた変換ロジック
         return output;
     }
 }
 
-// Variance in generics
+// ジェネリクスにおける変性 (Variance)
 public interface IRepository<out T> where T : IEntity
 {
-    IEnumerable<T> GetAll();  // Covariant - can return more derived types
+    IEnumerable<T> GetAll();  // 共変 (Covariant) - より派生した型を返却可能
 }
 
 public interface IWriter<in T> where T : IEntity
 {
-    void Write(T entity);  // Contravariant - can accept more base types
+    void Write(T entity);  // 反変 (Contravariant) - より基本の型を受け入れ可能
 }
 ```
 
-### Rust Generic Constraints with Trait Bounds
+### トレイト境界を用いた Rust のジェネリック制約
 ```rust
 use std::fmt::{Debug, Display};
 use std::clone::Clone;
 
-// Basic trait bounds
+// 基本的なトレイト境界
 pub struct Repository<T> 
 where 
     T: Clone + Debug + Default,
@@ -1416,35 +1416,35 @@ where
     }
     
     pub fn create(&self) -> T {
-        T::default()  // Default trait provides default value
+        T::default()  // Default トレイトによりデフォルト値が提供される
     }
     
     pub fn add(&mut self, item: T) {
-        println!("Adding item: {:?}", item);  // Debug trait for printing
+        println!("アイテムを追加中: {:?}", item);  // 出力用の Debug トレイト
         self.items.push(item);
     }
     
     pub fn get_all(&self) -> Vec<T> {
-        self.items.clone()  // Clone trait for duplication
+        self.items.clone()  // 複製用の Clone トレイト
     }
 }
 
-// Multiple trait bounds with different syntaxes
+// 異なる構文での複数のトレイト境界
 pub fn process_data<T, U>(input: T) -> U 
 where 
     T: Display + Clone,
     U: From<T> + Debug,
 {
-    println!("Processing: {}", input);  // Display trait
-    let cloned = input.clone();         // Clone trait
-    let output = U::from(cloned);       // From trait for conversion
-    println!("Result: {:?}", output);   // Debug trait
+    println!("処理中: {}", input);      // Display トレイト
+    let cloned = input.clone();         // Clone トレイト
+    let output = U::from(cloned);       // 型変換のための From トレイト
+    println!("結果: {:?}", output);     // Debug トレイト
     output
 }
 
-// Associated types (similar to C# generic constraints)
+// 関連型 (C# のジェネリック制約に類似)
 pub trait Iterator {
-    type Item;  // Associated type instead of generic parameter
+    type Item;  // ジェネリックパラメータの代わりに関連型を使用
     
     fn next(&mut self) -> Option<Self::Item>;
 }
@@ -1453,15 +1453,15 @@ pub trait Collect<T> {
     fn collect<I: Iterator<Item = T>>(iter: I) -> Self;
 }
 
-// Higher-ranked trait bounds (advanced)
+// 高階トレイト境界（HRTB: Higher-ranked trait bounds、高度な機能）
 fn apply_to_all<F>(items: &[String], f: F) -> Vec<String>
 where 
-    F: for<'a> Fn(&'a str) -> String,  // Function works with any lifetime
+    F: for<'a> Fn(&'a str) -> String,  // 関数が任意のライフタイムで動作する
 {
     items.iter().map(|s| f(s)).collect()
 }
 
-// Conditional trait implementations
+// 条件付きトレイト実装
 impl<T> PartialEq for Repository<T> 
 where 
     T: PartialEq + Clone + Debug + Default,
@@ -1474,12 +1474,12 @@ where
 
 ```mermaid
 graph TD
-    subgraph "C# Generic Constraints"
+    subgraph "C# のジェネリック制約"
         CS_WHERE["where T : class, IInterface, new()"]
-        CS_RUNTIME["[ERROR] Some runtime type checking<br/>Virtual method dispatch"]
-        CS_VARIANCE["[OK] Covariance/Contravariance<br/>in/out keywords"]
-        CS_REFLECTION["[ERROR] Runtime reflection possible<br/>typeof(T), is, as operators"]
-        CS_BOXING["[ERROR] Value type boxing<br/>for interface constraints"]
+        CS_RUNTIME["[ERROR] 実行時型チェックの発生<br/>仮想メソッドディスパッチ"]
+        CS_VARIANCE["[OK] 共変性 / 反変性<br/>(in / out キーワード)"]
+        CS_REFLECTION["[ERROR] 実行時リフレクションが可能<br/>typeof(T), is, as 演算子"]
+        CS_BOXING["[ERROR] 値型のボックス化<br/>(インターフェース制約時)"]
         
         CS_WHERE --> CS_RUNTIME
         CS_WHERE --> CS_VARIANCE
@@ -1487,12 +1487,12 @@ graph TD
         CS_WHERE --> CS_BOXING
     end
     
-    subgraph "Rust Trait Bounds"
+    subgraph "Rust のトレイト境界"
         RUST_WHERE["where T: Trait + Clone + Debug"]
-        RUST_COMPILE["[OK] Compile-time resolution<br/>Monomorphization"]
-        RUST_ZERO["[OK] Zero-cost abstractions<br/>No runtime overhead"]
-        RUST_ASSOCIATED["[OK] Associated types<br/>More flexible than generics"]
-        RUST_HKT["[OK] Higher-ranked trait bounds<br/>Advanced type relationships"]
+        RUST_COMPILE["[OK] コンパイル時解決<br/>単相化 (Monomorphization)"]
+        RUST_ZERO["[OK] ゼロコスト抽象化<br/>ランタイムオーバーヘッドなし"]
+        RUST_ASSOCIATED["[OK] 関連型<br/>ジェネリクスより柔軟"]
+        RUST_HKT["[OK] 高階トレイト境界<br/>高度な型関係の表現"]
         
         RUST_WHERE --> RUST_COMPILE
         RUST_WHERE --> RUST_ZERO
@@ -1500,9 +1500,9 @@ graph TD
         RUST_WHERE --> RUST_HKT
     end
     
-    subgraph "Flexibility Comparison"
-        CS_FLEX["C# Flexibility<br/>[OK] Variance<br/>[OK] Runtime type info<br/>[ERROR] Performance cost"]
-        RUST_FLEX["Rust Flexibility<br/>[OK] Zero cost<br/>[OK] Compile-time safety<br/>[ERROR] No variance (yet)"]
+    subgraph "柔軟性の比較"
+        CS_FLEX["C# の柔軟性<br/>[OK] 変性 (Variance)<br/>[OK] 実行時型情報<br/>[ERROR] パフォーマンスコスト"]
+        RUST_FLEX["Rust の柔軟性<br/>[OK] ゼロコスト<br/>[OK] コンパイル時安全性<br/>[ERROR] 変性のサポートなし（現時点）"]
     end
     
     style CS_RUNTIME fill:#fff3e0
@@ -1515,11 +1515,11 @@ graph TD
 
 ***
 
-## Common C# Patterns in Rust
+## Rust における一般的な C# パターン
 
-### Repository Pattern
+### リポジトリパターン (Repository Pattern)
 ```csharp
-// C# Repository Pattern
+// C# のリポジトリパターン
 public interface IRepository<T> where T : IEntity
 {
     Task<T> GetByIdAsync(int id);
@@ -1543,12 +1543,12 @@ public class UserRepository : IRepository<User>
         return await _context.Users.FindAsync(id);
     }
     
-    // ... other implementations
+    // ... その他の実装
 }
 ```
 
 ```rust
-// Rust Repository Pattern with traits and generics
+// トレイトとジェネリクスを用いた Rust のリポジトリパターン
 use async_trait::async_trait;
 use std::fmt::Debug;
 
@@ -1582,9 +1582,9 @@ pub enum RepositoryError {
 impl std::fmt::Display for RepositoryError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            RepositoryError::NotFound(id) => write!(f, "Entity with id {} not found", id),
-            RepositoryError::DatabaseError(msg) => write!(f, "Database error: {}", msg),
-            RepositoryError::ValidationError(msg) => write!(f, "Validation error: {}", msg),
+            RepositoryError::NotFound(id) => write!(f, "ID {} のエンティティが見つかりません", id),
+            RepositoryError::DatabaseError(msg) => write!(f, "データベースエラー: {}", msg),
+            RepositoryError::ValidationError(msg) => write!(f, "バリデーションエラー: {}", msg),
         }
     }
 }
@@ -1592,13 +1592,13 @@ impl std::fmt::Display for RepositoryError {
 impl std::error::Error for RepositoryError {}
 
 pub struct UserRepository {
-    // database connection pool, etc.
+    // データベース接続プールなど
 }
 
 #[async_trait]
 impl Repository<User, RepositoryError> for UserRepository {
     async fn get_by_id(&self, id: u64) -> Result<Option<User>, RepositoryError> {
-        // Simulate database lookup
+        // データベース検索のシミュレーション
         if id == 0 {
             return Ok(None);
         }
@@ -1611,33 +1611,33 @@ impl Repository<User, RepositoryError> for UserRepository {
     }
     
     async fn get_all(&self) -> Result<Vec<User>, RepositoryError> {
-        // Implementation here
+        // 実装ロジック
         Ok(vec![])
     }
     
     async fn add(&self, entity: User) -> Result<User, RepositoryError> {
-        // Validation and database insertion
+        // バリデーションとデータベース挿入
         if entity.name.is_empty() {
-            return Err(RepositoryError::ValidationError("Name cannot be empty".to_string()));
+            return Err(RepositoryError::ValidationError("名前を空にすることはできません".to_string()));
         }
         Ok(entity)
     }
     
     async fn update(&self, entity: User) -> Result<User, RepositoryError> {
-        // Implementation here
+        // 実装ロジック
         Ok(entity)
     }
     
     async fn delete(&self, id: u64) -> Result<(), RepositoryError> {
-        // Implementation here
+        // 実装ロジック
         Ok(())
     }
 }
 ```
 
-### Builder Pattern
+### ビルダーパターン (Builder Pattern)
 ```csharp
-// C# Builder Pattern (fluent interface)
+// C# のビルダーパターン (流れるようなインターフェース: Fluent Interface)
 public class HttpClientBuilder
 {
     private TimeSpan? _timeout;
@@ -1675,7 +1675,7 @@ public class HttpClientBuilder
     }
 }
 
-// Usage
+// 使用例
 var client = new HttpClientBuilder()
     .WithTimeout(TimeSpan.FromSeconds(30))
     .WithBaseAddress("https://api.example.com")
@@ -1684,7 +1684,7 @@ var client = new HttpClientBuilder()
 ```
 
 ```rust
-// Rust Builder Pattern (consuming builder)
+// Rust のビルダーパターン（所有権を消費するビルダー）
 use std::collections::HashMap;
 use std::time::Duration;
 
@@ -1726,7 +1726,7 @@ impl HttpClientBuilder {
     }
     
     pub fn build(self) -> Result<HttpClient, String> {
-        let base_address = self.base_address.ok_or("Base address is required")?;
+        let base_address = self.base_address.ok_or("ベースアドレスは必須です")?;
         
         Ok(HttpClient {
             timeout: self.timeout.unwrap_or(Duration::from_secs(30)),
@@ -1736,14 +1736,14 @@ impl HttpClientBuilder {
     }
 }
 
-// Usage
+// 使用例
 let client = HttpClientBuilder::new()
     .with_timeout(Duration::from_secs(30))
     .with_base_address("https://api.example.com")
     .with_header("Accept", "application/json")
     .build()?;
 
-// Alternative: Using Default trait for common cases
+// 別解: 一般的なケース向けに Default トレイトを実装
 impl Default for HttpClientBuilder {
     fn default() -> Self {
         Self::new()
@@ -1753,59 +1753,59 @@ impl Default for HttpClientBuilder {
 
 ***
 
-## Essential Crates for C# Developers
+## C# 開発者に不可欠なクレート
 
-### Core Functionality Equivalents
+### コア機能の対応クレート
 
 ```rust
-// Cargo.toml dependencies for C# developers
+// C# 開発者のための Cargo.toml 依存関係
 [dependencies]
-# Serialization (like Newtonsoft.Json or System.Text.Json)
+# シリアライズ（Newtonsoft.Json や System.Text.Json に相当）
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
-# HTTP client (like HttpClient)
+# HTTP クライアント（HttpClient に相当）
 reqwest = { version = "0.11", features = ["json"] }
 
-# Async runtime (like Task.Run, async/await)
+# 非同期ランタイム（Task.Run, async/await に相当）
 tokio = { version = "1.0", features = ["full"] }
 
-# Error handling (like custom exceptions)
+# エラー処理（カスタム例外クラスなどに相当）
 thiserror = "1.0"
 anyhow = "1.0"
 
-# Logging (like ILogger, Serilog)
+# ロギング（ILogger, Serilog に相当）
 log = "0.4"
 env_logger = "0.10"
 
-# Date/time (like DateTime)
+# 日時（DateTime に相当）
 chrono = { version = "0.4", features = ["serde"] }
 
-# UUID (like System.Guid)
+# UUID（System.Guid に相当）
 uuid = { version = "1.0", features = ["v4", "serde"] }
 
-# Collections (like List<T>, Dictionary<K,V>)
-# Built into std, but for advanced collections:
-indexmap = "2.0"  # Ordered HashMap
+# コレクション（List<T>, Dictionary<K,V> に相当）
+# 標準ライブラリにも含まれますが、高度なコレクション用:
+indexmap = "2.0"  # 順序を保持する HashMap
 
-# Configuration (like IConfiguration)
+# 設定管理（IConfiguration に相当）
 config = "0.13"
 
-# Database (like Entity Framework)
+# データベース（Entity Framework に相当）
 sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono"] }
 
-# Testing (like xUnit, NUnit)
-# Built into std, but for more features:
-rstest = "0.18"  # Parameterized tests
+# テスト（xUnit, NUnit に相当）
+# 標準ライブラリにも含まれますが、より高度な機能用:
+rstest = "0.18"  # パラメータ化テスト
 
-# Mocking (like Moq)
+# モック（Moq に相当）
 mockall = "0.11"
 
-# Parallel processing (like Parallel.ForEach)
+# 並列処理（Parallel.ForEach に相当）
 rayon = "1.7"
 ```
 
-### Example Usage Patterns
+### 使用パターンの例
 
 ```rust
 use serde::{Deserialize, Serialize};
@@ -1815,7 +1815,7 @@ use thiserror::Error;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
-// Data models (like C# POCOs with attributes)
+// データモデル（属性付きの C# POCO に相当）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {
     pub id: Uuid,
@@ -1825,23 +1825,23 @@ pub struct User {
     pub created_at: DateTime<Utc>,
 }
 
-// Custom error types (like custom exceptions)
+// カスタムエラー型（カスタム例外に相当）
 #[derive(Error, Debug)]
 pub enum ApiError {
-    #[error("HTTP request failed: {0}")]
+    #[error("HTTP リクエストに失敗しました: {0}")]
     Http(#[from] reqwest::Error),
     
-    #[error("Serialization failed: {0}")]
+    #[error("シリアライズに失敗しました: {0}")]
     Serialization(#[from] serde_json::Error),
     
-    #[error("User not found: {id}")]
+    #[error("ユーザーが見つかりません: {id}")]
     UserNotFound { id: Uuid },
     
-    #[error("Validation failed: {message}")]
+    #[error("バリデーションに失敗しました: {message}")]
     Validation { message: String },
 }
 
-// Service class equivalent
+// サービスクラスに相当
 pub struct UserService {
     client: reqwest::Client,
     base_url: String,
@@ -1852,12 +1852,12 @@ impl UserService {
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .build()
-            .expect("Failed to create HTTP client");
+            .expect("HTTP クライアントの作成に失敗しました");
             
         UserService { client, base_url }
     }
     
-    // Async method (like C# async Task<User>)
+    // 非同期メソッド（C# の async Task<User> に相当）
     pub async fn get_user(&self, id: Uuid) -> Result<User, ApiError> {
         let url = format!("{}/users/{}", self.base_url, id);
         
@@ -1874,11 +1874,11 @@ impl UserService {
         Ok(user)
     }
     
-    // Create user (like C# async Task<User>)
+    // ユーザー作成（C# の async Task<User> に相当）
     pub async fn create_user(&self, name: String, email: String) -> Result<User, ApiError> {
         if name.trim().is_empty() {
             return Err(ApiError::Validation {
-                message: "Name cannot be empty".to_string(),
+                message: "名前を空にすることはできません".to_string(),
             });
         }
         
@@ -1900,25 +1900,25 @@ impl UserService {
     }
 }
 
-// Usage example (like C# Main method)
+// 使用例（C# の Main メソッドに相当）
 #[tokio::main]
 async fn main() -> Result<(), ApiError> {
-    // Initialize logging (like configuring ILogger)
+    // ロギングの初期化（ILogger の設定に相当）
     env_logger::init();
     
     let service = UserService::new("https://api.example.com".to_string());
     
-    // Create user
+    // ユーザー作成
     let user = service.create_user(
         "John Doe".to_string(),
         "john@example.com".to_string(),
     ).await?;
     
-    println!("Created user: {:?}", user);
+    println!("作成されたユーザー: {:?}", user);
     
-    // Get user
+    // ユーザー取得
     let retrieved_user = service.get_user(user.id).await?;
-    println!("Retrieved user: {:?}", retrieved_user);
+    println!("取得されたユーザー: {:?}", retrieved_user);
     
     Ok(())
 }
@@ -1927,7 +1927,7 @@ async fn main() -> Result<(), ApiError> {
 mod tests {
     use super::*;
     
-    #[tokio::test]  // Like C# [Test] or [Fact]
+    #[tokio::test]  // C# の [Test] や [Fact] に相当
     async fn test_user_creation() {
         let service = UserService::new("http://localhost:8080".to_string());
         
@@ -1944,77 +1944,77 @@ mod tests {
     
     #[test]
     fn test_validation() {
-        // Synchronous test
+        // 同期テスト
         let error = ApiError::Validation {
-            message: "Invalid input".to_string(),
+            message: "無効な入力です".to_string(),
         };
         
-        assert_eq!(error.to_string(), "Validation failed: Invalid input");
+        assert_eq!(error.to_string(), "バリデーションに失敗しました: 無効な入力です");
     }
 }
 ```
 
 ***
 
-## Thread Safety: Convention vs Type System Guarantees
+## スレッド安全性: 慣例 vs 型システムによる保証
 
-### C# - Thread Safety by Convention
+### C# - 慣例によるスレッド安全性
 ```csharp
-// C# collections aren't thread-safe by default
+// C# のコレクションはデフォルトではスレッドセーフではない
 public class UserService
 {
     private readonly List<string> items = new();
     private readonly Dictionary<int, User> cache = new();
 
-    // This can cause data races:
+    // これはデータ競合を引き起こす可能性がある:
     public void AddItem(string item)
     {
-        items.Add(item);  // Not thread-safe!
+        items.Add(item);  // スレッドセーフではない！
     }
 
-    // Must use locks manually:
+    // 手動でロックを使用する必要がある:
     private readonly object lockObject = new();
 
     public void SafeAddItem(string item)
     {
         lock (lockObject)
         {
-            items.Add(item);  // Safe, but runtime overhead
+            items.Add(item);  // 安全だが実行時オーバーヘッドがある
         }
-        // Easy to forget the lock elsewhere
+        // 別の場所でロックの取得を忘れやすい
     }
 
-    // ConcurrentCollection helps but limited:
+    // ConcurrentCollection は役立つが機能が限定的:
     private readonly ConcurrentBag<string> safeItems = new();
     
     public void ConcurrentAdd(string item)
     {
-        safeItems.Add(item);  // Thread-safe but limited operations
+        safeItems.Add(item);  // スレッドセーフだが操作が制限される
     }
 
-    // Complex shared state management
+    // 複雑な共有状態の管理
     private readonly ConcurrentDictionary<int, User> threadSafeCache = new();
     private volatile bool isShutdown = false;
     
     public async Task ProcessUser(int userId)
     {
-        if (isShutdown) return;  // Race condition possible!
+        if (isShutdown) return;  // 競合状態（Race Condition）の可能性！
         
         var user = await GetUser(userId);
-        threadSafeCache.TryAdd(userId, user);  // Must remember which collections are safe
+        threadSafeCache.TryAdd(userId, user);  // どのコレクションが安全かを意識し続ける必要がある
     }
 
-    // Thread-local storage requires careful management
+    // スレッドローカルストレージには慎重な管理が必要
     private static readonly ThreadLocal<Random> threadLocalRandom = 
         new ThreadLocal<Random>(() => new Random());
         
     public int GetRandomNumber()
     {
-        return threadLocalRandom.Value.Next();  // Safe but manual management
+        return threadLocalRandom.Value.Next();  // 安全だが手動管理が必要
     }
 }
 
-// Event handling with potential race conditions
+// 競合状態の潜在リスクを持つイベント処理
 public class EventProcessor
 {
     public event Action<string> DataReceived;
@@ -2022,26 +2022,26 @@ public class EventProcessor
     
     public void OnDataReceived(string data)
     {
-        // Race condition - event might be null between check and invocation
+        // 競合状態 - チェックと呼び出しの間にイベントが null になる可能性がある
         if (DataReceived != null)
         {
             DataReceived(data);
         }
         
-        // Another race condition - list not thread-safe
-        eventLog.Add($"Processed: {data}");
+        // 別の競合状態 - リストがスレッドセーフではない
+        eventLog.Add($"処理完了: {data}");
     }
 }
 ```
 
-### Rust - Thread Safety Guaranteed by Type System
+### Rust - 型システムによって保証されるスレッド安全性
 ```rust
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 use std::collections::HashMap;
 use tokio::sync::{mpsc, broadcast};
 
-// Rust prevents data races at compile time
+// Rust はコンパイル時にデータ競合を防止する
 pub struct UserService {
     items: Arc<Mutex<Vec<String>>>,
     cache: Arc<RwLock<HashMap<i32, User>>>,
@@ -2058,10 +2058,10 @@ impl UserService {
     pub fn add_item(&self, item: String) {
         let mut items = self.items.lock().unwrap();
         items.push(item);
-        // Lock automatically released when `items` goes out of scope
+        // `items` がスコープを抜けるとロックは自動的に解放される
     }
     
-    // Multiple readers, single writer - automatically enforced
+    // 複数リーダー / 単一ライター - 自動的に強制される
     pub async fn get_user(&self, user_id: i32) -> Option<User> {
         let cache = self.cache.read().unwrap();
         cache.get(&user_id).cloned()
@@ -2072,20 +2072,20 @@ impl UserService {
         cache.insert(user_id, user);
     }
     
-    // Clone the Arc for thread sharing
+    // スレッド間共有のために Arc をクローン
     pub fn process_in_background(&self) {
         let items = Arc::clone(&self.items);
         
         thread::spawn(move || {
             let items = items.lock().unwrap();
             for item in items.iter() {
-                println!("Processing: {}", item);
+                println!("処理中: {}", item);
             }
         });
     }
 }
 
-// Channel-based communication - no shared state needed
+// チャネルベースの通信 - 共有状態を必要としない
 pub struct MessageProcessor {
     sender: mpsc::UnboundedSender<String>,
 }
@@ -2101,29 +2101,29 @@ impl MessageProcessor {
     }
 }
 
-// This won't compile - Rust prevents sharing mutable data unsafely:
+// これはコンパイルエラーになる - Rust は安全でない可変データの共有を防止する:
 fn impossible_data_race() {
     let mut items = vec![1, 2, 3];
     
-    // This won't compile - cannot move `items` into multiple closures
+    // これはコンパイル不可 - `items` を複数のクロージャにムーブできない
     /*
     thread::spawn(move || {
-        items.push(4);  // ERROR: use of moved value
+        items.push(4);  // エラー: ムーブされた値の使用
     });
     
     thread::spawn(move || {
-        items.push(5);  // ERROR: use of moved value  
+        items.push(5);  // エラー: ムーブされた値の使用
     });
     */
 }
 
-// Safe concurrent data processing
+// 安全な並行データ処理
 use rayon::prelude::*;
 
 fn parallel_processing() {
     let data = vec![1, 2, 3, 4, 5];
     
-    // Parallel iteration - guaranteed thread-safe
+    // 並列イテレーション - スレッド安全性が保証される
     let results: Vec<i32> = data
         .par_iter()
         .map(|&x| x * x)
@@ -2132,11 +2132,11 @@ fn parallel_processing() {
     println!("{:?}", results);
 }
 
-// Async concurrency with message passing
+// メッセージパッシングによる非同期並行処理
 async fn async_message_passing() {
     let (tx, mut rx) = mpsc::channel(100);
     
-    // Producer task
+    // プロデューサータスク
     let producer = tokio::spawn(async move {
         for i in 0..10 {
             if tx.send(i).await.is_err() {
@@ -2145,14 +2145,14 @@ async fn async_message_passing() {
         }
     });
     
-    // Consumer task  
+    // コンシューマータスク
     let consumer = tokio::spawn(async move {
         while let Some(value) = rx.recv().await {
-            println!("Received: {}", value);
+            println!("受信: {}", value);
         }
     });
     
-    // Wait for both tasks
+    // 両方のタスクを待機
     let (producer_result, consumer_result) = tokio::join!(producer, consumer);
     producer_result.unwrap();
     consumer_result.unwrap();
@@ -2167,15 +2167,15 @@ struct User {
 
 ```mermaid
 graph TD
-    subgraph "C# Thread Safety Challenges"
-        CS_MANUAL["Manual synchronization"]
-        CS_LOCKS["lock statements"]
+    subgraph "C# のスレッド安全性における課題"
+        CS_MANUAL["手動の同期処理"]
+        CS_LOCKS["lock 文"]
         CS_CONCURRENT["ConcurrentCollections"]
-        CS_VOLATILE["volatile fields"]
-        CS_FORGET["😰 Easy to forget locks"]
-        CS_DEADLOCK["💀 Deadlock possible"]
-        CS_RACE["🏃 Race conditions"]
-        CS_OVERHEAD["⚡ Runtime overhead"]
+        CS_VOLATILE["volatile フィールド"]
+        CS_FORGET["😰 ロックの取得忘れ"]
+        CS_DEADLOCK["💀 デッドロックの可能性"]
+        CS_RACE["🏃 競合状態（データ競合）"]
+        CS_OVERHEAD["⚡ 実行時オーバーヘッド"]
         
         CS_MANUAL --> CS_LOCKS
         CS_MANUAL --> CS_CONCURRENT
@@ -2186,15 +2186,15 @@ graph TD
         CS_LOCKS --> CS_OVERHEAD
     end
     
-    subgraph "Rust Type System Guarantees"
-        RUST_OWNERSHIP["Ownership system"]
-        RUST_BORROWING["Borrow checker"]
-        RUST_SEND["Send trait"]
-        RUST_SYNC["Sync trait"]
+    subgraph "Rust の型システムによる保証"
+        RUST_OWNERSHIP["所有権システム"]
+        RUST_BORROWING["借用チェッカ"]
+        RUST_SEND["Send トレイト"]
+        RUST_SYNC["Sync トレイト"]
         RUST_ARC["Arc<Mutex<T>>"]
-        RUST_CHANNELS["Message passing"]
-        RUST_SAFE["✅ Data races impossible"]
-        RUST_FAST["⚡ Zero-cost abstractions"]
+        RUST_CHANNELS["メッセージパッシング"]
+        RUST_SAFE["✅ データ競合の完全排除"]
+        RUST_FAST["⚡ ゼロコスト抽象化"]
         
         RUST_OWNERSHIP --> RUST_BORROWING
         RUST_BORROWING --> RUST_SEND
@@ -2214,12 +2214,12 @@ graph TD
 
 ***
 
-## Incremental Adoption Strategy
+## 段階的な導入戦略
 
-### Phase 1: Learning and Experimentation (Weeks 1-4)
+### フェーズ 1: 学習と実験（第 1 〜 4 週）
 ```rust
-// Start with command-line tools and utilities
-// Example: Log file analyzer
+// コマンドラインツールやユーティリティから始める
+// 例: ログファイルアナライザ
 use std::fs;
 use std::collections::HashMap;
 use clap::Parser;
@@ -2258,10 +2258,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-### Phase 2: Replace Performance-Critical Components (Weeks 5-8)
+### フェーズ 2: パフォーマンス重要コンポーネントの置き換え（第 5 〜 8 週）
 ```rust
-// Replace CPU-intensive data processing
-// Example: Image processing microservice
+// CPU 負荷の高いデータ処理部分を置き換える
+// 例: 画像処理マイクロサービス
 use image::{DynamicImage, ImageBuffer, Rgb};
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -2296,7 +2296,7 @@ async fn process_image(request: ProcessingRequest) -> Result<ProcessingResponse,
             let height = request.parameters["height"].as_u64().unwrap_or(100) as u32;
             img.resize(width, height, image::imageops::FilterType::Lanczos3)
         }
-        _ => return Err("Unknown operation".into()),
+        _ => return Err("未知の操作です".into()),
     };
     
     let mut buffer = Vec::new();
@@ -2330,10 +2330,10 @@ struct ProcessingError(String);
 impl warp::reject::Reject for ProcessingError {}
 ```
 
-### Phase 3: New Microservices (Weeks 9-12)
+### フェーズ 3: 新規マイクロサービスの構築（第 9 〜 12 週）
 ```rust
-// Build new services from scratch in Rust
-// Example: Authentication service
+// 新しいサービスを最初から Rust で構築する
+// 例: 認証サービス
 use axum::{
     extract::{Query, State},
     http::StatusCode,
@@ -2437,11 +2437,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ***
 
-## C# to Rust Concept Mapping
+## C# から Rust への概念マッピング
 
-### Dependency Injection → Constructor Injection + Traits
+### 依存性の注入 (DI) → コンストラクタ注入 ＋ トレイト
 ```csharp
-// C# with DI container
+// DI コンテナを用いた C#
 services.AddScoped<IUserRepository, UserRepository>();
 services.AddScoped<IUserService, UserService>();
 
@@ -2457,7 +2457,7 @@ public class UserService
 ```
 
 ```rust
-// Rust: Constructor injection with traits
+// Rust: トレイトを用いたコンストラクタ注入
 pub trait UserRepository {
     async fn find_by_id(&self, id: Uuid) -> Result<Option<User>, Error>;
     async fn save(&self, user: &User) -> Result<(), Error>;
@@ -2483,14 +2483,14 @@ where
     }
 }
 
-// Usage
+// 使用例
 let repository = PostgresUserRepository::new(pool);
 let service = UserService::new(repository);
 ```
 
-### LINQ → Iterator Chains
+### LINQ → イテレータチェーン
 ```csharp
-// C# LINQ
+// C# の LINQ
 var result = users
     .Where(u => u.Age > 18)
     .Select(u => u.Name.ToUpper())
@@ -2500,7 +2500,7 @@ var result = users
 ```
 
 ```rust
-// Rust: Iterator chains (zero-cost!)
+// Rust: イテレータチェーン (ゼロコスト！)
 let result: Vec<String> = users
     .iter()
     .filter(|u| u.age > 18)
@@ -2511,7 +2511,7 @@ let result: Vec<String> = users
     .take(10)
     .collect();
 
-// Or with itertools crate for more LINQ-like operations
+// または itertools クレートを使って、より LINQ に近い操作を行う場合
 use itertools::Itertools;
 
 let result: Vec<String> = users
@@ -2523,9 +2523,9 @@ let result: Vec<String> = users
     .collect();
 ```
 
-### Entity Framework → SQLx + Migrations
+### Entity Framework → SQLx ＋ マイグレーション
 ```csharp
-// C# Entity Framework
+// C# の Entity Framework
 public class ApplicationDbContext : DbContext
 {
     public DbSet<User> Users { get; set; }
@@ -2537,7 +2537,7 @@ var user = await context.Users
 ```
 
 ```rust
-// Rust: SQLx with compile-time checked queries
+// Rust: コンパイル時チェック付きクエリを提供する SQLx
 use sqlx::{PgPool, FromRow};
 
 #[derive(FromRow)]
@@ -2547,7 +2547,7 @@ struct User {
     name: String,
 }
 
-// Compile-time checked query
+// コンパイル時チェック付きクエリ
 let user = sqlx::query_as!(
     User,
     "SELECT id, email, name FROM users WHERE email = $1",
@@ -2556,7 +2556,7 @@ let user = sqlx::query_as!(
 .fetch_optional(&pool)
 .await?;
 
-// Or with dynamic queries
+// または動的クエリを使用する場合
 let user = sqlx::query_as::<_, User>(
     "SELECT id, email, name FROM users WHERE email = $1"
 )
@@ -2565,9 +2565,9 @@ let user = sqlx::query_as::<_, User>(
 .await?;
 ```
 
-### Configuration → Config Crates
+### 構成設定 (Configuration) → Config クレート
 ```csharp
-// C# Configuration
+// C# の構成設定
 public class AppSettings
 {
     public string DatabaseUrl { get; set; }
@@ -2578,7 +2578,7 @@ var config = builder.Configuration.Get<AppSettings>();
 ```
 
 ```rust
-// Rust: Config with serde
+// Rust: serde と連携する config クレート
 use config::{Config, ConfigError, Environment, File};
 use serde::Deserialize;
 
@@ -2599,28 +2599,28 @@ impl AppSettings {
     }
 }
 
-// Usage
+// 使用例
 let settings = AppSettings::new()?;
 ```
 
 ***
 
-## Team Adoption Timeline
+## チーム導入のタイムライン
 
-### Month 1: Foundation
-**Week 1-2: Syntax and Ownership**
-- Basic syntax differences from C#
-- Understanding ownership, borrowing, and lifetimes
-- Small exercises: CLI tools, file processing
+### 1か月目: 基礎の習得
+**第 1 〜 2 週: 構文と所有権**
+- C# との基本的な構文の違い
+- 所有権、借用、ライフタイムの理解
+- 小規模な演習: CLI ツール、ファイル処理
 
-**Week 3-4: Error Handling and Types**
-- `Result<T, E>` vs exceptions
-- `Option<T>` vs nullable types
-- Pattern matching and exhaustive checking
+**第 3 〜 4 週: エラー処理と型システム**
+- `Result<T, E>` vs 例外
+- `Option<T>` vs null 許容型
+- パターンマッチングと網羅性チェック
 
-**Recommended exercises:**
+**推奨演習課題:**
 ```rust
-// Week 1-2: File processor
+// 第 1 〜 2 週: ファイルプロセッサ
 fn process_log_file(path: &str) -> Result<Vec<String>, std::io::Error> {
     let content = std::fs::read_to_string(path)?;
     let errors: Vec<String> = content
@@ -2631,7 +2631,7 @@ fn process_log_file(path: &str) -> Result<Vec<String>, std::io::Error> {
     Ok(errors)
 }
 
-// Week 3-4: JSON processor with error handling
+// 第 3 〜 4 週: エラー処理を伴う JSON プロセッサ
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -2647,20 +2647,20 @@ fn parse_log_entries(json_str: &str) -> Result<Vec<LogEntry>, Box<dyn std::error
 }
 ```
 
-### Month 2: Practical Applications
-**Week 5-6: Traits and Generics**
-- Trait system vs interfaces
-- Generic constraints and bounds
-- Common patterns and idioms
+### 2か月目: 実践的な応用
+**第 5 〜 6 週: トレイトとジェネリクス**
+- トレイトシステム vs インターフェース
+- ジェネリック制約とトレイト境界
+- 一般的なパターンとイディオム
 
-**Week 7-8: Async Programming and Concurrency**
-- `async`/`await` similarities and differences
-- Channels for communication
-- Thread safety guarantees
+**第 7 〜 8 週: 非同期プログラミングと並行処理**
+- `async`/`await` の共通点と相違点
+- 通信用チャネル
+- スレッド安全性の保証
 
-**Recommended projects:**
+**推奨プロジェクト:**
 ```rust
-// Week 5-6: Generic data processor
+// 第 5 〜 6 週: ジェネリックなデータプロセッサ
 trait DataProcessor<T> {
     type Output;
     type Error;
@@ -2679,7 +2679,7 @@ impl DataProcessor<&str> for JsonProcessor {
     }
 }
 
-// Week 7-8: Async web client
+// 第 7 〜 8 週: 非同期 Web クライアント
 async fn fetch_and_process_data(urls: Vec<&str>) -> Result<(), Box<dyn std::error::Error>> {
     let client = reqwest::Client::new();
     
@@ -2690,7 +2690,7 @@ async fn fetch_and_process_data(urls: Vec<&str>) -> Result<(), Box<dyn std::erro
             tokio::spawn(async move {
                 let response = client.get(url).send().await?;
                 let text = response.text().await?;
-                println!("Fetched {} bytes from {}", text.len(), url);
+                println!("{} から {} バイト取得しました", url, text.len());
                 Ok::<(), reqwest::Error>(())
             })
         })
@@ -2704,38 +2704,38 @@ async fn fetch_and_process_data(urls: Vec<&str>) -> Result<(), Box<dyn std::erro
 }
 ```
 
-### Month 3+: Production Integration
-**Week 9-12: Real Project Work**
-- Choose a non-critical component to rewrite
-- Implement comprehensive error handling
-- Add logging, metrics, and testing
-- Performance profiling and optimization
+### 3か月目以降: 本番環境への統合
+**第 9 〜 12 週: 実プロジェクトでの開発**
+- リライト対象として非クリティカルなコンポーネントを選定
+- 包括的なエラー処理の実装
+- ロギング、メトリクス、テストの追加
+- パフォーマンスプロファイリングと最適化
 
-**Ongoing: Team Review and Mentoring**
-- Code reviews focusing on Rust idioms
-- Pair programming sessions
-- Knowledge sharing sessions
+**継続的取り組み: チームレビューとメンタリング**
+- Rust のイディオムに焦点を当てたコードレビュー
+- ペアプログラミングセッション
+- 知見共有ミーティングの実施
 
 ***
 
-## Performance Comparison: Managed vs Native
+## パフォーマンス比較: マネージド vs ネイティブ
 
-### Real-World Performance Characteristics
+### 実際の環境におけるパフォーマンス特性
 
-| **Aspect** | **C# (.NET)** | **Rust** | **Performance Impact** |
+| **観点** | **C# (.NET)** | **Rust** | **パフォーマンスへの影響** |
 |------------|---------------|----------|------------------------|
-| **Startup Time** | 100-500ms (JIT compilation) | 1-10ms (native binary) | 🚀 **50-500x faster** |
-| **Memory Usage** | +30-100% (GC overhead + metadata) | Baseline (minimal runtime) | 💾 **30-50% less RAM** |
-| **GC Pauses** | 1-100ms periodic pauses | Never (no GC) | ⚡ **Consistent latency** |
-| **CPU Usage** | +10-20% (GC + JIT overhead) | Baseline (direct execution) | 🔋 **10-20% better efficiency** |
-| **Binary Size** | 30-200MB (with runtime) | 1-20MB (static binary) | 📦 **10x smaller deployments** |
-| **Memory Safety** | Runtime checks | Compile-time proofs | 🛡️ **Zero overhead safety** |
-| **Concurrent Performance** | Good (with careful synchronization) | Excellent (fearless concurrency) | 🏃 **Superior scalability** |
+| **起動時間** | 100〜500ms（JIT コンパイル） | 1〜10ms（ネイティブバイナリ） | 🚀 **50〜500倍高速** |
+| **メモリ使用量** | +30〜100%（GC オーバーヘッド ＋ メタデータ） | 基準値（最小限のランタイム） | 💾 **RAM 使用量を 30〜50% 削減** |
+| **GC による一時停止** | 1〜100ms の定期的な停止 | なし（GC なし） | ⚡ **一貫したレイテンシ** |
+| **CPU 使用率** | +10〜20%（GC ＋ JIT のオーバーヘッド） | 基準値（直接実行） | 🔋 **電力・実行効率が 10〜20% 向上** |
+| **バイナリサイズ** | 30〜200MB（ランタイム同梱時） | 1〜20MB（静的バイナリ） | 📦 **デプロイサイズが 1/10 に縮小** |
+| **メモリ安全性** | 実行時チェック | コンパイル時証明 | 🛡️ **ゼロオーバーヘッドの安全性** |
+| **並行処理性能** | 良好（慎重な同期が必要） | 卓越（恐れなき並行性: Fearless Concurrency） | 🏃 **優れたスケーラビリティ** |
 
-### Benchmark Examples
+### ベンチマークの例
 
 ```csharp
-// C# - JSON processing benchmark
+// C# - JSON 処理ベンチマーク
 public class JsonProcessor
 {
     public async Task<List<User>> ProcessJsonFile(string path)
@@ -2750,13 +2750,13 @@ public class JsonProcessor
     }
 }
 
-// Typical performance: ~200ms for 100MB file
-// Memory usage: ~500MB peak (GC overhead)
-// Binary size: ~80MB (self-contained)
+// 典型的なパフォーマンス: 100MB のファイルに対して約 200ms
+// メモリ使用量: ピーク時約 500MB (GC オーバーヘッド)
+// バイナリサイズ: 約 80MB (自己完結型デプロイ時)
 ```
 
 ```rust
-// Rust - Equivalent JSON processing
+// Rust - 同等の JSON 処理
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 
@@ -2777,15 +2777,15 @@ pub async fn process_json_file(path: &str) -> Result<Vec<User>, Box<dyn std::err
     Ok(users)
 }
 
-// Typical performance: ~120ms for same 100MB file
-// Memory usage: ~200MB peak (no GC overhead)
-// Binary size: ~8MB (static binary)
+// 典型的なパフォーマンス: 同一の 100MB ファイルに対して約 120ms
+// メモリ使用量: ピーク時約 200MB (GC オーバーヘッドなし)
+// バイナリサイズ: 約 8MB (静的バイナリ)
 ```
 
-### CPU-Intensive Workloads
+### CPU バウンドなワークロード
 
 ```csharp
-// C# - Mathematical computation
+// C# - 数学的な計算
 public class Mandelbrot
 {
     public static int[,] Generate(int width, int height, int maxIterations)
@@ -2808,12 +2808,12 @@ public class Mandelbrot
     }
 }
 
-// Performance: ~2.3 seconds (8-core machine)
-// Memory: ~500MB
+// パフォーマンス: 約 2.3 秒 (8 コアマシン)
+// メモリ: 約 500MB
 ```
 
 ```rust
-// Rust - Same computation with Rayon
+// Rust - Rayon を使用した同一の計算
 use rayon::prelude::*;
 use num_complex::Complex;
 
@@ -2834,57 +2834,57 @@ pub fn generate_mandelbrot(width: usize, height: usize, max_iterations: u32) -> 
         .collect()
 }
 
-// Performance: ~1.1 seconds (same 8-core machine)  
-// Memory: ~200MB
-// 2x faster with 60% less memory usage
+// パフォーマンス: 約 1.1 秒 (同一の 8 コアマシン)  
+// メモリ: 約 200MB
+// 2倍高速で、メモリ使用量は 60% 削減
 ```
 
-### When to Choose Each Language
+### 各言語の選定基準
 
-**Choose C# when:**
-- **Rapid development is crucial** - Rich tooling ecosystem
-- **Team expertise in .NET** - Existing knowledge and skills
-- **Enterprise integration** - Heavy use of Microsoft ecosystem
-- **Moderate performance requirements** - Performance is adequate
-- **Rich UI applications** - WPF, WinUI, Blazor applications
-- **Prototyping and MVPs** - Fast time to market
+**C# を選択すべき場合:**
+- **迅速な開発が極めて重要な場合** - 充実したツールエコシステム
+- **チームに .NET の専門知識がある場合** - 既存の知識とスキルセットの活用
+- **エンタープライズ統合** - Microsoft エコシステムの多用
+- **適度なパフォーマンス要件** - 一般的なパフォーマンスで十分な場合
+- **リッチな UI アプリケーション** - WPF、WinUI、Blazor アプリケーション
+- **プロトタイピングおよび MVP 開発** - 市場投入までのスピード重視
 
-**Choose Rust when:**
-- **Performance is critical** - CPU/memory-intensive applications
-- **Resource constraints matter** - Embedded, edge computing, serverless
-- **Long-running services** - Web servers, databases, system services
-- **System-level programming** - OS components, drivers, network tools
-- **High reliability requirements** - Financial systems, safety-critical applications
-- **Concurrent/parallel workloads** - High-throughput data processing
+**Rust を選択すべき場合:**
+- **パフォーマンスが極めて重要な場合** - CPU/メモリ集約型アプリケーション
+- **リソース制約が重要である場合** - 組み込み、エッジコンピューティング、サーバーレス
+- **長時間稼働するサービス** - Web サーバー、データベース、システムサービス
+- **システムレベルプログラミング** - OS コンポーネント、ドライバ、ネットワークツール
+- **高信頼性が要求される場合** - 金融システム、安全性重視のクリティカルなアプリケーション
+- **並行 / 並列ワークロード** - 高スループットなデータ処理
 
-### Migration Strategy Decision Tree
+### 移行戦略の決定木
 
 ```mermaid
 graph TD
-    START["Considering Rust?"]
-    PERFORMANCE["Is performance critical?"]
-    TEAM["Team has time to learn?"]
-    EXISTING["Large existing C# codebase?"]
-    NEW_PROJECT["New project or component?"]
+    START["Rust の導入を検討中？"]
+    PERFORMANCE["パフォーマンスは極めて重要か？"]
+    TEAM["チームに学習する時間的余裕はあるか？"]
+    EXISTING["大規模な既存 C# コードベースがあるか？"]
+    NEW_PROJECT["新規プロジェクト、または新コンポーネントか？"]
     
-    INCREMENTAL["Incremental adoption:<br/>• CLI tools first<br/>• Performance-critical components<br/>• New microservices"]
+    INCREMENTAL["段階的な導入:<br/>• まずは CLI ツールから<br/>• パフォーマンス重視のコンポーネント<br/>• 新規マイクロサービス"]
     
-    FULL_RUST["Full Rust adoption:<br/>• Greenfield projects<br/>• System-level services<br/>• High-performance APIs"]
+    FULL_RUST["完全な Rust 導入:<br/>• グリーンフィールド（完全新規）プロジェクト<br/>• システムレベルのサービス<br/>• 高パフォーマンス API"]
     
-    STAY_CSHARP["Stay with C#:<br/>• Optimize existing code<br/>• Use .NET performance features<br/>• Consider .NET Native"]
+    STAY_CSHARP["C# を維持:<br/>• 既存コードの最適化<br/>• .NET のパフォーマンス機能の活用<br/>• .NET Native などの検討"]
     
     START --> PERFORMANCE
-    PERFORMANCE -->|Yes| TEAM
-    PERFORMANCE -->|No| STAY_CSHARP
+    PERFORMANCE -->|はい| TEAM
+    PERFORMANCE -->|いいえ| STAY_CSHARP
     
-    TEAM -->|Yes| EXISTING
-    TEAM -->|No| STAY_CSHARP
+    TEAM -->|はい| EXISTING
+    TEAM -->|いいえ| STAY_CSHARP
     
-    EXISTING -->|Yes| NEW_PROJECT
-    EXISTING -->|No| FULL_RUST
+    EXISTING -->|はい| NEW_PROJECT
+    EXISTING -->|いいえ| FULL_RUST
     
-    NEW_PROJECT -->|New| FULL_RUST
-    NEW_PROJECT -->|Existing| INCREMENTAL
+    NEW_PROJECT -->|新規| FULL_RUST
+    NEW_PROJECT -->|既存| INCREMENTAL
     
     style FULL_RUST fill:#c8e6c9
     style INCREMENTAL fill:#fff3e0
@@ -2893,78 +2893,78 @@ graph TD
 
 ***
 
-## Best Practices for C# Developers
+## C# 開発者のためのベストプラクティス
 
-### 1. **Mindset Shifts**
-- **From GC to Ownership**: Think about who owns data and when it's freed
-- **From Exceptions to Results**: Make error handling explicit and visible
-- **From Inheritance to Composition**: Use traits to compose behavior
-- **From Null to Option**: Make absence of values explicit in the type system
+### 1. **マインドセットの転換**
+- **GC から所有権へ**: 誰がデータを所有し、いつ解放されるかを意識する
+- **例外から Result へ**: エラー処理を明示的かつ可視化する
+- **継承から合成へ**: トレイトを用いて振る舞いを合成する
+- **Null から Option へ**: 値の不在を型システムで明示的に表現する
 
-### 2. **Code Organization**
+### 2. **コードの構成方法**
 ```rust
-// Structure projects like C# solutions
+// C# ソリューションのようにプロジェクトを構造化する
 src/
-├── main.rs          // Program.cs equivalent
-├── lib.rs           // Library entry point
-├── models/          // Like Models/ folder in C#
+├── main.rs          // Program.cs に相当
+├── lib.rs           // ライブラリのエントリポイント
+├── models/          // C# の Models/ フォルダに相当
 │   ├── mod.rs
 │   ├── user.rs
 │   └── product.rs
-├── services/        // Like Services/ folder
+├── services/        // Services/ フォルダに相当
 │   ├── mod.rs
 │   ├── user_service.rs
 │   └── product_service.rs
-├── controllers/     // Like Controllers/ (for web apps)
-├── repositories/    // Like Repositories/
-└── utils/          // Like Utilities/
+├── controllers/     // Controllers/ に相当（Web アプリの場合）
+├── repositories/    // Repositories/ に相当
+└── utils/          // Utilities/ に相当
 ```
 
-### 3. **Error Handling Strategy**
+### 3. **エラー処理戦略**
 ```rust
-// Create a common Result type for your application
+// アプリケーション共通の Result 型を定義
 pub type AppResult<T> = Result<T, AppError>;
 
 #[derive(Error, Debug)]
 pub enum AppError {
-    #[error("Database error: {0}")]
+    #[error("データベースエラー: {0}")]
     Database(#[from] sqlx::Error),
     
-    #[error("HTTP error: {0}")]
+    #[error("HTTP エラー: {0}")]
     Http(#[from] reqwest::Error),
     
-    #[error("Validation error: {message}")]
+    #[error("バリデーションエラー: {message}")]
     Validation { message: String },
     
-    #[error("Business logic error: {message}")]
+    #[error("ビジネスロジックエラー: {message}")]
     Business { message: String },
 }
 
-// Use throughout your application
+// アプリケーション全体で使用
 pub async fn create_user(data: CreateUserRequest) -> AppResult<User> {
-    validate_user_data(&data)?;  // Returns AppError::Validation
-    let user = repository.create_user(data).await?;  // Returns AppError::Database
+    validate_user_data(&data)?;  // AppError::Validation を返す
+    let user = repository.create_user(data).await?;  // AppError::Database を返す
     Ok(user)
 }
 ```
 
-### 4. **Testing Patterns**
+### 4. **テストパターン**
 ```rust
-// Structure tests like C# unit tests
+// C# の単体テストのようにテストを構成
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rstest::*;  // For parameterized tests like C# [Theory]
+    use rstest::*;  // C# の [Theory] のようなパラメータ化テスト用
     
     #[test]
     fn test_basic_functionality() {
-        // Arrange
+        // Arrange (準備)
         let input = "test data";
         
-        // Act
+        // Act (実行)
         let result = process_data(input);
         
-        // Assert
+        // Assert (検証)
         assert_eq!(result, "expected output");
     }
     
@@ -2976,7 +2976,7 @@ mod tests {
         assert_eq!(add(a, b), expected);
     }
     
-    #[tokio::test]  // For async tests
+    #[tokio::test]  // 非同期テスト用
     async fn test_async_functionality() {
         let result = async_function().await;
         assert!(result.is_ok());
@@ -2984,13 +2984,13 @@ mod tests {
 }
 ```
 
-### 5. **Common Mistakes to Avoid**
+### 5. **避けるべき一般的な間違い**
 ```rust
-// [ERROR] Don't try to implement inheritance
-// Instead of:
-// struct Manager : Employee  // This doesn't exist in Rust
+// [ERROR] 継承を実装しようとしない
+// 以下のような書き方は避ける:
+// struct Manager : Employee  // Rust には存在しない構文
 
-// [OK] Use composition with traits
+// [OK] トレイトを用いた合成を使用する
 trait Employee {
     fn get_salary(&self) -> u32;
 }
@@ -2999,35 +2999,33 @@ trait Manager: Employee {
     fn get_team_size(&self) -> usize;
 }
 
-// [ERROR] Don't use unwrap() everywhere (like ignoring exceptions)
-let value = might_fail().unwrap();  // Can panic!
+// [ERROR] いたるところで unwrap() を使わない（例外を無視するようなもの）
+let value = might_fail().unwrap();  // パニックを引き起こす可能性あり！
 
-// [OK] Handle errors properly
+// [OK] エラーを適切に処理する
 let value = match might_fail() {
     Ok(v) => v,
     Err(e) => {
-        log::error!("Operation failed: {}", e);
+        log::error!("処理に失敗しました: {}", e);
         return Err(e.into());
     }
 };
 
-// [ERROR] Don't clone everything (like copying objects unnecessarily)
-let data = expensive_data.clone();  // Expensive!
+// [ERROR] 何でもかんでも clone() しない（不要にオブジェクトをコピーするようなもの）
+let data = expensive_data.clone();  // コストが高い！
 
-// [OK] Use borrowing when possible
-let data = &expensive_data;  // Just a reference
+// [OK] 可能な限り借用を使用する
+let data = &expensive_data;  // 単なる参照
 
-// [ERROR] Don't use RefCell everywhere (like making everything mutable)
+// [ERROR] いたるところで RefCell を使わない（すべてを可変にしようとするようなもの）
 struct Data {
-    value: RefCell<i32>,  // Interior mutability - use sparingly
+    value: RefCell<i32>,  // 内部可変性 - 慎重に使用すること
 }
 
-// [OK] Prefer owned or borrowed data
+// [OK] 所有または借用されたデータを優先する
 struct Data {
-    value: i32,  // Simple and clear
+    value: i32,  // シンプルで明快
 }
 ```
 
-This guide provides C# developers with a comprehensive understanding of how their existing knowledge translates to Rust, highlighting both the similarities and the fundamental differences in approach. The key is understanding that Rust's constraints (like ownership) are designed to prevent entire classes of bugs that are possible in C#, at the cost of some initial complexity.
-
-
+このガイドは、C# 開発者がこれまでに培った知識をどのように Rust に置き換えて応用できるかについて、包括的な理解を提供することを目的としています。アプローチにおける共通点と根本的な相違点の双方を浮き彫りにしました。最も重要なポイントは、Rust の制約（所有権など）が、最初のうちはある程度の複雑さを伴うものの、C# で起こりうるバグのカテゴリそのものを根絶するために設計されていると理解することです。

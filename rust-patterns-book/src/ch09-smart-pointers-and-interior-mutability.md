@@ -1,42 +1,42 @@
-# 9. Smart Pointers and Interior Mutability 🟡
+# 9. スマートポインタと内部可変性 🟡
 
-> **What you'll learn:**
-> - Box, Rc, Arc for heap allocation and shared ownership
-> - Weak references for breaking Rc/Arc reference cycles
-> - Cell, RefCell, and Cow for interior mutability patterns
-> - Pin for self-referential types and ManuallyDrop for lifecycle control
+> **学習内容:**
+> - ヒープ割り当てと共有所有権のための Box、Rc、Arc
+> - Rc/Arc の循環参照を解消するための弱参照（Weak）
+> - 内部可変性パターンのための Cell、RefCell、Cow
+> - 自己参照型のための Pin とライフサイクル制御のための ManuallyDrop
 
-## Box, Rc, Arc — Heap Allocation and Sharing
+## Box、Rc、Arc — ヒープ割り当てと共有
 
 ```rust
-// --- Box<T>: Single owner, heap allocation ---
-// Use when: recursive types, large values, trait objects
+// --- Box<T>: 単一の所有者、ヒープ割り当て ---
+// 使用場面: 再帰的型、巨大な値、トレイトオブジェクト
 let boxed: Box<i32> = Box::new(42);
-println!("{}", *boxed); // Deref to i32
+println!("{}", *boxed); // i32 へ Deref
 
-// Recursive type requires Box (otherwise infinite size):
+// 再帰的型には Box が必要（そうでないと無限のサイズになる）:
 enum List<T> {
     Cons(T, Box<List<T>>),
     Nil,
 }
 
-// Trait object (dynamic dispatch):
+// トレイトオブジェクト（動的ディスパッチ）:
 let writer: Box<dyn std::io::Write> = Box::new(std::io::stdout());
 
-// --- Rc<T>: Multiple owners, single-threaded ---
-// Use when: shared ownership within one thread (no Send/Sync)
+// --- Rc<T>: 複数の所有者、シングルスレッド ---
+// 使用場面: 1つのスレッド内での共有所有権（Send/Sync ではない）
 use std::rc::Rc;
 
 let a = Rc::new(vec![1, 2, 3]);
-let b = Rc::clone(&a); // Increments reference count (NOT deep clone)
+let b = Rc::clone(&a); // 参照カウントをインクリメント（ディープクローンではない）
 let c = Rc::clone(&a);
-println!("Ref count: {}", Rc::strong_count(&a)); // 3
+println!("参照カウント: {}", Rc::strong_count(&a)); // 3
 
-// All three point to the same Vec. When the last Rc is dropped,
-// the Vec is deallocated.
+// 3つすべてが同じ Vec を指している。最後の Rc がドロップされると、
+// Vec のメモリが解放される。
 
-// --- Arc<T>: Multiple owners, thread-safe ---
-// Use when: shared ownership across threads
+// --- Arc<T>: 複数の所有者、スレッドセーフ ---
+// 使用場面: スレッド間での共有所有権
 use std::sync::Arc;
 
 let shared = Arc::new(String::from("shared data"));
@@ -47,10 +47,10 @@ let handles: Vec<_> = (0..5).map(|_| {
 for h in handles { h.join().unwrap(); }
 ```
 
-### Weak References — Breaking Reference Cycles
+### 弱参照 — 循環参照の解消
 
-`Rc` and `Arc` use reference counting, which cannot free cycles (A → B → A).
-`Weak<T>` is a non-owning handle that does **not** increment the strong count:
+`Rc` と `Arc` は参照カウントを使用しているため、循環参照（A → B → A）を解放できません。
+`Weak<T>` は強参照カウントをインクリメント**しない**、所有権を持たないハンドルです：
 
 ```rust
 use std::rc::{Rc, Weak};
@@ -58,7 +58,7 @@ use std::cell::RefCell;
 
 struct Node {
     value: i32,
-    parent: RefCell<Weak<Node>>,   // does NOT keep parent alive
+    parent: RefCell<Weak<Node>>,   // 親を生かし続けない（所有権を持たない）
     children: RefCell<Vec<Rc<Node>>>,
 }
 
@@ -70,26 +70,25 @@ let child = Rc::new(Node {
 });
 parent.children.borrow_mut().push(Rc::clone(&child));
 
-// Access parent from child — returns Option<Rc<Node>>:
+// 子から親へアクセス — Option<Rc<Node>> を返す:
 if let Some(p) = child.parent.borrow().upgrade() {
-    println!("Child's parent value: {}", p.value); // 0
+    println!("子の親の値: {}", p.value); // 0
 }
-// When `parent` is dropped, strong_count → 0, memory is freed.
-// `child.parent.upgrade()` would then return `None`.
+// `parent` がドロップされると、strong_count が 0 になり、メモリが解放される。
+// その後 `child.parent.upgrade()` を呼ぶと `None` が返される。
 ```
 
-**Rule of thumb**: Use `Rc`/`Arc` for ownership edges, `Weak` for back-references
-and caches. For thread-safe code, use `Arc<T>` with `sync::Weak<T>`.
+**経験則**: 所有権のエッジには `Rc`/`Arc` を使用し、逆参照やキャッシュには `Weak` を使用してください。スレッドセーフなコードの場合は、`Arc<T>` と `sync::Weak<T>` を使用します。
 
-### Cell and RefCell — Interior Mutability
+### Cell と RefCell — 内部可変性
 
-Sometimes you need to mutate data behind a shared (`&`) reference. Rust provides *interior mutability* with runtime borrow checking:
+共有（`&`）参照の背後にあるデータを変更する必要がある場合があります。Rust は実行時借用チェックを伴う*内部可変性（Interior Mutability）*を提供します：
 
 ```rust
 use std::cell::{Cell, RefCell};
 
-// --- Cell<T>: Copy-based interior mutability ---
-// Only for Copy types (or types you swap in/out)
+// --- Cell<T>: コピーベースの内部可変性 ---
+// Copy 型（または値を丸ごとスワップする型）にのみ適用
 struct Counter {
     count: Cell<u32>,
 }
@@ -97,15 +96,15 @@ struct Counter {
 impl Counter {
     fn new() -> Self { Counter { count: Cell::new(0) } }
 
-    fn increment(&self) { // &self, not &mut self!
+    fn increment(&self) { // &mut self ではなく &self!
         self.count.set(self.count.get() + 1);
     }
 
     fn value(&self) -> u32 { self.count.get() }
 }
 
-// --- RefCell<T>: Runtime borrow checking ---
-// Panics if you violate borrow rules at runtime
+// --- RefCell<T>: 実行時借用チェック ---
+// 実行時に借用ルールに違反するとパニックする
 struct Cache {
     data: RefCell<Vec<String>>,
 }
@@ -113,41 +112,38 @@ struct Cache {
 impl Cache {
     fn new() -> Self { Cache { data: RefCell::new(Vec::new()) } }
 
-    fn add(&self, item: String) { // &self — looks immutable from outside
-        self.data.borrow_mut().push(item); // Runtime-checked &mut
+    fn add(&self, item: String) { // &self — 外部からは不変に見える
+        self.data.borrow_mut().push(item); // 実行時チェック付きの &mut
     }
 
     fn get_all(&self) -> Vec<String> {
-        self.data.borrow().clone() // Runtime-checked &
+        self.data.borrow().clone() // 実行時チェック付きの &
     }
 
     fn bad_example(&self) {
         let _guard1 = self.data.borrow();
         // let _guard2 = self.data.borrow_mut();
-        // ❌ PANICS at runtime — can't have &mut while & exists
+        // ❌ 実行時にパニック — & が存在している間は &mut を取得できない
     }
 }
 ```
 
-> **Cell vs RefCell**: `Cell` never panics (it copies/swaps values) but only
-> works with `Copy` types or via `swap()`/`replace()`. `RefCell` works with any
-> type but panics on double-mutable-borrow. Neither is `Sync` — for multithreaded
-> use, see `Mutex`/`RwLock`.
+> **Cell vs RefCell**: `Cell` は決してパニックしません（値をコピーまたはスワップします）が、`Copy` 型でのみ動作するか、`swap()`/`replace()` を経由する必要があります。`RefCell` は任意の型で動作しますが、二重の可変借用が発生した場合は実行時にパニックします。どちらも `Sync` ではないため、マルチスレッドでの使用については `Mutex`/`RwLock` を参照してください。
 
-### Cow — Clone on Write
+### Cow — 書き込み時にクローン (Clone on Write)
 
-`Cow` (Clone on Write) holds either a borrowed or owned value. It clones *only* when mutation is needed:
+`Cow`（Clone on Write）は、借用された値または所有された値のいずれかを保持します。変更が必要になった場合に*のみ*クローン（複製）を行います：
 
 ```rust
 use std::borrow::Cow;
 
-// Avoids allocating when no modification is needed:
+// 変更が不要な場合はアロケーションを回避:
 fn normalize(input: &str) -> Cow<'_, str> {
     if input.contains('\t') {
-        // Only allocate if tabs need replacing
+        // タブの置換が必要な場合のみアロケート
         Cow::Owned(input.replace('\t', "    "))
     } else {
-        // No allocation — just return a reference
+        // アロケーションなし — 単に参照を返す
         Cow::Borrowed(input)
     }
 }
@@ -156,76 +152,71 @@ fn main() {
     let clean = "no tabs here";
     let dirty = "tabs\there";
 
-    let r1 = normalize(clean); // Cow::Borrowed — zero allocation
-    let r2 = normalize(dirty); // Cow::Owned — allocated new String
+    let r1 = normalize(clean); // Cow::Borrowed — アロケーションゼロ
+    let r2 = normalize(dirty); // Cow::Owned — 新しい String をアロケート
 
     println!("{r1}");
     println!("{r2}");
 }
 
-// Also useful for function parameters that MIGHT need ownership:
+// 所有権が必要になる「かもしれない」関数の引数にも便利:
 fn process(data: Cow<'_, [u8]>) {
-    // Can read data without copying
-    println!("Length: {}", data.len());
-    // If we need to mutate, Cow auto-clones:
-    let mut owned = data.into_owned(); // Clone only if Borrowed
+    // コピーすることなくデータを読み取れる
+    println!("長さ: {}", data.len());
+    // 変更が必要な場合、Cow は自動的にクローンする:
+    let mut owned = data.into_owned(); // Borrowed の場合のみクローン
     owned.push(0xFF);
 }
 ```
 
-#### `Cow<'_, [u8]>` for Binary Data
+#### バイナリデータのための `Cow<'_, [u8]>`
 
-`Cow` is especially useful for byte-oriented APIs where data may or may not
-need transformation (checksum insertion, padding, escaping). This avoids
-allocating a `Vec<u8>` on the common fast path:
+`Cow` は、データに変更（チェックサムの挿入、パディング、エスケープなど）が必要な場合と不要な場合が混在するバイト指向の API に特に役立ちます。これにより、一般的な高速パスにおいて `Vec<u8>` のアロケーションを回避できます：
 
 ```rust
 use std::borrow::Cow;
 
-/// Pads a frame to a minimum length, borrowing when no padding is needed.
+/// フレームを最小長までパディングし、パディングが不要な場合は借用する。
 fn pad_frame(frame: &[u8], min_len: usize) -> Cow<'_, [u8]> {
     if frame.len() >= min_len {
-        Cow::Borrowed(frame)  // Already long enough — zero allocation
+        Cow::Borrowed(frame)  // すでに十分な長さ — アロケーションゼロ
     } else {
         let mut padded = frame.to_vec();
         padded.resize(min_len, 0x00);
-        Cow::Owned(padded)    // Allocate only when padding is required
+        Cow::Owned(padded)    // パディングが必要な場合のみアロケート
     }
 }
 
-let short = pad_frame(&[0xDE, 0xAD], 8);    // Owned — padded to 8 bytes
-let long  = pad_frame(&[0; 64], 8);          // Borrowed — already ≥ 8
+let short = pad_frame(&[0xDE, 0xAD], 8);    // Owned — 8バイトにパディングされた
+let long  = pad_frame(&[0; 64], 8);          // Borrowed — すでに ≥ 8
 ```
 
-> **Tip**: Combine `Cow<[u8]>` with `bytes::Bytes` (Ch10) when you need
-> reference-counted sharing of potentially-transformed buffers.
+> **ヒント**: 変換される可能性のあるバッファを参照カウントで共有する必要がある場合は、`Cow<[u8]>` と `bytes::Bytes`（第10章）を組み合わせて使用してください。
 
-### When to Use Which Pointer
+### 各ポインタの使い分け
 
-| Pointer | Owner Count | Thread-Safe | Mutability | Use When |
+| ポインタ | 所有者の数 | スレッドセーフ | 可変性 | 使用場面 |
 |---------|:-----------:|:-----------:|:----------:|----------|
-| `Box<T>` | 1 | ✅ (if T: Send) | Via `&mut` | Heap allocation, trait objects, recursive types |
-| `Rc<T>` | N | ❌ | None (wrap in Cell/RefCell) | Shared ownership, single thread, graphs/trees |
-| `Arc<T>` | N | ✅ | None (wrap in Mutex/RwLock) | Shared ownership across threads |
-| `Cell<T>` | — | ❌ | `.get()` / `.set()` | Interior mutability for Copy types |
-| `RefCell<T>` | — | ❌ | `.borrow()` / `.borrow_mut()` | Interior mutability for any type, single thread |
-| `Cow<'_, T>` | 0 or 1 | ✅ (if T: Send) | Clone on write | Avoid allocation when data is often unchanged |
+| `Box<T>` | 1 | ✅ (T: Send の場合) | `&mut` 経由 | ヒープ割り当て、トレイトオブジェクト、再帰的型 |
+| `Rc<T>` | N | ❌ | なし (Cell/RefCell でラップ) | 共有所有権、シングルスレッド、グラフ/木構造 |
+| `Arc<T>` | N | ✅ | なし (Mutex/RwLock でラップ) | スレッド間での共有所有権 |
+| `Cell<T>` | — | ❌ | `.get()` / `.set()` | Copy 型に対する内部可変性 |
+| `RefCell<T>` | — | ❌ | `.borrow()` / `.borrow_mut()` | 任意の型に対する内部可変性、シングルスレッド |
+| `Cow<'_, T>` | 0 または 1 | ✅ (T: Send の場合) | 書き込み時にクローン | データが変更されないことが多い場合のアロケーション回避 |
 
-### Pin and Self-Referential Types
+### Pin と自己参照型
 
-`Pin<P>` prevents a value from being moved in memory. This is essential for
-**self-referential types** — structs that contain a pointer to their own data —
-and for `Future`s, which may hold references across `.await` points.
+`Pin<P>` は、値がメモリ内で移動（ムーブ）されるのを防ぎます。これは**自己参照型**（自身のデータへのポインタを含む構造体）や、`.await` ポイントをまたいで参照を保持する可能性のある `Future` にとって不可欠です。
 
 ```rust
 use std::pin::Pin;
 use std::marker::PhantomPinned;
 
-// A self-referential struct (simplified):
+// 自己参照構造体（簡略化版）:
 struct SelfRef {
     data: String,
-    ptr: *const String, // Points to `data` above
-    _pin: PhantomPinned, // Opts out of Unpin — can't be moved
+    ptr: *const String, // 上記の `data` を指すポインタ
+    _pin: PhantomPinned, // Unpin をオプトアウト — 移動できなくなる
 }
 
 impl SelfRef {
@@ -237,7 +228,7 @@ impl SelfRef {
         };
         let mut boxed = Box::pin(val);
 
-        // SAFETY: we don't move the data after setting the pointer
+        // SAFETY: ポインタを設定した後はデータを移動させない
         let self_ptr: *const String = &boxed.data;
         unsafe {
             let mut_ref = Pin::as_mut(&mut boxed);
@@ -251,109 +242,98 @@ impl SelfRef {
     }
 
     fn ptr_data(&self) -> &str {
-        // SAFETY: ptr was set to point to self.data while pinned
+        // SAFETY: ptr はピン留めされている間に self.data を指すように設定された
         unsafe { &*self.ptr }
     }
 }
 
 fn main() {
     let pinned = SelfRef::new("hello");
-    assert_eq!(pinned.data(), pinned.ptr_data()); // Both "hello"
-    // std::mem::swap would invalidate ptr — but Pin prevents it
+    assert_eq!(pinned.data(), pinned.ptr_data()); // どちらも "hello"
+    // std::mem::swap は ptr を無効化してしまうが、Pin がそれを防ぐ
 }
 ```
 
-**Key concepts**:
+**主要概念**:
 
-| Concept | Meaning |
+| 概念 | 意味 |
 |---------|--------|
-| `Unpin` (auto-trait) | "Moving this type is safe." Most types are `Unpin` by default. |
-| `!Unpin` / `PhantomPinned` | "I have internal pointers — don't move me." |
-| `Pin<&mut T>` | A mutable reference that guarantees `T` won't move |
-| `Pin<Box<T>>` | An owned, heap-pinned value |
+| `Unpin`（自動トレイト） | 「この型は移動しても安全」。ほとんどの型はデフォルトで `Unpin` です。 |
+| `!Unpin` / `PhantomPinned` | 「内部ポインタがあるため、移動しないでください」。 |
+| `Pin<&mut T>` | `T` が移動しないことを保証する可変参照 |
+| `Pin<Box<T>>` | 所有権を持ち、ヒープ上でピン留めされた値 |
 
-**Why this matters for async**: Every `async fn` desugars to a `Future` that may
-hold references across `.await` points — making it self-referential. The async
-runtime uses `Pin<&mut Future>` to guarantee the future isn't moved once polled.
+**これが非同期（async）にとって重要な理由**: すべての `async fn` は、`.await` ポイントをまたいで参照を保持する可能性のある `Future` へと脱糖（desugar）され、自己参照型になります。非同期ランタイムは `Pin<&mut Future>` を使用して、一度ポーリングされた Future が二度と移動されないことを保証します。
 
 ```rust
-// When you write:
+// 次のように書いた場合:
 async fn fetch(url: &str) -> String {
-    let response = http_get(url).await; // reference held across await
+    let response = http_get(url).await; // await をまたいで参照が保持される
     response.text().await
 }
 
-// The compiler generates a state machine struct that is !Unpin,
-// and the runtime pins it before calling Future::poll().
+// コンパイラは !Unpin である状態機械構造体を生成し、
+// ランタイムは Future::poll() を呼び出す前にそれをピン留めする。
 ```
 
-> **When to care about Pin**: (1) Implementing `Future` manually, (2) writing
-> async runtimes or combinators, (3) any struct with self-referential pointers.
-> For normal application code, `async/await` handles pinning transparently.
-> See the companion *Async Rust Training* for deeper coverage.
+> **Pin を意識すべきタイミング**: (1) `Future` を手動で実装する場合、(2) 非同期ランタイムやコンビネータを作成する場合、(3) 自己参照ポインタを持つ任意の構造体。一般的なアプリケーションコードでは、`async/await` がピン留めを透過的に処理します。より深い内容については、姉妹編の *Async Rust Training* を参照してください。
 >
-> **Crate alternatives**: For self-referential structs without manual `Pin`,
-> consider [`ouroboros`](https://crates.io/crates/ouroboros) or
-> [`self_cell`](https://crates.io/crates/self_cell) — they generate safe
-> wrappers with correct pinning and drop semantics.
+> **クレートによる代替手段**: 手動で `Pin` を扱わずに自己参照構造体を作成したい場合は、[`ouroboros`](https://crates.io/crates/ouroboros) または [`self_cell`](https://crates.io/crates/self_cell) の使用を検討してください — 正しいピン留めとドロップのセマンティクスを備えた安全なラッパーを生成してくれます。
 
-### Pin Projections — Structural Pinning
+### Pin 射影 — 構造的ピン留め
 
-When you have a `Pin<&mut MyStruct>`, you often need to access individual fields.
-**Pin projection** is the pattern for safely going from `Pin<&mut Struct>` to
-`Pin<&mut Field>` (for pinned fields) or `&mut Field` (for unpinned fields).
+`Pin<&mut MyStruct>` を持っている場合、個々のフィールドにアクセスする必要がしばしば生じます。**Pin 射影（Pin Projection）**は、`Pin<&mut Struct>` から安全に `Pin<&mut Field>`（ピン留めされたフィールド用）または `&mut Field`（ピン留めされていないフィールド用）へと変換するパターンです。
 
-#### The Problem: Field Access on Pinned Types
+#### 問題点: ピン留めされた型に対するフィールドアクセス
 
 ```rust
 use std::pin::Pin;
 use std::marker::PhantomPinned;
 
 struct MyFuture {
-    data: String,              // Regular field — safe to move
-    state: InternalState,      // Self-referential — must stay pinned
+    data: String,              // 通常のフィールド — 移動しても安全
+    state: InternalState,      // 自己参照 — ピン留めを維持する必要がある
     _pin: PhantomPinned,
 }
 
 enum InternalState {
-    Waiting { ptr: *const String }, // Points to `data` — self-referential
+    Waiting { ptr: *const String }, // `data` を指す — 自己参照
     Done,
 }
 
-// Given `Pin<&mut MyFuture>`, how do you access `data` and `state`?
-// You CAN'T just do `pinned.data` — the compiler won't let you
-// get a &mut to a field of a pinned value without unsafe.
+// `Pin<&mut MyFuture>` がある場合、どのように `data` と `state` にアクセスするか？
+// 単に `pinned.data` とすることはできない — コンパイラは unsafe なしに
+// ピン留めされた値のフィールドへの &mut の取得を許可しない。
 ```
 
-#### Manual Pin Projection (unsafe)
+#### 手動 Pin 射影 (unsafe)
 
 ```rust
 impl MyFuture {
-    // Project to `data` — this field is structurally unpinned (safe to move)
+    // `data` への射影 — このフィールドは構造的にピン留めされていない（移動しても安全）
     fn data(self: Pin<&mut Self>) -> &mut String {
-        // SAFETY: `data` is not structurally pinned. Moving `data` alone
-        // doesn't move the whole struct, so Pin's guarantee is preserved.
+        // SAFETY: `data` は構造的にピン留めされていない。`data` 単体を移動しても
+        // 構造体全体が移動するわけではないため、Pin の保証は維持される。
         unsafe { &mut self.get_unchecked_mut().data }
     }
 
-    // Project to `state` — this field IS structurally pinned
+    // `state` への射影 — このフィールドは構造的にピン留めされている
     fn state(self: Pin<&mut Self>) -> Pin<&mut InternalState> {
-        // SAFETY: `state` is structurally pinned — we maintain the
-        // pin invariant by returning Pin<&mut InternalState>.
+        // SAFETY: `state` は構造的にピン留めされている — Pin<&mut InternalState> を
+        // 返すことでピン留めの不変条件を維持する。
         unsafe { Pin::new_unchecked(&mut self.get_unchecked_mut().state) }
     }
 }
 ```
 
-**Structural pinning rules** — a field is "structurally pinned" if:
-1. Moving/swapping that field alone could invalidate a self-reference
-2. The struct's `Drop` impl must not move the field
-3. The struct must be `!Unpin` (enforced by `PhantomPinned` or a `!Unpin` field)
+**構造的ピン留めのルール** — 以下の条件を満たす場合、フィールドは「構造的にピン留めされている」とみなされます：
+1. そのフィールド単体を移動またはスワップすると、自己参照が無効化される可能性がある
+2. 構造体の `Drop` 実装がそのフィールドを移動させてはならない
+3. 構造体が `!Unpin` でなければならない（`PhantomPinned` または `!Unpin` なフィールドによって強制される）
 
-#### `pin-project` — Safe Pin Projections (Zero Unsafe)
+#### `pin-project` — 安全な Pin 射影（unsafe ゼロ）
 
-The `pin-project` crate generates provably correct projections at compile time,
-eliminating the need for manual `unsafe`:
+`pin-project` クレートは、コンパイル時に正しさが証明された射影を生成し、手動での `unsafe` の必要性を排除します：
 
 ```rust
 use pin_project::pin_project;
@@ -361,20 +341,20 @@ use std::pin::Pin;
 use std::future::Future;
 use std::task::{Context, Poll};
 
-#[pin_project]                   // <-- Generates projection methods
+#[pin_project]                   // <-- 射影メソッドを生成
 struct TimedFuture<F: Future> {
-    #[pin]                       // <-- Structurally pinned (it's a Future)
+    #[pin]                       // <-- 構造的にピン留め（Future であるため）
     inner: F,
-    started_at: std::time::Instant, // NOT pinned — plain data
+    started_at: std::time::Instant, // ピン留めされない — 単なるデータ
 }
 
 impl<F: Future> Future for TimedFuture<F> {
     type Output = (F::Output, std::time::Duration);
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let this = self.project();  // Safe! Generated by pin_project
-        //   this.inner   : Pin<&mut F>              — pinned field
-        //   this.started_at : &mut std::time::Instant — unpinned field
+        let this = self.project();  // 安全！pin_project によって生成される
+        //   this.inner   : Pin<&mut F>              — ピン留めされたフィールド
+        //   this.started_at : &mut std::time::Instant — ピン留めされていないフィールド
 
         match this.inner.poll(cx) {
             Poll::Ready(output) => {
@@ -387,20 +367,19 @@ impl<F: Future> Future for TimedFuture<F> {
 }
 ```
 
-#### `pin-project` vs Manual Projection
+#### `pin-project` vs 手動射影
 
-| Aspect | Manual (`unsafe`) | `pin-project` |
+| 側面 | 手動 (`unsafe`) | `pin-project` |
 |--------|-------------------|---------------|
-| Safety | You prove invariants | Compiler-verified |
-| Boilerplate | Low (but error-prone) | Zero — derive macro |
-| `Drop` interaction | Must not move pinned fields | Enforced: `#[pinned_drop]` |
-| Compile-time cost | None | Proc-macro expansion |
-| Use case | Primitives, `no_std` | Application / library code |
+| 安全性 | 不変条件を自身で証明する | コンパイラが検証 |
+| ボイラープレート | 少ない（ただしエラーが起きやすい） | ゼロ — derive マクロ |
+| `Drop` との相互作用 | ピン留めされたフィールドを移動してはならない | `#[pinned_drop]` で強制 |
+| コンパイル時間のコスト | なし | 手続き型マクロの展開 |
+| ユースケース | プリミティブ、`no_std` | アプリケーション / ライブラリコード |
 
-#### `#[pinned_drop]` — Drop for Pinned Types
+#### `#[pinned_drop]` — ピン留めされた型に対する Drop
 
-When a type has `#[pin]` fields, `pin-project` requires `#[pinned_drop]`
-instead of a regular `Drop` impl to prevent accidentally moving pinned fields:
+型に `#[pin]` フィールドがある場合、`pin-project` はピン留めされたフィールドを誤って移動することを防ぐため、通常の `Drop` 実装の代わりに `#[pinned_drop]` を要求します：
 
 ```rust
 use pin_project::{pin_project, pinned_drop};
@@ -410,34 +389,32 @@ use std::pin::Pin;
 struct Connection<F> {
     #[pin]
     future: F,
-    buffer: Vec<u8>,  // Not pinned — can be moved in drop
+    buffer: Vec<u8>,  // ピン留めされない — drop 内で移動可能
 }
 
 #[pinned_drop]
 impl<F> PinnedDrop for Connection<F> {
     fn drop(self: Pin<&mut Self>) {
         let this = self.project();
-        // `this.future` is Pin<&mut F> — can't be moved, only dropped in place
-        // `this.buffer` is &mut Vec<u8> — can be drained, cleared, etc.
+        // `this.future` は Pin<&mut F> — 移動できず、その場でのみドロップ可能
+        // `this.buffer` は &mut Vec<u8> — drain や clear などが可能
         this.buffer.clear();
         println!("Connection dropped, buffer cleared");
     }
 }
 ```
 
-#### When Pin Projections Matter in Practice
+#### 実務において Pin 射影が重要となる場面
 
-> **Note**: The diagram below uses Mermaid syntax. It renders on GitHub and in
-> tools that support Mermaid (mdBook with `mermaid` plugin, VS Code with
-> Mermaid extension). In plain Markdown viewers, you'll see the raw source.
+> **注意**: 下記のダイアグラムには Mermaid 構文を使用しています。GitHub および Mermaid をサポートするツール（`mermaid` プラグイン付きの mdBook や Mermaid 拡張機能付きの VS Code）でレンダリングされます。プレーンな Markdown ビューアでは生のソースが表示されます。
 
 ```mermaid
 graph TD
-    A["Do you implement Future manually?"] -->|Yes| B["Does the future hold references<br/>across .await points?"]
-    A -->|No| C["async/await handles Pin for you<br/>✅ No projections needed"]
-    B -->|Yes| D["Use #[pin_project] on your<br/>future struct"]
-    B -->|No| E["Your future is Unpin<br/>✅ No projections needed"]
-    D --> F["Mark futures/streams as #[pin]<br/>Leave data fields unpinned"]
+    A["Future を手動で実装していますか？"] -->|はい| B[".await ポイントをまたいで<br/>参照を保持していますか？"]
+    A -->|いいえ| C["async/await が自動的に Pin を処理します<br/>✅ 射影は不要"]
+    B -->|はい| D["future 構造体に<br/>#[pin_project] を使用する"]
+    B -->|いいえ| E["その future は Unpin です<br/>✅ 射影は不要"]
+    D --> F["futures/streams を #[pin] としてマークする<br/>データフィールドはピン留めしない"]
     
     style C fill:#91e5a3,color:#000
     style E fill:#91e5a3,color:#000
@@ -445,16 +422,13 @@ graph TD
     style F fill:#ffa07a,color:#000
 ```
 
-> **Rule of thumb**: If you're wrapping another `Future` or `Stream`, use
-> `pin-project`. If you're writing application code with `async/await`, you'll
-> never need pin projections directly. See the companion
-> *Async Rust Training* for async combinator patterns that use pin projections.
+> **経験則**: 別の `Future` や `Stream` をラップする場合は `pin-project` を使用してください。`async/await` を用いてアプリケーションコードを書いている場合、直接 Pin 射影を扱う必要はまずありません。Pin 射影を使用する非同期コンビネータのパターンについては、姉妹編の *Async Rust Training* を参照してください。
 
-### Drop Ordering and ManuallyDrop
+### ドロップ順序と ManuallyDrop
 
-Rust's drop order is deterministic but has rules worth knowing:
+Rust のドロップ順序は決定論的ですが、知っておく価値のあるルールがあります：
 
-#### Drop Order Rules
+#### ドロップ順序のルール
 
 ```rust
 struct Label(&'static str);
@@ -464,51 +438,46 @@ impl Drop for Label {
 }
 
 fn main() {
-    let a = Label("first");   // Declared first
-    let b = Label("second");  // Declared second
-    let c = Label("third");   // Declared third
+    let a = Label("first");   // 最初に宣言
+    let b = Label("second");  // 2番目に宣言
+    let c = Label("third");   // 3番目に宣言
 }
-// Output:
-//   Dropping third    ← locals drop in REVERSE declaration order
+// 出力:
+//   Dropping third    ← ローカル変数は宣言の逆順でドロップされる
 //   Dropping second
 //   Dropping first
 ```
 
-**The three rules**:
+**3つのルール**:
 
-| What | Drop Order | Rationale |
+| 対象 | ドロップ順序 | 理由 |
 |------|-----------|----------|
-| **Local variables** | Reverse declaration order | Later variables might reference earlier ones |
-| **Struct fields** | Declaration order (top to bottom) | Matches construction order (stable since Rust 1.0, guaranteed by [RFC 1857](https://rust-lang.github.io/rfcs/1857-stabilize-drop-order.html)) |
-| **Tuple elements** | Declaration order (left to right) | `(a, b, c)` → drop `a`, then `b`, then `c` |
+| **ローカル変数** | 宣言の逆順 | 後で宣言された変数が、先に宣言された変数を参照している可能性があるため |
+| **構造体のフィールド** | 宣言順（上から下） | 構築順序と一致（Rust 1.0 から安定、[RFC 1857](https://rust-lang.github.io/rfcs/1857-stabilize-drop-order.html) で保証） |
+| **タプルの要素** | 宣言順（左から右） | `(a, b, c)` → `a`、次に `b`、最後に `c` がドロップ |
 
 ```rust
 struct Server {
-    listener: Label,  // Dropped 1st
-    handler: Label,   // Dropped 2nd
-    logger: Label,    // Dropped 3rd
+    listener: Label,  // 1番目にドロップ
+    handler: Label,   // 2番目にドロップ
+    logger: Label,    // 3番目にドロップ
 }
-// Fields drop top-to-bottom (declaration order).
-// This matters when fields reference each other or hold resources.
+// フィールドは上から下（宣言順）にドロップされる。
+// これはフィールド同士が参照し合っている場合やリソースを保持している場合に重要。
 ```
 
-> **Practical impact**: If your struct has a `JoinHandle` and a `Sender`,
-> field order determines which drops first. If the thread reads from the
-> channel, drop the `Sender` first (close the channel) so the thread exits,
-> then join the handle. Put `Sender` above `JoinHandle` in the struct.
+> **実践的な影響**: 構造体に `JoinHandle` と `Sender` が含まれている場合、フィールドの順序によってどちらが先にドロップされるかが決まります。スレッドがチャンネルから読み取っている場合、スレッドが終了するように先に `Sender` をドロップ（チャンネルを閉じる）し、その後にハンドルを join する必要があります。構造体内では `JoinHandle` よりも上に `Sender` を配置してください。
 
-#### `ManuallyDrop<T>` — Suppressing Automatic Drop
+#### `ManuallyDrop<T>` — 自動ドロップの抑制
 
-`ManuallyDrop<T>` wraps a value and prevents its destructor from running
-automatically. You take responsibility for dropping it (or intentionally
-leaking it):
+`ManuallyDrop<T>` は値をラップし、デストラクタが自動的に実行されるのを防ぎます。ドロップする（または意図的にリークさせる）責任をプログラマ自身が負うことになります：
 
 ```rust
 use std::mem::ManuallyDrop;
 
-// Use case 1: Prevent double-free in unsafe code
+// ユースケース 1: unsafe コードでの二重解放（double-free）の防止
 struct TwoPhaseBuffer {
-    // We need to drop the Vec ourselves to control timing
+    // タイミングを制御するために自身で Vec をドロップする必要がある
     data: ManuallyDrop<Vec<u8>>,
     committed: bool,
 }
@@ -527,93 +496,91 @@ impl TwoPhaseBuffer {
 
     fn commit(&mut self) {
         self.committed = true;
-        println!("Committed {} bytes", self.data.len());
+        println!("{} バイトをコミットしました", self.data.len());
     }
 }
 
 impl Drop for TwoPhaseBuffer {
     fn drop(&mut self) {
         if !self.committed {
-            println!("Rolling back — dropping uncommitted data");
+            println!("ロールバック中 — 未コミットのデータを破棄します");
         }
-        // SAFETY: data is always valid here; we only drop it once.
+        // SAFETY: data はここでは常に有効であり、1回しかドロップしない。
         unsafe { ManuallyDrop::drop(&mut self.data); }
     }
 }
 ```
 
 ```rust
-// Use case 2: Intentional leak (e.g., global singletons)
+// ユースケース 2: 意図的なリーク（例: グローバルシングルトン）
 fn leaked_string() -> &'static str {
-    // Box::leak() is the idiomatic way to create a &'static reference:
+    // Box::leak() は &'static 参照を作成するための慣用的な方法:
     let s = String::from("lives forever");
     Box::leak(s.into_boxed_str())
-    // ⚠️ This is a controlled memory leak. The String's heap allocation
-    // is never freed. Only use for long-lived singletons.
+    // ⚠️ これは制御されたメモリリークです。String のヒープ割り当ては
+    // 決して解放されません。生存期間の長いシングルトンにのみ使用してください。
 }
 
-// ManuallyDrop alternative (requires unsafe):
-// ⚠️ Prefer Box::leak() above — this is shown only to illustrate
-// ManuallyDrop semantics (suppressing Drop while the heap data survives).
+// ManuallyDrop による代替手段（unsafe が必要）:
+// ⚠️ 上記の Box::leak() を優先してください — これは ManuallyDrop の
+// セマンティクス（ヒープデータを維持しながら Drop を抑制する）を説明するためにのみ示しています。
 fn leaked_string_manual() -> &'static str {
     use std::mem::ManuallyDrop;
     let md = ManuallyDrop::new(String::from("lives forever"));
-    // SAFETY: ManuallyDrop prevents deallocation; the heap data lives
-    // forever, so a 'static reference is valid.
+    // SAFETY: ManuallyDrop はメモリ解放を防ぐ。ヒープデータは
+    // 永続するため、'static 参照は有効。
     unsafe { &*(md.as_str() as *const str) }
 }
 ```
 
 ```rust
-// Use case 3: Union fields (only one variant is valid at a time)
+// ユースケース 3: 共用体（Union）のフィールド（一度に1つのバリアントのみ有効）
 use std::mem::ManuallyDrop;
 
 union IntOrString {
     i: u64,
     s: ManuallyDrop<String>,
-    // String has a Drop impl, so it MUST be wrapped in ManuallyDrop
-    // inside a union — the compiler can't know which field is active.
+    // String は Drop 実装を持つため、共用体内では ManuallyDrop で
+    // ラップしなければならない — コンパイラはどのフィールドがアクティブかを判断できないため。
 }
 
-// No automatic Drop — the code that constructs IntOrString must also
-// handle cleanup. If the String variant is active, call:
+// 自動的な Drop は行われない — IntOrString を構築したコードがクリーンアップも
+// 処理する必要がある。String バリアントがアクティブな場合は次を呼び出す:
 //   unsafe { ManuallyDrop::drop(&mut value.s); }
-// without a Drop impl, the union is simply leaked (no UB, just a leak).
+// Drop 実装がない場合、共用体は単にリークする（未定義動作ではなく、単なるリーク）。
 ```
 
 **ManuallyDrop vs `mem::forget`**:
 
 | | `ManuallyDrop<T>` | `mem::forget(value)` |
 |---|---|---|
-| When | Wrap at construction | Consume later |
-| Access inner | `&*md` / `&mut *md` | Value is gone |
-| Drop later | `ManuallyDrop::drop(&mut md)` | Not possible |
-| Use case | Fine-grained lifecycle control | Fire-and-forget leak |
+| タイミング | 構築時にラップ | 後で消費 |
+| 内部へのアクセス | `&*md` / `&mut *md` | 値は失われる |
+| 後でドロップ | `ManuallyDrop::drop(&mut md)` | 不可能 |
+| ユースケース | きめ細かなライフサイクル制御 | 投げっぱなし（fire-and-forget）のリーク |
 
-> **Rule**: Use `ManuallyDrop` in unsafe abstractions where you need to control
-> *exactly* when a destructor runs. In safe application code, you almost never
-> need it — Rust's automatic drop ordering handles things correctly.
+> **ルール**: デストラクタが実行されるタイミングを*厳密に*制御する必要がある unsafe な抽象化において `ManuallyDrop` を使用してください。安全なアプリケーションコードでは、ほとんど必要ありません — Rust の自動ドロップ順序が正しく処理してくれます。
 
-> **Key Takeaways — Smart Pointers**
-> - `Box` for single ownership on heap; `Rc`/`Arc` for shared ownership (single-/multi-threaded)
-> - `Cell`/`RefCell` provide interior mutability; `RefCell` panics on violations at runtime
-> - `Cow` avoids allocation on the common path; `Pin` prevents moves for self-referential types
-> - Drop order: fields drop in declaration order (RFC 1857); locals drop in reverse declaration order
+> **重要なポイント — スマートポインタ**
+> - ヒープ上の単一所有権には `Box`、共有所有権（シングル/マルチスレッド）には `Rc`/`Arc`
+> - `Cell`/`RefCell` は内部可変性を提供し、`RefCell` は借用ルール違反時に実行時パニックを起こす
+> - `Cow` は一般的なパスでのアロケーションを回避し、`Pin` は自己参照型のムーブを防止する
+> - ドロップ順序: フィールドは宣言順（RFC 1857）、ローカル変数は宣言の逆順でドロップされる
 
-> **See also:** [Ch 6 — Concurrency](ch06-concurrency-vs-parallelism-vs-threads.md) for Arc + Mutex patterns. [Ch 4 — PhantomData](ch04-phantomdata-types-that-carry-no-data.md) for PhantomData used with smart pointers.
+> **関連項目:** Arc + Mutex パターンについては [第6章 — 並行性](ch06-concurrency-vs-parallelism-vs-threads.md) を参照してください。スマートポインタとともに使用される PhantomData については [第4章 — PhantomData](ch04-phantomdata-types-that-carry-no-data.md) を参照してください。
 
 ```mermaid
 graph TD
-    Box["Box&lt;T&gt;<br>Single owner, heap"] --> Heap["Heap allocation"]
-    Rc["Rc&lt;T&gt;<br>Shared, single-thread"] --> Heap
-    Arc["Arc&lt;T&gt;<br>Shared, multi-thread"] --> Heap
+    Box["Box&lt;T&gt;<br>単一所有者、ヒープ"] --> Heap["ヒープ割り当て"]
+    Rc["Rc&lt;T&gt;<br>共有、シングルスレッド"] --> Heap
+    Arc["Arc&lt;T&gt;<br>共有、マルチスレッド"] --> Heap
 
-    Rc --> Weak1["Weak&lt;T&gt;<br>Non-owning"]
-    Arc --> Weak2["Weak&lt;T&gt;<br>Non-owning"]
+    Rc --> Weak1["Weak&lt;T&gt;<br>所有権なし"]
+    Arc --> Weak2["Weak&lt;T&gt;<br>所有権なし"]
 
-    Cell["Cell&lt;T&gt;<br>Copy interior mut"] --> Stack["Stack / interior"]
-    RefCell["RefCell&lt;T&gt;<br>Runtime borrow check"] --> Stack
-    Cow["Cow&lt;T&gt;<br>Clone on write"] --> Stack
+    Cell["Cell&lt;T&gt;<br>Copy 型の内部可変性"] --> Stack["スタック / 内部"]
+    RefCell["RefCell&lt;T&gt;<br>実行時借用チェック"] --> Stack
+    Cow["Cow&lt;T&gt;<br>書き込み時にクローン"] --> Stack
 
     style Box fill:#d4efdf,stroke:#27ae60,color:#000
     style Rc fill:#e8f4f8,stroke:#2980b9,color:#000
@@ -629,12 +596,12 @@ graph TD
 
 ---
 
-### Exercise: Reference-Counted Graph ★★ (~30 min)
+### 演習: 参照カウントを用いたグラフ ★★（約30分）
 
-Build a directed graph using `Rc<RefCell<Node>>` where each node has a name and a list of children. Create a cycle (A → B → C → A) using `Weak` to break the back-edge. Verify no memory leak with `Rc::strong_count`.
+各ノードが名前と子ノードのリストを持つ有向グラフを `Rc<RefCell<Node>>` を使用して構築してください。循環参照（A → B → C → A）を作成し、逆方向のエッジを解消するために `Weak` を使用してください。`Rc::strong_count` を使用してメモリリークが発生していないことを検証してください。
 
 <details>
-<summary>🔑 Solution</summary>
+<summary>🔑 解答例</summary>
 
 ```rust
 use std::cell::RefCell;
@@ -667,27 +634,26 @@ fn main() {
     let b = Node::new("B");
     let c = Node::new("C");
 
-    // A → B → C, with C back-referencing A via Weak
+    // A → B → C、かつ C は Weak 経由で A を逆参照
     a.borrow_mut().children.push(Rc::clone(&b));
     b.borrow_mut().children.push(Rc::clone(&c));
-    c.borrow_mut().back_ref = Some(Rc::downgrade(&a)); // Weak ref!
+    c.borrow_mut().back_ref = Some(Rc::downgrade(&a)); // 弱参照！
 
-    println!("A strong count: {}", Rc::strong_count(&a)); // 1 (only `a` binding)
-    println!("B strong count: {}", Rc::strong_count(&b)); // 2 (b + A's child)
-    println!("C strong count: {}", Rc::strong_count(&c)); // 2 (c + B's child)
+    println!("A の強参照カウント: {}", Rc::strong_count(&a)); // 1 (`a` バインディングのみ)
+    println!("B の強参照カウント: {}", Rc::strong_count(&b)); // 2 (b + A の子)
+    println!("C の強参照カウント: {}", Rc::strong_count(&c)); // 2 (c + B の子)
 
-    // Upgrade the weak ref to prove it works:
+    // 弱参照をアップグレードして機能していることを確認:
     let c_ref = c.borrow();
     if let Some(back) = &c_ref.back_ref {
         if let Some(a_ref) = back.upgrade() {
-            println!("C points back to: {}", a_ref.borrow().name);
+            println!("C は以下を逆参照しています: {}", a_ref.borrow().name);
         }
     }
-    // When a, b, c go out of scope, all Nodes drop (no cycle leak!)
+    // a, b, c がスコープを抜けると、すべての Node がドロップされる（循環リークなし！）
 }
 ```
 
 </details>
 
 ***
-

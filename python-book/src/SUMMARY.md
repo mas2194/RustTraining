@@ -1,40 +1,40 @@
-# Summary
+# 目次
 
-[Introduction](ch00-introduction.md)
-
----
-
-# Part I — Foundations
-
-- [1. Introduction and Motivation](ch01-introduction-and-motivation.md)
-- [2. Getting Started](ch02-getting-started.md)
-- [3. Built-in Types and Variables](ch03-built-in-types-and-variables.md)
-- [4. Control Flow](ch04-control-flow.md)
-- [5. Data Structures and Collections](ch05-data-structures-and-collections.md)
-- [6. Enums and Pattern Matching](ch06-enums-and-pattern-matching.md)
+[はじめに](ch00-introduction.md)
 
 ---
 
-# Part II — Core Concepts
+# 第I部 — 基礎
 
-- [7. Ownership and Borrowing](ch07-ownership-and-borrowing.md)
-- [8. Crates and Modules](ch08-crates-and-modules.md)
-- [9. Error Handling](ch09-error-handling.md)
-- [10. Traits and Generics](ch10-traits-and-generics.md)
-- [11. From and Into Traits](ch11-from-and-into-traits.md)
-- [12. Closures and Iterators](ch12-closures-and-iterators.md)
-
----
-
-# Part III — Advanced Topics & Migration
-
-- [13. Concurrency](ch13-concurrency.md)
-- [14. Unsafe Rust and FFI](ch14-unsafe-rust-and-ffi.md)
-- [15. Migration Patterns](ch15-migration-patterns.md)
-- [16. Best Practices](ch16-best-practices.md)
+- [1. 導入と動機](ch01-introduction-and-motivation.md)
+- [2. はじめの一歩](ch02-getting-started.md)
+- [3. 組み込み型と変数](ch03-built-in-types-and-variables.md)
+- [4. 制御フロー](ch04-control-flow.md)
+- [5. データ構造とコレクション](ch05-data-structures-and-collections.md)
+- [6. 列挙型とパターンマッチング](ch06-enums-and-pattern-matching.md)
 
 ---
 
-# Part IV — Capstone
+# 第II部 — コアコンセプト
 
-- [17. Capstone Project: CLI Task Manager](ch17-capstone-project.md)
+- [7. 所有権と借用](ch07-ownership-and-borrowing.md)
+- [8. クレートとモジュール](ch08-crates-and-modules.md)
+- [9. エラー処理](ch09-error-handling.md)
+- [10. トレイトとジェネリクス](ch10-traits-and-generics.md)
+- [11. From トレイトと Into トレイト](ch11-from-and-into-traits.md)
+- [12. クロージャとイテレータ](ch12-closures-and-iterators.md)
+
+---
+
+# 第III部 — 発展的トピックと移行
+
+- [13. 並行性](ch13-concurrency.md)
+- [14. Unsafe Rust と FFI](ch14-unsafe-rust-and-ffi.md)
+- [15. 移行パターン](ch15-migration-patterns.md)
+- [16. ベストプラクティス](ch16-best-practices.md)
+
+---
+
+# 第IV部 — 総合演習
+
+- [17. 総合演習プロジェクト: CLI タスクマネージャー](ch17-capstone-project.md)

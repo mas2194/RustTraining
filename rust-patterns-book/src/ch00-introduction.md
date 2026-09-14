@@ -1,144 +1,143 @@
-# Rust Patterns & Engineering How-Tos
+# Rustのパターンとエンジニアリング実践ガイド
 
-## Speaker Intro
+## 講師（著者）紹介
 
-- Principal Firmware Architect in Microsoft SCHIE (Silicon and Cloud Hardware Infrastructure Engineering) team
-- Industry veteran with expertise in security, systems programming (firmware, operating systems, hypervisors), CPU and platform architecture, and C++ systems
-- Started programming in Rust in 2017 (@AWS EC2), and have been in love with the language ever since
+- Microsoft SCHIE（Silicon and Cloud Hardware Infrastructure Engineering）チーム プリンシパルファームウェアアーキテクト
+- セキュリティ、システムプログラミング（ファームウェア、オペレーティングシステム、ハイパーバイザ）、CPUおよびプラットフォームアーキテクチャ、C++システムに精通した業界のベテラン
+- 2017年よりRustでのプログラミングを開始（@AWS EC2）、以来この言語の魅力に惹かれ続けている
 
 ---
 
-A practical guide to intermediate-and-above Rust patterns that arise in real codebases. This is not a language tutorial — it assumes you can write basic Rust and want to level up. Each chapter isolates one concept, explains when and why to use it, and provides compilable examples with inline exercises.
+実務のコードベースで直面する、中級以上のRustパターンを解説する実践ガイドです。本書は言語入門書ではありません。基本的なRustコードが書ける開発者が、さらに一段上のレベルへとステップアップすることを目的としています。各章で1つのコンセプトを掘り下げ、それを「いつ」「なぜ」使うべきかを解説し、インライン演習付きのコンパイル可能なサンプルコードを提供します。
 
-## Who This Is For
+## 対象読者
 
-- Developers who have finished *The Rust Programming Language* but struggle with "how do I actually design this?"
-- C++/C# engineers translating production systems into Rust
-- Anyone who has hit a wall with generics, trait bounds, or lifetime errors and wants a systematic toolkit
+- 『The Rust Programming Language（プログラミング言語Rust）』を読了したものの、「実際にどのように設計すればよいのか？」で悩んでいる開発者
+- 本番システムをRustへ移行・移植しようとしているC++/C#エンジニア
+- ジェネリクス、トレイト境界、あるいはライフタイムエラーの壁にぶつかり、体系的な問題解決アプローチを求めている方
 
-## Prerequisites
+## 前提知識
 
-Before starting, you should be comfortable with:
-- Ownership, borrowing, and lifetimes (basic level)
-- Enums, pattern matching, and `Option`/`Result`
-- Structs, methods, and basic traits (`Display`, `Debug`, `Clone`)
-- Cargo basics: `cargo build`, `cargo test`, `cargo run`
+読み進めるにあたり、以下の基礎知識を前提としています：
+- 所有権、借用、ライフタイム（基本レベル）
+- 列挙型（enum）、パターンマッチング、`Option`/`Result`
+- 構造体、メソッド、基本的なトレイト（`Display`, `Debug`, `Clone`）
+- Cargoの基本操作: `cargo build`, `cargo test`, `cargo run`
 
-## How to Use This Book
+## 本書の使い方
 
-### Difficulty Legend
+### 難易度の目安
 
-Each chapter is tagged with a difficulty level:
+各章には難易度レベルが付与されています：
 
-| Symbol | Level | Meaning |
+| 記号 | レベル | 意味 |
 |--------|-------|---------|
-| 🟢 | Fundamentals | Core concepts every Rust developer needs |
-| 🟡 | Intermediate | Patterns used in production codebases |
-| 🔴 | Advanced | Deep language mechanics — revisit as needed |
+| 🟢 | 基礎 (Fundamentals) | すべてのRust開発者に必須のコアコンセプト |
+| 🟡 | 中級 (Intermediate) | 本番コードベースで活用される実践的パターン |
+| 🔴 | 上級 (Advanced) | 言語メカニズムの深層 — 必要に応じて再確認すべき内容 |
 
-### Pacing Guide
+### 学習ペースの目安
 
-| Chapters | Topic | Suggested Time | Checkpoint |
-|----------|-------|----------------|------------|
-| **Part I: Type-Level Patterns** | | | |
-| 1. Generics 🟢 | Monomorphization, const generics, `const fn` | 1–2 hours | Can explain when `dyn Trait` beats generics |
-| 2. Traits 🟡 | Associated types, GATs, blanket impls, vtables | 3–4 hours | Can design a trait with associated types |
-| 3. Newtype & Type-State 🟡 | Zero-cost safety, compile-time FSMs | 2–3 hours | Can build a type-state builder pattern |
-| 4. PhantomData 🔴 | Lifetime branding, variance, drop check | 2–3 hours | Can explain why `PhantomData<fn(T)>` differs from `PhantomData<T>` |
-| **Part II: Concurrency & Runtime** | | | |
-| 5. Channels 🟢 | `mpsc`, crossbeam, `select!`, actors | 1–2 hours | Can implement a channel-based worker pool |
-| 6. Concurrency 🟡 | Threads, rayon, Mutex, RwLock, atomics | 2–3 hours | Can pick the right sync primitive for a scenario |
-| 7. Closures 🟢 | `Fn`/`FnMut`/`FnOnce`, combinators | 1–2 hours | Can write a higher-order function that accepts closures |
-| 8. Functional vs. Imperative 🟡 | Combinators, iterator adapters, functional patterns | 2–3 hours | Can explain when functional style beats imperative |
-| 9. Smart Pointers 🟡 | Box, Rc, Arc, RefCell, Cow, Pin | 2–3 hours | Can explain when to use each smart pointer |
-| **Part III: Systems & Production** | | | |
-| 10. Error Handling 🟢 | thiserror, anyhow, `?` operator | 1–2 hours | Can design an error type hierarchy |
-| 11. Serialization 🟡 | serde, zero-copy, binary data | 2–3 hours | Can write a custom serde deserializer |
-| 12. Unsafe 🔴 | Superpowers, FFI, UB pitfalls, allocators | 2–3 hours | Can wrap unsafe code in a sound safe API |
-| 13. Macros 🟡 | `macro_rules!`, proc macros, `syn`/`quote` | 2–3 hours | Can write a declarative macro with `tt` munching |
-| 14. Testing 🟢 | Unit/integration/doc tests, proptest, criterion | 1–2 hours | Can set up property-based tests |
-| 15. API Design 🟡 | Module layout, ergonomic APIs, feature flags | 2–3 hours | Can apply the "parse, don't validate" pattern |
-| 16. Async 🔴 | Futures, Tokio, common pitfalls | 1–2 hours | Can identify async anti-patterns |
-| **Appendices** | | | |
-| Reference Card | Quick-look trait bounds, lifetimes, patterns | As needed | — |
-| Capstone Project | Type-safe task scheduler | 4–6 hours | Submit a working implementation |
+| 章 | トピック | 学習時間の目安 | チェックポイント |
+|----|----------|----------------|------------------|
+| **第I部: 型レベルのパターン** | | | |
+| 1. ジェネリクス 🟢 | 単相化、constジェネリクス、`const fn` | 1〜2時間 | ジェネリクスより`dyn Trait`が優れているケースを説明できる |
+| 2. トレイト 🟡 | 関連型、GAT、ブランケット実装、vtable | 3〜4時間 | 関連型を持つトレイトを適切に設計できる |
+| 3. ニュータイプと型状態 🟡 | ゼロコストの安全性、コンパイル時有限状態機械 | 2〜3時間 | 型状態パターンを用いたビルダーを実装できる |
+| 4. PhantomData 🔴 | ライフタイムのブランディング、変性、ドロップチェック | 2〜3時間 | `PhantomData<fn(T)>`と`PhantomData<T>`の違いを説明できる |
+| **第II部: 並行性とランタイム** | | | |
+| 5. チャネル 🟢 | `mpsc`、crossbeam、`select!`、アクター | 1〜2時間 | チャネルベースのワーカープールを実装できる |
+| 6. 並行性 🟡 | スレッド、rayon、Mutex、RwLock、アトミック | 2〜3時間 | シナリオに応じた適切な同期プリミティブを選択できる |
+| 7. クロージャ 🟢 | `Fn`/`FnMut`/`FnOnce`、コンビネータ | 1〜2時間 | クロージャを受け取る高階関数を作成できる |
+| 8. 関数型 vs 命令型 🟡 | コンビネータ、イテレータアダプタ、関数型パターン | 2〜3時間 | 関数型スタイルが命令型より優れている場面を説明できる |
+| 9. スマートポインタ 🟡 | Box、Rc、Arc、RefCell、Cow、Pin | 2〜3時間 | 各スマートポインタの使い分けを説明できる |
+| **第III部: システムとプロダクション** | | | |
+| 10. エラーハンドリング 🟢 | thiserror、anyhow、`?` 演算子 | 1〜2時間 | エラー型の階層構造を設計できる |
+| 11. シリアライゼーション 🟡 | serde、ゼロコピー、バイナリデータ | 2〜3時間 | カスタムのserdeデシリアライザを実装できる |
+| 12. Unsafe 🔴 | 5つのスーパーパワー、健全な抽象化、FFI、UBの落とし穴 | 2〜3時間 | unsafeなコードを健全で安全なAPIでラップできる |
+| 13. マクロ 🟡 | `macro_rules!`、手続き型マクロ、`syn`/`quote` | 2〜3時間 | `tt` munchingを用いた宣言的マクロを作成できる |
+| 14. テスト 🟢 | ユニット/結合/ドキュメントテスト、proptest、criterion | 1〜2時間 | プロパティベーステストを構築できる |
+| 15. API設計 🟡 | モジュール構成、人間工学的なAPI、フィーチャーフラグ | 2〜3時間 | 「検証ではなくパースせよ（parse, don't validate）」を適用できる |
+| 16. 非同期 🔴 | Future、Tokio、よくある落とし穴 | 1〜2時間 | 非同期におけるアンチパターンを特定できる |
+| **付録** | | | |
+| リファレンスカード | トレイト境界、ライフタイム、パターンのクイックリファレンス | 必要に応じて | — |
+| 総合課題 | 型安全なタスクスケジューラ | 4〜6時間 | 動作する完全な実装を完成させる |
 
-**Total estimated time**: 30–45 hours for thorough study with exercises.
+**総学習時間の目安**: 演習を含めてじっくり学ぶ場合、30〜45時間。
 
-### Working Through Exercises
+### 演習問題の進め方
 
-Every chapter ends with a hands-on exercise. For maximum learning:
+各章の最後には実践的な演習問題が用意されています。学習効果を最大化するために：
 
-1. **Try it yourself first** — spend at least 15 minutes before opening the solution
-2. **Type the code** — don't copy-paste; typing builds muscle memory
-3. **Modify the solution** — add a feature, change a constraint, break something on purpose
-4. **Check cross-references** — most exercises combine patterns from multiple chapters
+1. **まずは自力で挑戦する** — 解答を見る前に、最低15分は自分で考えてみてください。
+2. **コードを実際に打ち込む** — コピー＆ペーストではなく、タイピングすることでマッスルメモリー（身体感覚）を養います。
+3. **解答コードを改変してみる** — 機能を追加したり、制約を変更したり、あえて壊してみたりしてください。
+4. **相互参照を確認する** — 多くの演習は、複数の章で学んだパターンを組み合わせて構成されています。
 
-The capstone project (Appendix) ties together patterns from across the book into a single, production-quality system.
+総合課題（付録）では、本書全体で扱ったパターンを統合し、単一のプロダクション品質のシステムを構築します。
 
-## Table of Contents
+## 目次
 
-### Part I: Type-Level Patterns
+### 第I部: 型レベルのパターン
 
-**[1. Generics — The Full Picture](ch01-generics-the-full-picture.md)** 🟢
-Monomorphization, code bloat trade-offs, generics vs enums vs trait objects, const generics, `const fn`.
+**[1. ジェネリクスの全貌](ch01-generics-the-full-picture.md)** 🟢  
+単相化、コード膨張（code bloat）のトレードオフ、ジェネリクス vs 列挙型 vs トレイトオブジェクト、constジェネリクス、`const fn`。
 
-**[2. Traits In Depth](ch02-traits-in-depth.md)** 🟡
-Associated types, GATs, blanket impls, marker traits, vtables, HRTBs, extension traits, enum dispatch.
+**[2. トレイトを極める](ch02-traits-in-depth.md)** 🟡  
+関連型、GAT、ブランケット実装、マーカートレイト、vtable、HRTB、拡張トレイト、enum dispatch。
 
-**[3. The Newtype and Type-State Patterns](ch03-the-newtype-and-type-state-patterns.md)** 🟡
-Zero-cost type safety, compile-time state machines, builder patterns, config traits.
+**[3. ニュータイプと型状態パターン](ch03-the-newtype-and-type-state-patterns.md)** 🟡  
+ゼロコストの型安全性、コンパイル時状態機械、ビルダーパターン、設定トレイト。
 
-**[4. PhantomData — Types That Carry No Data](ch04-phantomdata-types-that-carry-no-data.md)** 🔴
-Lifetime branding, unit-of-measure pattern, drop check, variance.
+**[4. PhantomData — データを保持しない型](ch04-phantomdata-types-that-carry-no-data.md)** 🔴  
+ライフタイムのブランディング、単位系の型安全パターン、ドロップチェック、変性（variance）。
 
-### Part II: Concurrency & Runtime
+### 第II部: 並行性とランタイム
 
-**[5. Channels and Message Passing](ch05-channels-and-message-passing.md)** 🟢
-`std::sync::mpsc`, crossbeam, `select!`, backpressure, actor pattern.
+**[5. チャネルとメッセージパッシング](ch05-channels-and-message-passing.md)** 🟢  
+`std::sync::mpsc`、crossbeam、`select!`、バックプレッシャー、アクターパターン。
 
-**[6. Concurrency vs Parallelism vs Threads](ch06-concurrency-vs-parallelism-vs-threads.md)** 🟡
-OS threads, scoped threads, rayon, Mutex/RwLock/Atomics, Condvar, OnceLock, lock-free patterns.
+**[6. 並行性 vs 並列性 vs スレッド](ch06-concurrency-vs-parallelism-vs-threads.md)** 🟡  
+OSスレッド、スコープ付きスレッド、rayon、Mutex/RwLock/アトミック、Condvar、OnceLock、ロックフリーパターン。
 
-**[7. Closures and Higher-Order Functions](ch07-closures-and-higher-order-functions.md)** 🟢
-`Fn`/`FnMut`/`FnOnce`, closures as parameters/return values, combinators, higher-order APIs.
+**[7. クロージャと高階関数](ch07-closures-and-higher-order-functions.md)** 🟢  
+`Fn`/`FnMut`/`FnOnce`、引数や戻り値としてのクロージャ、コンビネータ、高階API。
 
-**[8. Functional vs. Imperative: When Elegance Wins (and When It Doesn't)](ch08-functional-vs-imperative-when-elegance-wins.md)** 🟡
-Combinators, iterator adapters, functional patterns.
+**[8. 関数型 vs 命令型: エレガンスが勝る時（そしてそうでない時）](ch08-functional-vs-imperative-when-elegance-wins.md)** 🟡  
+コンビネータ、イテレータアダプタ、関数型パターン。
 
-**[9. Smart Pointers and Interior Mutability](ch09-smart-pointers-and-interior-mutability.md)** 🟡
-Box, Rc, Arc, Weak, Cell/RefCell, Cow, Pin, ManuallyDrop.
+**[9. スマートポインタと内部可変性](ch09-smart-pointers-and-interior-mutability.md)** 🟡  
+Box、Rc、Arc、Weak、Cell/RefCell、Cow、Pin、ManuallyDrop。
 
-### Part III: Systems & Production
+### 第III部: システムとプロダクション
 
-**[10. Error Handling Patterns](ch10-error-handling-patterns.md)** 🟢
-thiserror vs anyhow, `#[from]`, `.context()`, `?` operator, panics.
+**[10. エラーハンドリングのパターン](ch10-error-handling-patterns.md)** 🟢  
+thiserror vs anyhow、`#[from]`、`.context()`、`?` 演算子、パニック。
 
-**[11. Serialization, Zero-Copy, and Binary Data](ch11-serialization-zero-copy-and-binary-data.md)** 🟡
-serde fundamentals, enum representations, zero-copy deserialization, `repr(C)`, `bytes::Bytes`.
+**[11. シリアライゼーション、ゼロコピー、バイナリデータ](ch11-serialization-zero-copy-and-binary-data.md)** 🟡  
+serdeの基礎、列挙型の表現形式、ゼロコピーデシリアライゼーション、`repr(C)`、`bytes::Bytes`。
 
-**[12. Unsafe Rust — Controlled Danger](ch12-unsafe-rust-controlled-danger.md)** 🔴
-Five superpowers, sound abstractions, FFI, UB pitfalls, arena/slab allocators.
+**[12. Unsafe Rust — 制御された危険](ch12-unsafe-rust-controlled-danger.md)** 🔴  
+5つのスーパーパワー、健全な抽象化、FFI、UB（未定義動作）の落とし穴、アリーナ/スラブアロケータ。
 
-**[13. Macros — Code That Writes Code](ch13-macros-code-that-writes-code.md)** 🟡
-`macro_rules!`, when (not) to use macros, proc macros, derive macros, `syn`/`quote`.
+**[13. マクロ — コードを書くコード](ch13-macros-code-that-writes-code.md)** 🟡  
+`macro_rules!`、マクロを使うべき時・避けるべき時、手続き型マクロ、deriveマクロ、`syn`/`quote`。
 
-**[14. Testing and Benchmarking Patterns](ch14-testing-and-benchmarking-patterns.md)** 🟢
-Unit/integration/doc tests, proptest, criterion, mocking strategies.
+**[14. テストとベンチマークのパターン](ch14-testing-and-benchmarking-patterns.md)** 🟢  
+ユニット/結合/ドキュメントテスト、proptest、criterion、モック戦略。
 
-**[15. Crate Architecture and API Design](ch15-crate-architecture-and-api-design.md)** 🟡
-Module layout, API design checklist, ergonomic parameters, feature flags, workspaces.
+**[15. クレート設計とAPI設計](ch15-crate-architecture-and-api-design.md)** 🟡  
+モジュール構成、API設計チェックリスト、人間工学的な引数設計、フィーチャーフラグ、ワークスペース。
 
-**[16. Async/Await Essentials](ch16-asyncawait-essentials.md)** 🔴
-Futures, Tokio quick-start, common pitfalls. (For deep async coverage, see our Async Rust Training.)
+**[16. Async/Awaitの要点](ch16-asyncawait-essentials.md)** 🔴  
+Future、Tokioクイックスタート、よくある落とし穴。（※より深い非同期処理の解説は、Async Rust Training をご覧ください。）
 
-### Appendices
+### 付録
 
-**[Summary and Reference Card](ch18-summary-and-reference-card.md)**
-Pattern decision guide, trait bounds cheat sheet, lifetime elision rules, further reading.
+**[まとめとリファレンスカード](ch18-summary-and-reference-card.md)**  
+パターンの意思決定ガイド、トレイト境界チートシート、ライフタイム省略ルール、推薦図書。
 
-**[Capstone Project: Type-Safe Task Scheduler](ch19-capstone-project.md)**
-Integrate generics, traits, typestate, channels, error handling, and testing into a complete system.
+**[総合課題: 型安全なタスクスケジューラ](ch19-capstone-project.md)**  
+ジェネリクス、トレイト、型状態、チャネル、エラーハンドリング、テストを統合した完全なシステムの実装。
 
 ***
-

@@ -1,151 +1,143 @@
-# `no_std` and Feature Verification 🔴
+# `no_std` とフィーチャの検証 🔴
 
-> **What you'll learn:**
-> - Verifying feature combinations systematically with `cargo-hack`
-> - The three layers of Rust: `core` vs `alloc` vs `std` and when to use each
-> - Building `no_std` crates with custom panic handlers and allocators
-> - Testing `no_std` code on host and with QEMU
+> **学べること:**
+> - `cargo-hack` によるフィーチャの組み合わせの体系的な検証
+> - Rust の 3 つの階層: `core` vs `alloc` vs `std` とそれぞれの使い分け
+> - カスタムパニックハンドラとアロケータを備えた `no_std` クレートのビルド
+> - ホスト上および QEMU を使用した `no_std` コードのテスト
 >
-> **Cross-references:** [Windows & Conditional Compilation](ch10-windows-and-conditional-compilation.md) — the platform half of this topic · [Cross-Compilation](ch02-cross-compilation-one-source-many-target.md) — cross-compiling to ARM and embedded targets · [Miri and Sanitizers](ch05-miri-valgrind-and-sanitizers-verifying-u.md) — verifying `unsafe` code in `no_std` environments · [Build Scripts](ch01-build-scripts-buildrs-in-depth.md) — `cfg` flags emitted by `build.rs`
+> **関連リンク:** [Windows と条件付きコンパイル](ch10-windows-and-conditional-compilation.md) — 本トピックのプラットフォーム編 · [クロスコンパイル](ch02-cross-compilation-one-source-many-target.md) — ARM および組み込みターゲットへのクロスコンパイル · [Miri とサニタイザ](ch05-miri-valgrind-and-sanitizers-verifying-u.md) — `no_std` 環境における `unsafe` コードの検証 · [ビルドスクリプト](ch01-build-scripts-buildrs-in-depth.md) — `build.rs` から出力される `cfg` フラグ
 
-Rust runs everywhere from 8-bit microcontrollers to cloud servers. This chapter
-covers the foundation: stripping the standard library with `#![no_std]` and
-verifying that your feature combinations actually compile.
+Rust は 8 ビットマイクロコントローラからクラウドサーバーまで、あらゆる環境で動作します。本章ではその基盤となるトピック、すなわち `#![no_std]` を使って標準ライブラリを取り除き、フィーチャの組み合わせが正しくコンパイルできるかを検証する方法について扱います。
 
-### Verifying Feature Combinations with `cargo-hack`
+### `cargo-hack` によるフィーチャの組み合わせの検証
 
-[`cargo-hack`](https://github.com/taiki-e/cargo-hack) tests all feature
-combinations systematically — essential for crates with `#[cfg(...)]` code:
+[`cargo-hack`](https://github.com/taiki-e/cargo-hack) は、すべてのフィーチャの組み合わせを体系的にテストします — `#[cfg(...)]` コードを含むクレートには不可欠です：
 
 ```bash
-# Install
+# インストール
 cargo install cargo-hack
 
-# Check that every feature compiles individually
+# 各フィーチャが個別にコンパイルできるかチェック
 cargo hack check --each-feature --workspace
 
-# The nuclear option: test ALL feature combinations (exponential!)
-# Only practical for crates with <8 features.
+# 究極のオプション: すべてのフィーチャの組み合わせをテスト（指数関数的に増加！）
+# フィーチャ数が 8 個未満のクレートでのみ現実的
 cargo hack check --feature-powerset --workspace
 
-# Practical compromise: test each feature alone + all features + no features
+# 現実的な妥協案: 各フィーチャ単体 + 全フィーチャ有効 + フィーチャ無効のテスト
 cargo hack check --each-feature --workspace --no-dev-deps
 cargo check --workspace --all-features
 cargo check --workspace --no-default-features
 ```
 
-**Why this matters for the project:**
+**プロジェクトにおいてこれが重要な理由:**
 
-If you add platform features (`linux`, `windows`, `direct-ipmi`, `direct-accel-api`),
-`cargo-hack` catches combinations that break:
+プラットフォームフィーチャ（`linux`, `windows`, `direct-ipmi`, `direct-accel-api`）を追加する場合、`cargo-hack` は壊れた組み合わせを検出できます：
 
 ```toml
-# Example: features that gate platform code
+# 例: プラットフォームコードを制御するフィーチャ
 [features]
 default = ["linux"]
-linux = []                          # Linux-specific hardware access
-windows = ["dep:windows-sys"]       # Windows-specific APIs
-direct-ipmi = []                    # unsafe IPMI ioctl (ch05)
-direct-accel-api = []                    # unsafe accel-mgmt FFI (ch05)
+linux = []                          # Linux 固有のハードウェアアクセス
+windows = ["dep:windows-sys"]       # Windows 固有の API
+direct-ipmi = []                    # unsafe な IPMI ioctl（第5章参照）
+direct-accel-api = []               # unsafe な accel-mgmt FFI（第5章参照）
 ```
 
 ```bash
-# Verify all features compile in isolation AND together
+# すべてのフィーチャが単体および組み合わせてコンパイルできることを検証
 cargo hack check --each-feature -p diag_tool
-# Catches: "feature 'windows' doesn't compile without 'direct-ipmi'"
-# Catches: "#[cfg(feature = \"linux\")] has a typo — it's 'lnux'"
+# 検出例: "'direct-ipmi' なしでは 'windows' フィーチャがコンパイルできない"
+# 検出例: "#[cfg(feature = \"linux\")] にタイポがある — 'lnux' になっている"
 ```
 
-**CI integration:**
+**CI への統合:**
 
 ```yaml
-# Add to CI pipeline (fast — just compilation checks)
+# CI パイプラインに追加（コンパイルチェックのみなので高速）
 - name: Feature matrix check
   run: cargo hack check --each-feature --workspace --no-dev-deps
 ```
 
-> **Rule of thumb**: Run `cargo hack check --each-feature` in CI for any crate
-> with 2+ features. Run `--feature-powerset` only for core library crates with
-> <8 features — it's exponential ($2^n$ combinations).
+> **目安**: 2 つ以上のフィーチャを持つクレートでは、CI で `cargo hack check --each-feature` を実行してください。`--feature-powerset` は、フィーチャ数が 8 個未満のコアライブラリクレートでのみ実行してください（組み合わせが $2^n$ で指数関数的に増加するため）。
 
-### `no_std` — When and Why
+### `no_std` — いつ、なぜ使うのか
 
-`#![no_std]` tells the compiler: "don't link the standard library." Your
-crate can only use `core` (and optionally `alloc`). Why would you want this?
+`#![no_std]` はコンパイラに「標準ライブラリをリンクしない」よう指示します。クレートは `core`（およびオプションで `alloc`）のみを使用できます。なぜこれが必要になるのでしょうか？
 
-| Scenario | Why `no_std` |
+| シナリオ | `no_std` を使う理由 |
 |----------|-------------|
-| Embedded firmware (ARM Cortex-M, RISC-V) | No OS, no heap, no file system |
-| UEFI diagnostics tool | Pre-boot environment, no OS APIs |
-| Kernel modules | Kernel space can't use userspace `std` |
-| WebAssembly (WASM) | Minimize binary size, no OS dependencies |
-| Bootloaders | Run before any OS exists |
-| Shared library with C interface | Avoid Rust runtime in callers |
+| 組み込みファームウェア（ARM Cortex-M, RISC-V） | OS なし、ヒープなし、ファイルシステムなし |
+| UEFI 診断ツール | 起動前環境、OS の API なし |
+| カーネルモジュール | カーネル空間ではユーザ空間の `std` を使用不可 |
+| WebAssembly (WASM) | バイナリサイズの最小化、OS 依存関係の排除 |
+| ブートローダ | OS が存在する前に実行される |
+| C インターフェースを持つ共有ライブラリ | 呼び出し元で Rust ランタイムの引き込みを回避 |
 
-**For hardware diagnostics**, `no_std` becomes relevant when building:
-- UEFI-based pre-boot diagnostic tools (before the OS loads)
-- BMC firmware diagnostics (resource-constrained ARM SoCs)
-- Kernel-level PCIe diagnostics (kernel module or eBPF probe)
+**ハードウェア診断において**、`no_std` は以下のようなものを構築する際に関わってきます：
+- UEFI ベースの起動前診断ツール（OS がロードされる前）
+- BMC ファームウェア診断（リソース制約の厳しい ARM SoC）
+- カーネルレベルの PCIe 診断（カーネルモジュールまたは eBPF プローブ）
 
-### `core` vs `alloc` vs `std` — The Three Layers
+### `core` vs `alloc` vs `std` — 3 つの階層
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
 │ std                                                         │
-│  Everything in core + alloc, PLUS:                          │
-│  • File I/O (std::fs, std::io)                              │
-│  • Networking (std::net)                                    │
-│  • Threads (std::thread)                                    │
-│  • Time (std::time)                                         │
-│  • Environment (std::env)                                   │
-│  • Process (std::process)                                   │
-│  • OS-specific (std::os::unix, std::os::windows)            │
+│  core + alloc のすべてに加えて、以下を含む:                  │
+│  • ファイル I/O (std::fs, std::io)                          │
+│  • ネットワーク (std::net)                                  │
+│  • スレッド (std::thread)                                   │
+│  • 時刻 (std::time)                                         │
+│  • 環境変数・コマンドライン引数 (std::env)                  │
+│  • プロセス (std::process)                                  │
+│  • OS 固有機能 (std::os::unix, std::os::windows)            │
 ├─────────────────────────────────────────────────────────────┤
-│ alloc          (available with #![no_std] + extern crate    │
-│                 alloc, if you have a global allocator)       │
+│ alloc          (グローバルアロケータがある場合、             │
+│                 #![no_std] + extern crate alloc で利用可能)  │
 │  • String, Vec, Box, Rc, Arc                                │
 │  • BTreeMap, BTreeSet                                       │
-│  • format!() macro                                          │
-│  • Collections and smart pointers that need heap            │
+│  • format!() マクロ                                         │
+│  • ヒープを必要とするコレクションやスマートポインタ         │
 ├─────────────────────────────────────────────────────────────┤
-│ core           (always available, even in #![no_std])        │
-│  • Primitive types (u8, bool, char, etc.)                    │
+│ core           (常に利用可能、#![no_std] でも利用可能)       │
+│  • プリミティブ型 (u8, bool, char など)                      │
 │  • Option, Result                                           │
-│  • Iterator, slice, array, str (slices, not String)         │
-│  • Traits: Clone, Copy, Debug, Display, From, Into          │
-│  • Atomics (core::sync::atomic)                             │
-│  • Cell, RefCell (core::cell)  — Pin (core::pin)            │
-│  • core::fmt (formatting without allocation)                │
-│  • core::mem, core::ptr (low-level memory operations)       │
-│  • Math: core::num, basic arithmetic                        │
+│  • Iterator, スライス, 配列, str (スライスであり、String ではない) │
+│  • トレイト: Clone, Copy, Debug, Display, From, Into        │
+│  • アトミック型 (core::sync::atomic)                        │
+│  • Cell, RefCell (core::cell) — Pin (core::pin)             │
+│  • core::fmt (ヒープ割り当てなしのフォーマット)              │
+│  • core::mem, core::ptr (低レベルメモリオペレーション)      │
+│  • 数学演算: core::num, 基本的な算術演算                     │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**What you lose without `std`:**
-- No `HashMap` (requires a hasher — use `BTreeMap` from `alloc`, or `hashbrown`)
-- No `println!()` (requires stdout — use `core::fmt::Write` to a buffer)
-- No `std::error::Error` (stabilized in `core` since Rust 1.81, but many
-  ecosystems haven't migrated)
-- No file I/O, no networking, no threads (unless provided by a platform HAL)
-- No `Mutex` (use `spin::Mutex` or platform-specific locks)
+**`std` がない場合に失われるもの:**
+- `HashMap` がない（ハッシャーが必要 — `alloc` の `BTreeMap` や `hashbrown` を使用）
+- `println!()` がない（標準出力が必要 — バッファへの `core::fmt::Write` を使用）
+- `std::error::Error` がない（Rust 1.81 以降で `core` に安定化されましたが、多くのエコシステムはまだ移行していません）
+- ファイル I/O、ネットワーク、スレッドがない（プラットフォーム HAL から提供されない限り）
+- `Mutex` がない（`spin::Mutex` やプラットフォーム固有のロックを使用）
 
-### Building a `no_std` Crate
+### `no_std` クレートの構築
 
 ```rust
-// src/lib.rs — a no_std library crate
+// src/lib.rs — no_std ライブラリクレート
 #![no_std]
 
-// Optionally use heap allocation
+// オプションでヒープ割り当てを使用
 extern crate alloc;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::fmt;
 
-/// Temperature reading from a thermal sensor.
-/// This struct works in any environment — bare metal to Linux.
+/// 温度センサからの温度読み取り値。
+/// この構造体はベアメタルから Linux まで、あらゆる環境で動作します。
 #[derive(Clone, Copy, Debug)]
 pub struct Temperature {
-    /// Raw sensor value (0.0625°C per LSB for typical I2C sensors)
+    /// 生のセンサ値（一般的な I2C センサの場合、1 LSB あたり 0.0625°C）
     raw: u16,
 }
 
@@ -154,9 +146,9 @@ impl Temperature {
         Self { raw }
     }
 
-    /// Convert to degrees Celsius (fixed-point, no FPU required)
+    /// 摂氏ミリ度（1/1000°C）に変換（固定小数点、FPU 不要）
     pub const fn millidegrees_c(&self) -> i32 {
-        (self.raw as i32) * 625 / 10 // 0.0625°C resolution
+        (self.raw as i32) * 625 / 10 // 分解能 0.0625°C
     }
 
     pub fn degrees_c(&self) -> f32 {
@@ -167,8 +159,8 @@ impl Temperature {
 impl fmt::Display for Temperature {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let md = self.millidegrees_c();
-        // Handle sign correctly for values between -0.999°C and -0.001°C
-        // where md / 1000 == 0 but the value is negative.
+        // md / 1000 == 0 だが値が負である -0.999°C から -0.001°C の値について
+        // 符号を正しく処理する
         if md < 0 && md > -1000 {
             write!(f, "-0.{:03}°C", (-md) % 1000)
         } else {
@@ -177,8 +169,8 @@ impl fmt::Display for Temperature {
     }
 }
 
-/// Parse space-separated temperature values.
-/// Uses alloc — requires a global allocator.
+/// 空白区切りの温度文字列をパースする。
+/// alloc を使用 — グローバルアロケータが必要。
 pub fn parse_temperatures(input: &str) -> Vec<Temperature> {
     input
         .split_whitespace()
@@ -187,8 +179,8 @@ pub fn parse_temperatures(input: &str) -> Vec<Temperature> {
         .collect()
 }
 
-/// Format without allocation — writes directly to a buffer.
-/// Works in `core`-only environments (no alloc, no heap).
+/// ヒープ割り当てなしでのフォーマット — バッファへ直接書き込む。
+/// `core` のみの環境で動作（alloc なし、ヒープなし）。
 pub fn format_temp_into(temp: &Temperature, buf: &mut [u8]) -> usize {
     use core::fmt::Write;
     struct SliceWriter<'a> {
@@ -200,8 +192,8 @@ pub fn format_temp_into(temp: &Temperature, buf: &mut [u8]) -> usize {
             let bytes = s.as_bytes();
             let remaining = self.buf.len() - self.pos;
             if bytes.len() > remaining {
-                // Buffer full — signal the error instead of silently truncating.
-                // Callers can check the returned pos for partial writes.
+                // バッファがいっぱい — 暗黙に切り捨てるのではなくエラーを返す。
+                // 呼び出し元は返された pos を確認して部分的な書き込みを検証可能。
                 return Err(fmt::Error);
             }
             self.buf[self.pos..self.pos + bytes.len()].copy_from_slice(bytes);
@@ -216,7 +208,7 @@ pub fn format_temp_into(temp: &Temperature, buf: &mut [u8]) -> usize {
 ```
 
 ```toml
-# Cargo.toml for a no_std crate
+# no_std クレートの Cargo.toml
 [package]
 name = "thermal-sensor"
 version = "0.1.0"
@@ -224,28 +216,23 @@ edition = "2021"
 
 [features]
 default = ["alloc"]
-alloc = []    # Enable Vec, String, etc.
-std = []      # Enable full std (implies alloc)
+alloc = []    # Vec や String などを有効化
+std = []      # 完全な std を有効化（alloc を内包）
 
 [dependencies]
-# Use no_std-compatible crates
+# no_std 互換のクレートを使用
 serde = { version = "1.0", default-features = false, features = ["derive"] }
-# ↑ default-features = false drops std dependency!
+# ↑ default-features = false により std 依存関係を除外！
 ```
 
-> **Key crate pattern**: Many popular crates (serde, log, rand, embedded-hal)
-> support `no_std` via `default-features = false`. Always check whether a
-> dependency requires `std` before using it in a `no_std` context. Note that
-> some crates (e.g., `regex`) require at least `alloc` and don't work in
-> `core`-only environments.
+> **主要なクレートのパターン**: 多くの人気クレート（serde, log, rand, embedded-hal）は、`default-features = false` によって `no_std` をサポートしています。`no_std` コンテキストで使用する前に、依存関係が `std` を必要としているかどうかを常に確認してください。なお、一部のクレート（例: `regex`）は少なくとも `alloc` を必要とし、`core` のみの環境では動作しないことに注意してください。
 
-### Custom Panic Handlers and Allocators
+### カスタムパニックハンドラとアロケータ
 
-In `#![no_std]` binaries (not libraries), you must provide a panic handler
-and optionally a global allocator:
+`#![no_std]` バイナリ（ライブラリではない）では、パニックハンドラと、必要に応じてグローバルアロケータを提供する必要があります：
 
 ```rust
-// src/main.rs — a no_std binary (e.g., UEFI diagnostic)
+// src/main.rs — no_std バイナリ（例: UEFI 診断ツール）
 #![no_std]
 #![no_main]
 
@@ -253,67 +240,66 @@ extern crate alloc;
 
 use core::panic::PanicInfo;
 
-// Required: what to do on panic (no stack unwinding available)
+// 必須: パニック時の処理（スタック巻き戻しは利用不可）
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    // In embedded: blink an LED, write to UART, hang
-    // In UEFI: write to console, halt
-    // Minimal: just loop forever
+    // 組み込みの場合: LED を点滅させる、UART に書き込む、ハングさせる
+    // UEFI の場合: コンソールに出力して停止する
+    // 最小限の実装: 無限ループするだけ
     loop {
         core::hint::spin_loop();
     }
 }
 
-// Required if using alloc: provide a global allocator
+// alloc を使用する場合に必須: グローバルアロケータの提供
 use alloc::alloc::{GlobalAlloc, Layout};
 
 struct BumpAllocator {
-    // Simple bump allocator for embedded/UEFI
-    // In practice, use a crate like `linked_list_allocator` or `embedded-alloc`
+    // 組み込み/UEFI 向けのシンプルなバンプアロケータ
+    // 実際には `linked_list_allocator` や `embedded-alloc` などのクレートを使用する
 }
 
-// WARNING: This is a non-functional placeholder! Calling alloc() will return
-// null, causing immediate UB (the global allocator contract requires non-null
-// returns for non-zero-sized allocations). In real code, use an established
-// allocator crate:
-//   - embedded-alloc (embedded targets)
-//   - linked_list_allocator (UEFI / OS kernels)
-//   - talc (general-purpose no_std)
+// 警告: これは機能しないプレースホルダーです！alloc() を呼び出すと null が返され、
+// 即座に未定義動作（UB）が発生します（グローバルアロケータの規約では、
+// サイズが 0 でない割り当てに対して非 null を返す必要があります）。
+// 実際のコードでは、実績のあるアロケータクレートを使用してください:
+//   - embedded-alloc (組み込みターゲット)
+//   - linked_list_allocator (UEFI / OS カーネル)
+//   - talc (汎用 no_std)
 unsafe impl GlobalAlloc for BumpAllocator {
     /// # Safety
-    /// Layout must have non-zero size. Returns null (placeholder — will crash).
+    /// レイアウトのサイズは 0 より大きくなければなりません。null を返します（プレースホルダー — クラッシュします）。
     unsafe fn alloc(&self, _layout: Layout) -> *mut u8 {
-        // PLACEHOLDER — will crash! Replace with real allocation logic.
+        // プレースホルダー — クラッシュします！本物のアロケーションロジックに置き換えてください。
         core::ptr::null_mut()
     }
     /// # Safety
-    /// `_ptr` must have been returned by `alloc` with a compatible layout.
+    /// `_ptr` は、互換性のあるレイアウトで `alloc` から返されたものでなければなりません。
     unsafe fn dealloc(&self, _ptr: *mut u8, _layout: Layout) {
-        // No-op for bump allocator
+        // バンプアロケータでは何もしない
     }
 }
 
 #[global_allocator]
 static ALLOCATOR: BumpAllocator = BumpAllocator {};
 
-// Entry point (platform-specific, not fn main)
-// For UEFI: #[entry] or efi_main
-// For embedded: #[cortex_m_rt::entry]
+// エントリポイント（fn main ではなくプラットフォーム固有）
+// UEFI の場合: #[entry] または efi_main
+// 組み込みの場合: #[cortex_m_rt::entry]
 ```
 
-### Testing `no_std` Code
+### `no_std` コードのテスト
 
-Tests run on the host machine, which has `std`. The trick: your library is
-`no_std`, but your test harness uses `std`:
+テストは `std` を備えたホストマシン上で実行されます。テクニックとして、ライブラリ自体は `no_std` ですが、テストハーネスは `std` を使用します：
 
 ```rust
-// Your crate: #![no_std] in src/lib.rs
-// But tests run under std automatically:
+// クレート: src/lib.rs では #![no_std]
+// ただしテストは自動的に std 環境で実行される:
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    // std is available here — println!, assert!, Vec all work
+    // ここでは std が利用可能 — println!, assert!, Vec すべて動作する
 
     #[test]
     fn test_temperature_conversion() {
@@ -333,75 +319,75 @@ mod tests {
 }
 ```
 
-**Testing on the actual target** (when `std` isn't available at all):
+**実際のターゲット上でのテスト**（`std` が全く利用できない場合）：
 
 ```bash
-# Use defmt-test for on-device testing (embedded ARM)
-# Use uefi-test-runner for UEFI targets
-# Use QEMU for cross-architecture tests without hardware
+# 実機上テストには defmt-test を使用（組み込み ARM）
+# UEFI ターゲットには uefi-test-runner を使用
+# ハードウェアなしのクロスアーキテクチャテストには QEMU を使用
 
-# Run no_std library tests on host (always works):
+# ホスト上で no_std ライブラリテストを実行（常に動作）:
 cargo test --lib
 
-# Verify no_std compilation against a no_std target:
+# no_std ターゲットに対して no_std コンパイルを検証:
 cargo check --target thumbv7em-none-eabihf  # ARM Cortex-M
 cargo check --target riscv32imac-unknown-none-elf  # RISC-V
 ```
 
-### `no_std` Decision Tree
+### `no_std` 決定木
 
 ```mermaid
 flowchart TD
-    START["Does your code need<br/>the standard library?"] --> NEED_FS{"File system,<br/>network, threads?"}
-    NEED_FS -->|"Yes"| USE_STD["Use std<br/>Normal application"]
-    NEED_FS -->|"No"| NEED_HEAP{"Need heap allocation?<br/>Vec, String, Box"}
-    NEED_HEAP -->|"Yes"| USE_ALLOC["#![no_std]<br/>extern crate alloc"]
-    NEED_HEAP -->|"No"| USE_CORE["#![no_std]<br/>core only"]
+    START["コードに標準ライブラリが<br/>必要ですか？"] --> NEED_FS{"ファイルシステム、<br/>ネットワーク、スレッドが必要？"}
+    NEED_FS -->|"はい"| USE_STD["std を使用<br/>通常のアプリケーション"]
+    NEED_FS -->|"いいえ"| NEED_HEAP{"ヒープ割り当てが必要？<br/>Vec, String, Box"}
+    NEED_HEAP -->|"はい"| USE_ALLOC["#![no_std]<br/>extern crate alloc"]
+    NEED_HEAP -->|"いいえ"| USE_CORE["#![no_std]<br/>core のみ"]
     
     USE_ALLOC --> VERIFY["cargo-hack<br/>--each-feature"]
     USE_CORE --> VERIFY
     USE_STD --> VERIFY
-    VERIFY --> TARGET{"Target has OS?"}
-    TARGET -->|"Yes"| HOST_TEST["cargo test --lib<br/>Standard testing"]
-    TARGET -->|"No"| CROSS_TEST["QEMU / defmt-test<br/>On-device testing"]
+    VERIFY --> TARGET{"ターゲットに OS はあるか？"}
+    TARGET -->|"はい"| HOST_TEST["cargo test --lib<br/>標準的なテスト"]
+    TARGET -->|"いいえ"| CROSS_TEST["QEMU / defmt-test<br/>実機・エミュレータテスト"]
     
     style USE_STD fill:#91e5a3,color:#000
     style USE_ALLOC fill:#ffd43b,color:#000
     style USE_CORE fill:#ff6b6b,color:#000
 ```
 
-### 🏋️ Exercises
+### 🏋️ 演習問題
 
-#### 🟡 Exercise 1: Feature Combination Verification
+#### 🟡 演習 1: フィーチャの組み合わせの検証
 
-Install `cargo-hack` and run `cargo hack check --each-feature --workspace` on a project with multiple features. Does it find any broken combinations?
+`cargo-hack` をインストールし、複数のフィーチャを持つプロジェクトで `cargo hack check --each-feature --workspace` を実行してください。壊れている組み合わせは見つかりましたか？
 
 <details>
-<summary>Solution</summary>
+<summary>解答例</summary>
 
 ```bash
 cargo install cargo-hack
 
-# Check each feature individually
+# 各フィーチャを個別にチェック
 cargo hack check --each-feature --workspace --no-dev-deps
 
-# If a feature combination fails:
+# フィーチャの組み合わせが失敗した場合:
 # error[E0433]: failed to resolve: use of undeclared crate or module `std`
-# → This means a feature gate is missing a #[cfg] guard
+# → これは、フィーチャゲートに #[cfg] ガードが不足していることを意味します
 
-# Check all features + no features + each individually:
+# 全フィーチャ + フィーチャなし + 各フィーチャ単体をチェック:
 cargo hack check --each-feature --workspace
 cargo check --workspace --all-features
 cargo check --workspace --no-default-features
 ```
 </details>
 
-#### 🔴 Exercise 2: Build a `no_std` Library
+#### 🔴 演習 2: `no_std` ライブラリの構築
 
-Create a library crate that compiles with `#![no_std]`. Implement a simple stack-allocated ring buffer. Verify it compiles for `thumbv7em-none-eabihf` (ARM Cortex-M).
+`#![no_std]` でコンパイルできるライブラリクレートを作成してください。スタック割り当てのシンプルなリングバッファを実装します。`thumbv7em-none-eabihf`（ARM Cortex-M）向けにコンパイルできることを検証してください。
 
 <details>
-<summary>Solution</summary>
+<summary>解答例</summary>
 
 ```rust
 // lib.rs
@@ -454,16 +440,16 @@ mod tests {
 ```bash
 rustup target add thumbv7em-none-eabihf
 cargo check --target thumbv7em-none-eabihf
-# ✅ Compiles for bare-metal ARM
+# ✅ ベアメタル ARM 向けにコンパイル成功
 ```
 </details>
 
-### Key Takeaways
+### 重要ポイント
 
-- `cargo-hack --each-feature` is essential for any crate with conditional compilation — run it in CI
-- `core` → `alloc` → `std` are layered: each adds capabilities but requires more runtime support
-- Custom panic handlers and allocators are required for bare-metal `no_std` binaries
-- Test `no_std` libraries on the host with `cargo test --lib` — no hardware needed
-- Run `--feature-powerset` only for core libraries with <8 features — it's $2^n$ combinations
+- `cargo-hack --each-feature` は、条件付きコンパイルを含むすべてのクレートで不可欠です — CI で実行してください。
+- `core` → `alloc` → `std` は階層化されており、上位になるほど機能が増えますが、より多くのランタイムサポートが必要になります。
+- ベアメタル向けの `no_std` バイナリには、カスタムパニックハンドラとアロケータが必要です。
+- ホスト上で `cargo test --lib` を実行すれば、実機ハードウェアがなくても `no_std` ライブラリをテストできます。
+- `--feature-powerset` は、フィーチャ数が 8 個未満のコアライブラリでのみ実行してください（組み合わせが $2^n$ になるため）。
 
 ---

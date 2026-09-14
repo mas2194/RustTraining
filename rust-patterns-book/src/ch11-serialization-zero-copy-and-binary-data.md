@@ -1,15 +1,15 @@
-# 11. Serialization, Zero-Copy, and Binary Data 🟡
+# 11. シリアライゼーション、ゼロコピー、バイナリデータ 🟡
 
-> **What you'll learn:**
-> - serde fundamentals: derive macros, attributes, and enum representations
-> - Zero-copy deserialization for high-performance read-heavy workloads
-> - The serde format ecosystem (JSON, TOML, bincode, MessagePack)
-> - Binary data handling with `repr(C)`, zerocopy, and `bytes::Bytes`
+> **学習内容:**
+> - serde の基本: derive マクロ、属性、列挙型（enum）の表現形式
+> - 読み取り負荷の高いワークロード向けのゼロコピーデシリアライゼーション
+> - serde のフォーマットエコシステム（JSON、TOML、bincode、MessagePack）
+> - `repr(C)`、zerocopy、`bytes::Bytes` を用いたバイナリデータの取り扱い
 
-## serde Fundamentals
+## serde の基本
 
-`serde` (SERialize/DEserialize) is the universal serialization framework for Rust.
-It separates **data model** (your structs) from **format** (JSON, TOML, binary):
+`serde`（SERialize/DEserialize）は Rust におけるデファクトスタンダードのシリアライゼーションフレームワークです。
+**データモデル**（自作の構造体）と**フォーマット**（JSON、TOML、バイナリなど）を明確に分離します:
 
 ```rust,ignore
 use serde::{Serialize, Deserialize};
@@ -18,14 +18,14 @@ use serde::{Serialize, Deserialize};
 struct ServerConfig {
     name: String,
     port: u16,
-    #[serde(default)]                    // Use Default::default() if missing
+    #[serde(default)]                    // 欠落している場合は Default::default() を使用
     max_connections: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
     tls_cert_path: Option<String>,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Deserialize from JSON:
+    // JSON からデシリアライズ:
     let json_input = r#"{
         "name": "hw-diag",
         "port": 8080
@@ -34,11 +34,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("{config:?}");
     // ServerConfig { name: "hw-diag", port: 8080, max_connections: 0, tls_cert_path: None }
 
-    // Serialize to JSON:
+    // JSON へシリアライズ:
     let output = serde_json::to_string_pretty(&config)?;
     println!("{output}");
 
-    // Same struct, different format — no code changes:
+    // 同じ構造体で異なるフォーマットに対応 — コード変更は不要:
     let toml_input = r#"
         name = "hw-diag"
         port = 8080
@@ -50,49 +50,47 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-> **Key insight**: Your struct derives `Serialize` and `Deserialize` once.
-> Then it works with *every* serde-compatible format — JSON, TOML, YAML,
-> bincode, MessagePack, CBOR, postcard, and dozens more.
+> **重要なポイント**: 構造体に対して一度 `Serialize` と `Deserialize` を derive すれば、JSON、TOML、YAML、bincode、MessagePack、CBOR、postcard など、serde と互換性のある*あらゆる*フォーマットでそのまま利用できます。
 
-### Common serde Attributes
+### よく使われる serde 属性
 
-serde provides fine-grained control over serialization through field and container attributes:
+serde はフィールド属性やコンテナ属性を通じて、シリアライゼーションのきめ細かな制御を提供します:
 
 ```rust,ignore
 use serde::{Serialize, Deserialize};
 
-// --- Container attributes (on the struct/enum) ---
+// --- コンテナ属性（構造体/列挙型全体に適用） ---
 #[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]       // JSON convention: field_name → fieldName
-#[serde(deny_unknown_fields)]            // Reject extra keys — strict parsing
+#[serde(rename_all = "camelCase")]       // JSON の慣例: field_name → fieldName
+#[serde(deny_unknown_fields)]            // 未知のキーを拒否 — 厳格なパース
 struct DiagResult {
-    test_name: String,                   // Serialized as "testName"
-    pass_count: u32,                     // Serialized as "passCount"
-    fail_count: u32,                     // Serialized as "failCount"
+    test_name: String,                   // "testName" としてシリアライズ
+    pass_count: u32,                     // "passCount" としてシリアライズ
+    fail_count: u32,                     // "failCount" としてシリアライズ
 }
 
-// --- Field attributes ---
+// --- フィールド属性 ---
 #[derive(Serialize, Deserialize)]
 struct Sensor {
-    #[serde(rename = "sensor_id")]       // Override field name for serialization
+    #[serde(rename = "sensor_id")]       // シリアライズ時のフィールド名を上書き
     id: u64,
 
-    #[serde(default)]                    // Use Default if missing from input
+    #[serde(default)]                    // 入力に存在しない場合は Default を使用
     enabled: bool,
 
     #[serde(default = "default_threshold")]
     threshold: f64,
 
-    #[serde(skip)]                       // Never serialize or deserialize
+    #[serde(skip)]                       // シリアライズ/デシリアライズから完全に除外
     cached_value: Option<f64>,
 
     #[serde(skip_serializing_if = "Vec::is_empty")]
     tags: Vec<String>,
 
-    #[serde(flatten)]                    // Inline nested struct fields
+    #[serde(flatten)]                    // ネストされた構造体のフィールドをフラットに展開
     metadata: Metadata,
 
-    #[serde(with = "hex_bytes")]         // Custom ser/de module
+    #[serde(with = "hex_bytes")]         // カスタムのシリアライズ/デシリアライズモジュールを使用
     raw_data: Vec<u8>,
 }
 
@@ -103,35 +101,36 @@ struct Metadata {
     vendor: String,
     model: String,
 }
-// With #[serde(flatten)], the JSON looks like:
+// #[serde(flatten)] を指定すると、JSON は次のようになります:
 // { "sensor_id": 1, "vendor": "Intel", "model": "X200", ... }
-// NOT: { "sensor_id": 1, "metadata": { "vendor": "Intel", ... } }
+// 以下のようなネスト構造にはなりません:
+// { "sensor_id": 1, "metadata": { "vendor": "Intel", ... } }
 ```
 
-**Most-used attributes cheat sheet**:
+**頻出属性のチートシート**:
 
-| Attribute | Level | Effect |
+| 属性 | レベル | 効果 |
 |-----------|-------|--------|
-| `rename_all = "camelCase"` | Container | Rename all fields to camelCase/snake_case/SCREAMING_SNAKE_CASE |
-| `deny_unknown_fields` | Container | Error on unexpected keys (strict mode) |
-| `default` | Field | Use `Default::default()` when field missing |
-| `rename = "..."` | Field | Custom serialized name |
-| `skip` | Field | Exclude from ser/de entirely |
-| `skip_serializing_if = "fn"` | Field | Conditionally exclude (e.g., `Option::is_none`) |
-| `flatten` | Field | Inline a nested struct's fields |
-| `with = "module"` | Field | Use custom serialize/deserialize functions |
-| `alias = "..."` | Field | Accept alternative names during deserialization |
-| `deserialize_with = "fn"` | Field | Custom deserialize function only |
-| `untagged` | Enum | Try each variant in order (no discriminant in output) |
+| `rename_all = "camelCase"` | コンテナ | 全フィールド名を camelCase / snake_case / SCREAMING_SNAKE_CASE に変換 |
+| `deny_unknown_fields` | コンテナ | 未定義のキーが存在する場合にエラーとする（厳格モード） |
+| `default` | フィールド | フィールドが存在しない場合に `Default::default()` を使用 |
+| `rename = "..."` | フィールド | シリアライズ名を個別指定 |
+| `skip` | フィールド | シリアライズ・デシリアライズから完全に除外 |
+| `skip_serializing_if = "fn"` | フィールド | 条件付きでシリアライズを除外（例: `Option::is_none`） |
+| `flatten` | フィールド | ネストされた構造体のフィールドをインライン展開 |
+| `with = "module"` | フィールド | カスタムのシリアライズ/デシリアライズ関数モジュールを指定 |
+| `alias = "..."` | フィールド | デシリアライズ時に受け付ける別名を指定 |
+| `deserialize_with = "fn"` | フィールド | デシリアライズ時のみカスタム関数を使用 |
+| `untagged` | 列挙型 | 各ヴァリアントを順に試行（出力にタグ・判別子を含めない） |
 
-### Enum Representations
+### 列挙型（enum）の表現形式
 
-serde provides four representations for enums in formats like JSON:
+serde は JSON などのフォーマットにおいて、列挙型に対して4つの表現形式を提供しています:
 
 ```rust,ignore
 use serde::{Serialize, Deserialize};
 
-// 1. Externally tagged (DEFAULT):
+// 1. 外部タグ付き（Externally tagged — デフォルト）:
 #[derive(Serialize, Deserialize)]
 enum Command {
     Reboot,
@@ -141,7 +140,7 @@ enum Command {
 // "Reboot"                                          → Command::Reboot
 // {"RunDiag": {"test_name": "gpu", "timeout_secs": 60}}  → Command::RunDiag { ... }
 
-// 2. Internally tagged — #[serde(tag = "type")]:
+// 2. 内部タグ付き（Internally tagged）— #[serde(tag = "type")]:
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
 enum Event {
@@ -152,7 +151,7 @@ enum Event {
 // {"type": "Start", "timestamp": 1706000000}
 // {"type": "Error", "code": 42, "message": "timeout"}
 
-// 3. Adjacently tagged — #[serde(tag = "t", content = "c")]:
+// 3. 隣接タグ付き（Adjacently tagged）— #[serde(tag = "t", content = "c")]:
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "t", content = "c")]
 enum Payload {
@@ -162,7 +161,7 @@ enum Payload {
 // {"t": "Text", "c": "hello"}
 // {"t": "Binary", "c": [0, 1, 2]}
 
-// 4. Untagged — #[serde(untagged)]:
+// 4. タグなし（Untagged）— #[serde(untagged)]:
 #[derive(Serialize, Deserialize)]
 #[serde(untagged)]
 enum StringOrNumber {
@@ -171,104 +170,98 @@ enum StringOrNumber {
 }
 // "hello" → StringOrNumber::Str("hello")
 // 42.0    → StringOrNumber::Num(42.0)
-// ⚠️ Tried IN ORDER — first matching variant wins
+// ⚠️ 定義順に試行され、最初にマッチしたヴァリアントが採用されます
 ```
 
-> **Which representation to choose**: Use internally tagged (`tag = "type"`)
-> for most JSON APIs — it's the most readable and matches conventions in
-> Go, Python, and TypeScript. Use untagged only for "union" types where the
-> shape alone disambiguates.
+> **どの表現形式を選ぶべきか**: 大半の JSON API では内部タグ付き（`tag = "type"`）が推奨されます。最も可読性が高く、Go、Python、TypeScript などの一般的な規約とも合致します。タグなし（untagged）は、データ構造の形状だけで一意に判別できる「Union」型に限定して使用してください。
 
-### Zero-Copy Deserialization
+### ゼロコピーデシリアライゼーション
 
-serde can deserialize without allocating new strings — borrowing directly from
-the input buffer. This is the key to high-performance parsing:
+serde は新しい文字列をヒープに割り当てることなく、入力バッファから直接借用（borrow）してデシリアライズできます。これは高パフォーマンスなパース処理を実現する鍵となります:
 
 ```rust,ignore
 use serde::Deserialize;
 
-// --- Owned (allocating) ---
-// Each String field copies bytes from the input into new heap allocations.
+// --- 所有型（メモリ割り当てを伴う） ---
+// 各 String フィールドは入力からバイト列をコピーし、新たなヒープ領域に割り当てます。
 #[derive(Deserialize)]
 struct OwnedRecord {
-    name: String,           // Allocates a new String
-    value: String,          // Allocates another String
+    name: String,           // 新しい String を割り当て
+    value: String,          // 別の String を割り当て
 }
 
-// --- Zero-copy (borrowing) ---
-// &'de str fields borrow directly from the input — ZERO allocation.
+// --- ゼロコピー（借用） ---
+// &'de str フィールドは入力から直接参照 — アロケーションはゼロです。
 #[derive(Deserialize)]
 struct BorrowedRecord<'a> {
-    name: &'a str,          // Points into the input buffer
-    value: &'a str,         // Points into the input buffer
+    name: &'a str,          // 入力バッファの内部を指す
+    value: &'a str,         // 入力バッファの内部を指す
 }
 
 fn main() {
     let input = r#"{"name": "cpu_temp", "value": "72.5"}"#;
 
-    // Owned: allocates two String objects
+    // 所有型: 2つの String オブジェクトをヒープ割り当て
     let owned: OwnedRecord = serde_json::from_str(input).unwrap();
 
-    // Zero-copy: `name` and `value` point into `input` — no allocation
+    // ゼロコピー: `name` と `value` は `input` を直接参照 — アロケーションなし
     let borrowed: BorrowedRecord = serde_json::from_str(input).unwrap();
 
-    // The output is lifetime-bound: borrowed can't outlive input
+    // 出力はライフタイムに束縛される: borrowed は input より長く生存できない
     println!("{}: {}", borrowed.name, borrowed.value);
 }
 ```
 
-**Understanding the lifetime**:
+**ライフタイムの理解**:
 
 ```rust,ignore
-// Deserialize<'de> — the struct can borrow from data with lifetime 'de:
+// Deserialize<'de> — 構造体はライフタイム 'de のデータから借用可能:
 //   struct BorrowedRecord<'a> where 'a == 'de
-//   Only works when the input buffer lives long enough
-
-// DeserializeOwned — the struct owns all its data, no borrowing:
+//   入力バッファが十分長く生存する場合にのみ動作
+//
+// DeserializeOwned — 構造体がすべてのデータを所有し、借用しない:
 //   trait DeserializeOwned: for<'de> Deserialize<'de> {}
-//   Works with any input lifetime (the struct is independent)
+//   入力のライフタイムに制約されない（構造体が独立している）
 
 use serde::de::DeserializeOwned;
 
-// This function requires owned types — input can be temporary
+// この関数は所有型を要求 — 入力データは一時的なものでもよい
 fn parse_owned<T: DeserializeOwned>(input: &str) -> T {
     serde_json::from_str(input).unwrap()
 }
 
-// This function allows borrowing — more efficient but restricts lifetimes
+// この関数は借用を許容 — 効率的だがライフタイムの制約を受ける
 fn parse_borrowed<'a, T: Deserialize<'a>>(input: &'a str) -> T {
     serde_json::from_str(input).unwrap()
 }
 ```
 
-**When to use zero-copy**:
-- Parsing large files where you only need a few fields
-- High-throughput pipelines (network packets, log lines)
-- When the input buffer already lives long enough (e.g., memory-mapped file)
+**ゼロコピーを使うべき場合**:
+- 少数のフィールドしか必要としない巨大なファイルのパース
+- 高スループットなパイプライン（ネットワークパケット、ログ行など）
+- 入力バッファがすでに十分長く生存している場合（メモリマップドファイルなど）
 
-**When NOT to use zero-copy**:
-- Input is ephemeral (network read buffer that's reused)
-- You need to store the result beyond the input's lifetime
-- Fields need transformation (escapes, normalization)
+**ゼロコピーを使うべきではない場合**:
+- 入力データが短命な場合（再利用されるネットワーク受信バッファなど）
+- パース結果を入力データのライフタイムを超えて保持する必要がある場合
+- フィールドの変換が必要な場合（エスケープ解除、正規化など）
 
-> **Practical tip**: `Cow<'a, str>` gives you the best of both — borrow when
-> possible, allocate when necessary (e.g., when JSON escape sequences need
-> unescaping). serde supports Cow natively.
+> **実践的なヒント**: `Cow<'a, str>` を使うと両者の利点が得られます。可能な限り借用し、必要な場合（JSON エスケープシーケンスの解除など）にのみアロケーションを行います。serde は `Cow` をネイティブにサポートしています。
 
-### The Format Ecosystem
+### フォーマットのエコシステム
 
-| Format | Crate | Human-Readable | Size | Speed | Use Case |
+| フォーマット | クレート | 可読性（人間向け） | サイズ | 速度 | 主な用途 |
 |--------|-------|:--------------:|:----:|:-----:|----------|
-| JSON | `serde_json` | ✅ | Large | Good | Config files, REST APIs, logging |
-| TOML | `toml` | ✅ | Medium | Good | Config files (Cargo.toml style) |
-| YAML | `serde_yaml` | ✅ | Medium | Good | Config files (complex nesting) |
-| bincode | `bincode` | ❌ | Small | Fast | IPC, caches, Rust-to-Rust |
-| postcard | `postcard` | ❌ | Tiny | Very fast | Embedded systems, `no_std` |
-| MessagePack | `rmp-serde` | ❌ | Small | Fast | Cross-language binary protocol |
-| CBOR | `ciborium` | ❌ | Small | Fast | IoT, constrained environments |
+| JSON | `serde_json` | ✅ | 大 | 良好 | 設定ファイル、REST API、ロギング |
+| TOML | `toml` | ✅ | 中 | 良好 | 設定ファイル（Cargo.toml スタイル） |
+| YAML | `serde_yaml` | ✅ | 中 | 良好 | 設定ファイル（複雑なネスト構造） |
+| bincode | `bincode` | ❌ | 小 | 高速 | プロセス間通信（IPC）、キャッシュ、Rust 間通信 |
+| postcard | `postcard` | ❌ | 極小 | 極めて高速 | 組み込みシステム、`no_std` |
+| MessagePack | `rmp-serde` | ❌ | 小 | 高速 | 言語横断のバイナリプロトコル |
+| CBOR | `ciborium` | ❌ | 小 | 高速 | IoT、リソース制約環境 |
 
 ```rust
-// Same struct, many formats — serde's power:
+// 同一の構造体を多様なフォーマットで扱う — serde の真価:
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 struct DiagConfig {
@@ -284,30 +277,29 @@ let config = DiagConfig {
 };
 
 // JSON:   {"name":"accel_diag","tests":["memory","compute"],"timeout_secs":300}
-let json = serde_json::to_string(&config).unwrap();       // 67 bytes
+let json = serde_json::to_string(&config).unwrap();       // 67 バイト
 
-// bincode: compact binary — ~40 bytes, no field names
-let bin = bincode::serialize(&config).unwrap();            // Much smaller
+// bincode: コンパクトなバイナリ — 約40バイト、フィールド名は含まれない
+let bin = bincode::serialize(&config).unwrap();            // はるかに小さい
 
-// postcard: even smaller, varint encoding — great for embedded
+// postcard: さらに小型、可変長整数（varint）エンコーディング — 組み込みに最適
 // let post = postcard::to_allocvec(&config).unwrap();
 ```
 
-> **Choose your format**:
-> - Config files humans edit → TOML or JSON
-> - Rust-to-Rust IPC/caching → bincode (fast, compact, not cross-language)
-> - Cross-language binary → MessagePack or CBOR
-> - Embedded / `no_std` → postcard
+> **フォーマット選定の目安**:
+> - 人間が編集する設定ファイル → TOML または JSON
+> - Rust 同士の IPC やキャッシュ → bincode（高速・軽量、ただし他言語非対応）
+> - 言語横断のバイナリ通信 → MessagePack または CBOR
+> - 組み込み / `no_std` → postcard
 
-### Binary Data and repr(C)
+### バイナリデータと repr(C)
 
-For hardware diagnostics, parsing binary protocol data is common. Rust provides
-tools for safe, zero-copy binary data handling:
+ハードウェア診断では、バイナリプロトコルデータのパースが頻出します。Rust は安全かつゼロコピーでバイナリデータを処理するための強力なツールを提供しています:
 
 ```rust
-// --- #[repr(C)]: Predictable memory layout ---
-// Ensures fields are laid out in declaration order with C padding rules.
-// Essential for matching hardware register layouts and protocol headers.
+// --- #[repr(C)]: 予測可能なメモリレイアウト ---
+// C 言語のパディング規則に従い、宣言順にフィールドを配置することを保証します。
+// ハードウェアレジスタのレイアウトやプロトコルヘッダと一致させるために不可欠です。
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
@@ -320,7 +312,7 @@ struct IpmiHeader {
     cmd: u8,
 }
 
-// --- Safe binary parsing with manual deserialization ---
+// --- 手動デシリアライズによる安全なバイナリパース ---
 impl IpmiHeader {
     fn from_bytes(data: &[u8]) -> Option<Self> {
         if data.len() < size_of::<Self>() {
@@ -340,7 +332,7 @@ impl IpmiHeader {
     fn lun(&self)    -> u8 { self.net_fn_lun & 0x03 }
 }
 
-// --- Endianness-aware parsing ---
+// --- エンディアンを考慮したパース ---
 fn read_u16_le(data: &[u8], offset: usize) -> u16 {
     u16::from_le_bytes([data[offset], data[offset + 1]])
 }
@@ -352,25 +344,25 @@ fn read_u32_be(data: &[u8], offset: usize) -> u32 {
     ])
 }
 
-// --- #[repr(C, packed)]: Remove padding (alignment = 1) ---
+// --- #[repr(C, packed)]: パディングの排除（アライメント = 1） ---
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy)]
 struct PcieCapabilityHeader {
-    cap_id: u8,        // Capability ID
-    next_cap: u8,      // Pointer to next capability
-    cap_reg: u16,      // Capability-specific register
+    cap_id: u8,        // ケーパビリティ ID
+    next_cap: u8,      // 次のケーパビリティへのポインタ
+    cap_reg: u16,      // ケーパビリティ固有レジスタ
 }
-// ⚠️ Packed structs: taking &field creates an unaligned reference — UB.
-// Always copy fields out: let id = header.cap_id;  // OK (Copy)
-// Never do: let r = &header.cap_reg;               // UB if unaligned
+// ⚠️ パックされた構造体: &field で参照を取るとミスアライメント参照になり未定義動作（UB）を引き起こします。
+// 必ず値をコピーして取り出してください: let id = header.cap_id; // OK (Copy)
+// 決して行ってはならない例: let r = &header.cap_reg;            // アライメント違反時は UB
 ```
 
-### zerocopy and bytemuck — Safe Transmutation
+### zerocopy と bytemuck — 安全な型変換（Transmutation）
 
-Instead of `unsafe` transmute, use crates that verify layout safety at compile time:
+`unsafe` な `transmute` の代わりに、コンパイル時にレイアウトの安全性を検証するクレートを使用します:
 
 ```rust
-// --- zerocopy: Compile-time checked zero-copy conversions ---
+// --- zerocopy: コンパイル時に検証されるゼロコピー変換 ---
 // Cargo.toml: zerocopy = { version = "0.8", features = ["derive"] }
 
 use zerocopy::{FromBytes, IntoBytes, KnownLayout, Immutable};
@@ -381,16 +373,16 @@ struct SensorReading {
     sensor_id: u16,
     flags: u8,
     _reserved: u8,
-    value: u32,     // Fixed-point: actual = value / 1000.0
+    value: u32,     // 固定小数点: 実測値 = value / 1000.0
 }
 
 fn parse_sensor(raw: &[u8]) -> Option<&SensorReading> {
-    // Safe zero-copy: verifies alignment and size AT COMPILE TIME
+    // 安全なゼロコピー: アライメントとサイズをコンパイル時に検証
     SensorReading::ref_from_bytes(raw).ok()
-    // Returns &SensorReading pointing INTO raw — no copy, no allocation
+    // raw の内部を指す &SensorReading を返す — コピーもアロケーションもなし
 }
 
-// --- bytemuck: Simple, battle-tested ---
+// --- bytemuck: シンプルで実績のあるクレート ---
 // Cargo.toml: bytemuck = { version = "1", features = ["derive"] }
 
 use bytemuck::{Pod, Zeroable};
@@ -403,49 +395,48 @@ struct GpuRegister {
 }
 
 fn cast_registers(data: &[u8]) -> &[GpuRegister] {
-    // Safe cast: Pod guarantees all bit patterns are valid
+    // 安全なキャスト: Pod はすべてのビットパターンが有効であることを保証
     bytemuck::cast_slice(data)
 }
 ```
 
-**When to use which**:
+**使い分けの基準**:
 
-| Approach | Safety | Overhead | Use When |
+| アプローチ | 安全性 | オーバーヘッド | 使用すべきケース |
 |----------|:------:|:--------:|----------|
-| Manual field-by-field parsing | ✅ Safe | Copy fields | Small structs, complex layouts |
-| `zerocopy` | ✅ Safe | Zero-copy | Large buffers, many reads, compile-time checks |
-| `bytemuck` | ✅ Safe | Zero-copy | Simple `Pod` types, casting slices |
-| `unsafe { transmute() }` | ❌ Unsafe | Zero-copy | Last resort — avoid in application code |
+| 手動フィールド単位パース | ✅ 安全 | フィールドのコピー | 小さな構造体、複雑なレイアウト |
+| `zerocopy` | ✅ 安全 | ゼロコピー | 大きなバッファ、多数の読み込み、コンパイル時検証 |
+| `bytemuck` | ✅ 安全 | ゼロコピー | シンプルな `Pod` 型、スライスのキャスト |
+| `unsafe { transmute() }` | ❌ 不安全 | ゼロコピー | 最後の手段 — アプリケーションコードでは避けるべき |
 
-### bytes::Bytes — Reference-Counted Buffers
+### bytes::Bytes — 参照カウント付きバッファ
 
-The `bytes` crate (used by tokio, hyper, tonic) provides zero-copy byte buffers
-with reference counting — `Bytes` is to `Vec<u8>` what `Arc<[u8]>` is to owned slices:
+`bytes` クレート（tokio、hyper、tonic 等で利用）は、参照カウントを用いたゼロコピーのバイトバッファを提供します。`Bytes` と `Vec<u8>` の関係は、`Arc<[u8]>` と所有スライスの関係に相当します:
 
 ```rust
 use bytes::{Bytes, BytesMut, Buf, BufMut};
 
 fn main() {
-    // --- BytesMut: mutable buffer for building data ---
+    // --- BytesMut: データ構築用の可変バッファ ---
     let mut buf = BytesMut::with_capacity(1024);
-    buf.put_u8(0x01);                    // Write a byte
-    buf.put_u16(0x1234);                 // Write u16 (big-endian)
-    buf.put_slice(b"hello");             // Write raw bytes
-    buf.put(&b"world"[..]);              // Write from slice
+    buf.put_u8(0x01);                    // 1バイト書き込み
+    buf.put_u16(0x1234);                 // u16 を書き込み（ビッグエンディアン）
+    buf.put_slice(b"hello");             // 生のバイト列を書き込み
+    buf.put(&b"world"[..]);              // スライスから書き込み
 
-    // Freeze into immutable Bytes (zero cost):
+    // 不変の Bytes に固定（ゼロコスト）:
     let data: Bytes = buf.freeze();
 
-    // --- Bytes: immutable, reference-counted, cloneable ---
-    let data2 = data.clone();            // Cheap: increments refcount, NOT deep copy
-    let slice = data.slice(3..8);        // Zero-copy sub-slice (shares buffer)
+    // --- Bytes: 不変、参照カウント付き、クローン可能 ---
+    let data2 = data.clone();            // 安価: 参照カウントをインクリメントするのみ（ディープコピーではない）
+    let slice = data.slice(3..8);        // ゼロコピーのサブスライス（同一バッファを共有）
 
-    // Read from Bytes using the Buf trait:
+    // Buf トレイトを使って Bytes から読み取り:
     let mut reader = &data[..];
     let byte = reader.get_u8();          // 0x01
     let short = reader.get_u16();        // 0x1234
 
-    // Split without copying:
+    // コピーなしでバッファを分割:
     let mut original = Bytes::from_static(b"HEADER\x00PAYLOAD");
     let header = original.split_to(6);   // header = "HEADER", original = "\x00PAYLOAD"
 
@@ -456,42 +447,40 @@ fn main() {
 
 **`bytes` vs `Vec<u8>`**:
 
-| Feature | `Vec<u8>` | `Bytes` |
+| 機能 | `Vec<u8>` | `Bytes` |
 |---------|-----------|---------|
-| Clone cost | O(n) deep copy | O(1) refcount increment |
-| Sub-slicing | Borrows with lifetime | Owned, refcount-tracked |
-| Thread safety | Not `Sync` (needs `Arc`) | `Send + Sync` built in |
-| Mutability | Direct `&mut` | Split into `BytesMut` first |
-| Ecosystem | Standard library | tokio, hyper, tonic, axum |
+| クローンコスト | O(n) ディープコピー | O(1) 参照カウントの加算 |
+| サブスライス | ライフタイム付き借用 | 所有型、参照カウントで追跡 |
+| スレッド安全性 | `Sync` ではない（`Arc` が必要） | `Send + Sync` を標準サポート |
+| 可変性 | 直接 `&mut` で変更可能 | 事前に `BytesMut` への分割が必要 |
+| エコシステム | 標準ライブラリ | tokio, hyper, tonic, axum |
 
-> **When to use bytes**: Network protocols, packet parsing, any scenario where
-> you receive a buffer and need to split it into parts that are processed by
-> different components or threads. The zero-copy splitting is the killer feature.
+> **bytes を使うべき場面**: ネットワークプロトコル、パケット解析など、受信したバッファを分割して異なるコンポーネントやスレッドで処理するシナリオに最適です。ゼロコピーでのスライス分割は非常に強力な機能です。
 
-> **Key Takeaways — Serialization & Binary Data**
-> - serde's derive macros handle 90% of cases; use attributes (`rename`, `skip`, `default`) for the rest
-> - Zero-copy deserialization (`&'a str` in structs) avoids allocation for read-heavy workloads
-> - `repr(C)` + `zerocopy`/`bytemuck` for hardware register layouts; `bytes::Bytes` for reference-counted buffers
+> **シリアライゼーション＆バイナリデータの重要ポイント**
+> - serde の derive マクロが90%のユースケースに対応。残りは各種属性（`rename`, `skip`, `default` など）で細かく制御
+> - ゼロコピーデシリアライゼーション（構造体内の `&'a str`）により、読み取り負荷の高い処理でのヒープアロケーションを回避
+> - ハードウェアレジスタのレイアウトには `repr(C)` + `zerocopy`/`bytemuck` を使用。参照カウント付きバッファには `bytes::Bytes` を活用
 
-> **See also:** [Ch 9 — Error Handling](ch10-error-handling-patterns.md) for combining serde errors with `thiserror`. [Ch 11 — Unsafe](ch12-unsafe-rust-controlled-danger.md) for `repr(C)` and FFI data layouts.
+> **関連情報:** serde のエラーと `thiserror` の連携については [第10章 — エラー処理パターン](ch10-error-handling-patterns.md) を、`repr(C)` と FFI データレイアウトについては [第12章 — Unsafe Rust](ch12-unsafe-rust-controlled-danger.md) を参照してください。
 
 ```mermaid
 flowchart LR
-    subgraph Input
+    subgraph Input["入力"]
         JSON["JSON"]
         TOML["TOML"]
         Bin["bincode"]
         MsgP["MessagePack"]
     end
 
-    subgraph serde["serde data model"]
+    subgraph serde["serde データモデル"]
         Ser["Serialize"]
         De["Deserialize"]
     end
 
-    subgraph Output
-        Struct["Rust struct"]
-        Enum["Rust enum"]
+    subgraph Output["出力"]
+        Struct["Rust 構造体"]
+        Enum["Rust 列挙型"]
     end
 
     JSON --> De
@@ -517,12 +506,12 @@ flowchart LR
 
 ---
 
-### Exercise: Custom serde Deserialization ★★★ (~45 min)
+### 演習: カスタム serde デシリアライザ ★★★（約45分）
 
-Design a `HumanDuration` wrapper that deserializes from human-readable strings like `"30s"`, `"5m"`, `"2h"` using a custom serde deserializer. It should also serialize back to the same format.
+`"30s"`, `"5m"`, `"2h"` のような人間にとって読みやすい文字列からデシリアライズを行うカスタム serde デシリアライザを備えた `HumanDuration` ラッパーを設計してください。また、同一の文字列表中現へ再シリアライズできるようにしてください。
 
 <details>
-<summary>🔑 Solution</summary>
+<summary>🔑 解答例</summary>
 
 ```rust,ignore
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -534,20 +523,20 @@ struct HumanDuration(std::time::Duration);
 impl HumanDuration {
     fn from_str(s: &str) -> Result<Self, String> {
         let s = s.trim();
-        if s.is_empty() { return Err("empty duration string".into()); }
+        if s.is_empty() { return Err("空の期間文字列です".into()); }
 
         let (num_str, suffix) = s.split_at(
             s.find(|c: char| !c.is_ascii_digit()).unwrap_or(s.len())
         );
         let value: u64 = num_str.parse()
-            .map_err(|_| format!("invalid number: {num_str}"))?;
+            .map_err(|_| format!("無効な数値です: {num_str}"))?;
 
         let duration = match suffix {
             "s" | "sec"  => std::time::Duration::from_secs(value),
             "m" | "min"  => std::time::Duration::from_secs(value * 60),
             "h" | "hr"   => std::time::Duration::from_secs(value * 3600),
             "ms"         => std::time::Duration::from_millis(value),
-            other        => return Err(format!("unknown suffix: {other}")),
+            other        => return Err(format!("未知の接尾辞です: {other}")),
         };
         Ok(HumanDuration(duration))
     }
@@ -596,11 +585,10 @@ fn main() {
 
     let serialized = serde_json::to_string(&config).unwrap();
     assert!(serialized.contains("30s"));
-    println!("Config: {serialized}");
+    println!("設定: {serialized}");
 }
 ```
 
 </details>
 
 ***
-

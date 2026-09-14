@@ -1,26 +1,26 @@
-# Rust if keyword
+# Rustの if キーワード
 
-> **What you'll learn:** Rust's control flow constructs — `if`/`else` as expressions, `loop`/`while`/`for`, `match`, and how they differ from C/C++ counterparts. The key insight: most Rust control flow returns values.
+> **学習目標:** Rustの制御フロー構文 — 式としての `if`/`else`、`loop`/`while`/`for`、`match`、そしてそれらがC/C++の対応機能とどう異なるかを学びます。重要なポイント：Rustの制御フローの多くは値を返します。
 
-- In Rust, ```if``` is actually an expression, i.e., it can be used to assign values, but it also behaves like a statement. [▶ Try it](https://play.rust-lang.org/)
+- Rustにおいて、`if` は実際には式（expression）です。つまり、値の代入に使用できますが、文（statement）のようにも振る舞います。[▶ 試してみる](https://play.rust-lang.org/)
 
 ```rust
 fn main() {
     let x = 42;
     if x < 42 {
-        println!("Smaller than the secret of life");
+        println!("人生の秘密より小さいです");
     } else if x == 42 {
-        println!("Is equal to the secret of life");
+        println!("人生の秘密と等しいです");
     } else {
-        println!("Larger than the secret of life");
+        println!("人生の秘密より大きいです");
     }
     let is_secret_of_life = if x == 42 {true} else {false};
     println!("{}", is_secret_of_life);
 }
 ```
 
-# Rust loops using while and for
-- The ```while``` keyword can be used to loop while an expression is true
+# while と for を使ったRustのループ
+- `while` キーワードを使用すると、式が真（true）である間ループできます
 ```rust
 fn main() {
     let mut x = 40;
@@ -29,55 +29,53 @@ fn main() {
     }
 }
 ```
-- The ```for``` keyword can be used to iterate over ranges
+- `for` キーワードを使用して、範囲（レンジ）に対する反復処理ができます
 ```rust
 fn main() {
-    // Will not print 43; use 40..=43 to include last element
+    // 43は出力されません。最後の要素を含めるには 40..=43 を使用します
     for x in 40..43 {
         println!("{}", x);
     } 
 }
 ```
 
-# Rust loops using loop
-- The ```loop``` keyword creates an infinite loop until a ```break``` is encountered
+# loop を使ったRustのループ
+- `loop` キーワードは、`break` に到達するまでの無限ループを作成します
 ```rust
 fn main() {
     let mut x = 40;
-    // Change the below to 'here: loop to specify optional label for the loop
+    // ループに任意のラベルを指定するには以下を 'here: loop に変更します
     loop {
         if x == 42 {
-            break; // Use break x; to return the value of x
+            break; // xの値を返すには break x; を使用します
         }
         x += 1;
     }
 }
 ```
-- The ```break``` statement can include an optional expression that can be used to assign the value of a ```loop``` expression
-- The ```continue``` keyword can be used to return to the top of the ```loop```
-- Loop labels can be used with ```break``` or ```continue``` and are useful when dealing with nested loops
+- `break` 文には任意の式を含めることができ、`loop` 式全体の評価値として代入できます
+- `continue` キーワードを使用すると、`loop` の先頭に戻ることができます
+- ループラベルは `break` や `continue` と組み合わせて使用でき、ネストしたループを扱う際に役立ちます
 
-# Rust expression blocks
-- Rust expression blocks are simply a sequence of expressions enclosed in ```{}```. The evaluated value is simply the last expression in the block
+# Rustの式ブロック
+- Rustの式ブロックは、単に `{}` で囲まれた一連の式です。ブロックの評価値は、そのブロック内の最後の式になります
 ```rust
 fn main() {
     let x = {
         let y = 40;
-        y + 2 // Note: ; must be omitted
+        y + 2 // 注: ; は省略する必要があります
     };
-    // Notice the Python style printing
+    // Pythonスタイルの出力形式に注目してください
     println!("{x}");
 }
 ```
-- Rust style is to use this to omit the ```return``` keyword in functions
+- Rustスタイルでは、これを利用して関数内の `return` キーワードを省略します
 ```rust
 fn is_secret_of_life(x: u32) -> bool {
-    // Same as if x == 42 {true} else {false}
-    x == 42 // Note: ; must be omitted 
+    // if x == 42 {true} else {false} と同じです
+    x == 42 // 注: ; は省略する必要があります
 }
 fn main() {
     println!("{}", is_secret_of_life(42));
 }
 ```
-
-

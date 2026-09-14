@@ -1,11 +1,10 @@
-# Microsoft Open Source Code of Conduct
+# Microsoft オープンソース行動規範
 
-This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
+本プロジェクトは [Microsoft オープンソース行動規範（Microsoft Open Source Code of Conduct）](https://opensource.microsoft.com/codeofconduct/) を採用しています。
 
-Resources:
+関連リソース:
 
-- [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/)
-- [Microsoft Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/)
-- Contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with questions or concerns
-- Employees can reach out at [aka.ms/opensource/moderation-support](https://aka.ms/opensource/moderation-support)
-
+- [Microsoft オープンソース行動規範](https://opensource.microsoft.com/codeofconduct/)
+- [Microsoft 行動規範 FAQ](https://opensource.microsoft.com/codeofconduct/faq/)
+- 質問や懸念事項に関する連絡先: [opencode@microsoft.com](mailto:opencode@microsoft.com)
+- 従業員向け窓口: [aka.ms/opensource/moderation-support](https://aka.ms/opensource/moderation-support)

@@ -1,97 +1,97 @@
-## Essential Rust Keywords for C# Developers
+## C# 開発者のための Rust 重要キーワードリファレンス
 
-> **What you'll learn:** A quick-reference mapping of Rust keywords to their C# equivalents —
-> visibility modifiers, ownership keywords, control flow, type definitions, and pattern matching syntax.
+> **学習内容:** Rust のキーワードとそれに対応する C# の構文をまとめたクイックリファレンスです —
+> 可視性修飾子、所有権キーワード、制御フロー、型定義、パターンマッチング構文について学びます。
 >
-> **Difficulty:** 🟢 Beginner
+> **難易度:** 🟢 初級
 
-Understanding Rust's keywords and their purposes helps C# developers navigate the language more effectively.
+Rust のキーワードとその役割を理解することで、C# 開発者はよりスムーズに Rust を使いこなせるようになります。
 
-### Visibility and Access Control Keywords
+### 可視性とアクセス制御のキーワード
 
-#### C# Access Modifiers
+#### C# のアクセス修飾子
 ```csharp
 public class Example
 {
-    public int PublicField;           // Accessible everywhere
-    private int privateField;        // Only within this class
-    protected int protectedField;    // This class and subclasses
-    internal int internalField;      // Within this assembly
-    protected internal int protectedInternalField; // Combination
+    public int PublicField;           // どこからでもアクセス可能
+    private int privateField;        // このクラス内からのみ
+    protected int protectedField;    // このクラスおよび派生クラスからのみ
+    internal int internalField;      // 同一アセンブリ内からのみ
+    protected internal int protectedInternalField; // 両方の組み合わせ
 }
 ```
 
-#### Rust Visibility Keywords
+#### Rust の可視性キーワード
 ```rust
-// pub - Makes items public (like C# public)
+// pub - アイテムを公開する（C# の public に相当）
 pub struct PublicStruct {
-    pub public_field: i32,           // Public field
-    private_field: i32,              // Private by default (no keyword)
+    pub public_field: i32,           // 公開フィールド
+    private_field: i32,              // デフォルトで非公開（キーワードなし）
 }
 
 pub mod my_module {
-    pub(crate) fn crate_public() {}     // Public within current crate (like internal)
-    pub(super) fn parent_public() {}    // Public to parent module
-    pub(self) fn self_public() {}       // Public within current module (same as private)
+    pub(crate) fn crate_public() {}     // 現在のクレート内でのみ公開（internal に相当）
+    pub(super) fn parent_public() {}    // 親モジュールに対して公開
+    pub(self) fn self_public() {}       // 現在のモジュール内でのみ公開（非公開と同じ）
     
-    pub use super::PublicStruct;        // Re-export (like using alias)
+    pub use super::PublicStruct;        // 再エクスポート（using エイリアスに類似）
 }
 
-// No direct equivalent to C# protected - use composition instead
+// C# の protected に直接対応するものはありません - 代わりにコンポジションを使用します
 ```
 
-### Memory and Ownership Keywords
+### メモリと所有権のキーワード
 
-#### C# Memory Keywords
+#### C# のメモリ関連キーワード
 ```csharp
-// ref - Pass by reference
+// ref - 参照渡し
 public void Method(ref int value) { value = 10; }
 
-// out - Output parameter
+// out - 出力パラメータ
 public bool TryParse(string input, out int result) { /* */ }
 
-// in - Readonly reference (C# 7.2+)
-public void ReadOnly(in LargeStruct data) { /* Cannot modify data */ }
+// in - 読み取り専用参照（C# 7.2+）
+public void ReadOnly(in LargeStruct data) { /* data を変更することはできない */ }
 ```
 
-#### Rust Ownership Keywords
+#### Rust の所有権キーワード
 ```rust
-// & - Immutable reference (like C# in parameter)
+// & - 不変参照（C# の in パラメータに類似）
 fn read_only(data: &Vec<i32>) {
-    println!("Length: {}", data.len()); // Can read, cannot modify
+    println!("Length: {}", data.len()); // 読み取り可能、変更不可
 }
 
-// &mut - Mutable reference (like C# ref parameter)
+// &mut - 可変参照（C# の ref パラメータに類似）
 fn modify(data: &mut Vec<i32>) {
-    data.push(42); // Can modify
+    data.push(42); // 変更可能
 }
 
-// move - Force move capture in closures
+// move - クロージャへの値のムーブキャプチャを強制
 let data = vec![1, 2, 3];
 let closure = move || {
-    println!("{:?}", data); // data is moved into closure
+    println!("{:?}", data); // data はクロージャ内にムーブされる
 };
-// data is no longer accessible here
+// ここではもはや data にアクセスできない
 
-// Box - Heap allocation (like C# new for reference types)
-let boxed_data = Box::new(42); // Allocate on heap
+// Box - ヒープ割り当て（参照型に対する C# の new に類似）
+let boxed_data = Box::new(42); // ヒープ上に割り当て
 ```
 
-### Control Flow Keywords
+### 制御フローキーワード
 
-#### C# Control Flow
+#### C# の制御フロー
 ```csharp
-// return - Exit function with value
+// return - 値を返して関数を終了
 public int GetValue() { return 42; }
 
-// yield return - Iterator pattern
+// yield return - イテレータパターン
 public IEnumerable<int> GetNumbers()
 {
     yield return 1;
     yield return 2;
 }
 
-// break/continue - Loop control
+// break/continue - ループ制御
 foreach (var item in items)
 {
     if (item == null) continue;
@@ -99,89 +99,89 @@ foreach (var item in items)
 }
 ```
 
-#### Rust Control Flow Keywords
+#### Rust の制御フローキーワード
 ```rust
-// return - Explicit return (usually not needed)
+// return - 明示的な return（通常は不要）
 fn get_value() -> i32 {
-    return 42; // Explicit return
-    // OR just: 42 (implicit return)
+    return 42; // 明示的な return
+    // または単に: 42（暗黙的な戻り値）
 }
 
-// break/continue - Loop control with optional values
+// break/continue - 戻り値を伴うループ制御
 fn find_value() -> Option<i32> {
     loop {
         let value = get_next();
         if value < 0 { continue; }
-        if value > 100 { break None; }      // Break with value
-        if value == 42 { break Some(value); } // Break with success
+        if value > 100 { break None; }      // 値を伴う break
+        if value == 42 { break Some(value); } // 成功時の値を伴う break
     }
 }
 
-// loop - Infinite loop (like while(true))
+// loop - 無限ループ（while(true) に相当）
 loop {
     if condition { break; }
 }
 
-// while - Conditional loop
+// while - 条件付きループ
 while condition {
-    // code
+    // 処理コード
 }
 
-// for - Iterator loop
+// for - イテレータループ
 for item in collection {
-    // code
+    // 処理コード
 }
 ```
 
-### Type Definition Keywords
+### 型定義キーワード
 
-#### C# Type Keywords
+#### C# の型キーワード
 ```csharp
-// class - Reference type
+// class - 参照型
 public class MyClass { }
 
-// struct - Value type
+// struct - 値型
 public struct MyStruct { }
 
-// interface - Contract definition
+// interface - コントラクト定義
 public interface IMyInterface { }
 
-// enum - Enumeration
+// enum - 列挙型
 public enum MyEnum { Value1, Value2 }
 
-// delegate - Function pointer
+// delegate - 関数ポインタ
 public delegate void MyDelegate(int value);
 ```
 
-#### Rust Type Keywords
+#### Rust の型キーワード
 ```rust
-// struct - Data structure (like C# class/struct combined)
+// struct - データ構造（C# の class/struct を統合したような存在）
 struct MyStruct {
     field: i32,
 }
 
-// enum - Algebraic data type (much more powerful than C# enum)
+// enum - 代数的データ型（C# の enum より遥かに強力）
 enum MyEnum {
     Variant1,
-    Variant2(i32),              // Can hold data
-    Variant3 { x: i32, y: i32 }, // Struct-like variant
+    Variant2(i32),              // データを保持可能
+    Variant3 { x: i32, y: i32 }, // 構造体スタイルのバリアント
 }
 
-// trait - Interface definition (like C# interface but more powerful)
+// trait - インターフェース定義（C# の interface に類似するがより強力）
 trait MyTrait {
     fn method(&self);
     
-    // Default implementation (like C# 8+ default interface methods)
+    // デフォルト実装（C# 8+ のインターフェースのデフォルトメソッドに類似）
     fn default_method(&self) {
         println!("Default implementation");
     }
 }
 
-// type - Type alias (like C# using alias)
+// type - 型エイリアス（C# の using エイリアスに類似）
 type UserId = u32;
 type Result<T> = std::result::Result<T, MyError>;
 
-// impl - Implementation block (no C# equivalent - methods defined separately)
+// impl - 実装ブロック（C# に直接の対応なし - メソッドを型定義と分けて定義）
 impl MyStruct {
     fn new() -> MyStruct {
         MyStruct { field: 0 }
@@ -195,93 +195,93 @@ impl MyTrait for MyStruct {
 }
 ```
 
-### Function Definition Keywords
+### 関数定義キーワード
 
-#### C# Function Keywords
+#### C# の関数キーワード
 ```csharp
-// static - Class method
+// static - クラスメソッド
 public static void StaticMethod() { }
 
-// virtual - Can be overridden
+// virtual - オーバーライド可能
 public virtual void VirtualMethod() { }
 
-// override - Override base method
+// override - 基底メソッドをオーバーライド
 public override void VirtualMethod() { }
 
-// abstract - Must be implemented
+// abstract - 実装が必須
 public abstract void AbstractMethod();
 
-// async - Asynchronous method
+// async - 非同期メソッド
 public async Task<int> AsyncMethod() { return await SomeTask(); }
 ```
 
-#### Rust Function Keywords
+#### Rust の関数キーワード
 ```rust
-// fn - Function definition (like C# method but standalone)
+// fn - 関数定義（C# のメソッドに似ているが独立して定義可能）
 fn regular_function() {
     println!("Hello");
 }
 
-// const fn - Compile-time function (like C# const but for functions)
+// const fn - コンパイル時関数（C# の const に似ているが関数に適用）
 const fn compile_time_function() -> i32 {
-    42 // Can be evaluated at compile time
+    42 // コンパイル時に評価可能
 }
 
-// async fn - Asynchronous function (like C# async)
+// async fn - 非同期関数（C# の async に相当）
 async fn async_function() -> i32 {
     some_async_operation().await
 }
 
-// unsafe fn - Function that may violate memory safety
+// unsafe fn - メモリ安全性を損なう可能性のある関数
 unsafe fn unsafe_function() {
-    // Can perform unsafe operations
+    // unsafe な操作を実行可能
 }
 
-// extern fn - Foreign function interface
+// extern fn - 外部関数インターフェース（FFI）
 extern "C" fn c_compatible_function() {
-    // Can be called from C
+    // C 言語から呼び出し可能
 }
 ```
 
-### Variable Declaration Keywords
+### 変数宣言キーワード
 
-#### C# Variable Keywords
+#### C# の変数キーワード
 ```csharp
-// var - Type inference
-var name = "John"; // Inferred as string
+// var - 型推論
+var name = "John"; // string と推論される
 
-// const - Compile-time constant
+// const - コンパイル時定数
 const int MaxSize = 100;
 
-// readonly - Runtime constant (fields only, not local variables)
+// readonly - 実行時定数（ローカル変数ではなくフィールドのみ）
 // readonly DateTime createdAt = DateTime.Now;
 
-// static - Class-level variable
+// static - クラスレベル変数
 static int instanceCount = 0;
 ```
 
-#### Rust Variable Keywords
+#### Rust の変数キーワード
 ```rust
-// let - Variable binding (like C# var)
-let name = "John"; // Immutable by default
+// let - 変数バインディング（C# の var に相当）
+let name = "John"; // デフォルトで不変
 
-// let mut - Mutable variable binding
-let mut count = 0; // Can be changed
+// let mut - 可変変数バインディング
+let mut count = 0; // 変更可能
 count += 1;
 
-// const - Compile-time constant (like C# const)
+// const - コンパイル時定数（C# の const に相当）
 const MAX_SIZE: usize = 100;
 
-// static - Global variable (like C# static)
+// static - グローバル変数（C# の static に相当）
 static INSTANCE_COUNT: std::sync::atomic::AtomicUsize = 
     std::sync::atomic::AtomicUsize::new(0);
 ```
 
-### Pattern Matching Keywords
+### パターンマッチングキーワード
 
-#### C# Pattern Matching (C# 8+)
+#### C# のパターンマッチング（C# 8+）
 ```csharp
-// switch expression
+// switch 式
 string result = value switch
 {
     1 => "One",
@@ -289,121 +289,119 @@ string result = value switch
     _ => "Other"
 };
 
-// is pattern
+// is パターン
 if (obj is string str)
 {
     Console.WriteLine(str.Length);
 }
 ```
 
-#### Rust Pattern Matching Keywords
+#### Rust のパターンマッチングキーワード
 ```rust
-// match - Pattern matching (like C# switch but much more powerful)
+// match - パターンマッチング（C# の switch に似ているがより強力）
 let result = match value {
     1 => "One",
     2 => "Two",
-    3..=10 => "Between 3 and 10", // Range patterns
-    _ => "Other", // Wildcard (like C# _)
+    3..=10 => "Between 3 and 10", // 範囲パターン
+    _ => "Other", // ワイルドカード（C# の _ に相当）
 };
 
-// if let - Conditional pattern matching
+// if let - 条件付きパターンマッチング
 if let Some(value) = optional {
     println!("Got value: {}", value);
 }
 
-// while let - Loop with pattern matching
+// while let - パターンマッチングを伴うループ
 while let Some(item) = iterator.next() {
     println!("Item: {}", item);
 }
 
-// let with patterns - Destructuring
-let (x, y) = point; // Destructure tuple
+// パターンを伴う let - 分割代入
+let (x, y) = point; // タプルの分割代入
 let Some(value) = optional else {
-    return; // Early return if pattern doesn't match
+    return; // パターンに一致しない場合の早期リターン
 };
 ```
 
-### Memory Safety Keywords
+### メモリ安全性のキーワード
 
-#### C# Memory Keywords
+#### C# のメモリ関連キーワード
 ```csharp
-// unsafe - Disable safety checks
+// unsafe - 安全性チェックを無効化
 unsafe
 {
     int* ptr = &variable;
     *ptr = 42;
 }
 
-// fixed - Pin managed memory
+// fixed - マネージドメモリを固定（ピン留め）
 unsafe
 {
     fixed (byte* ptr = array)
     {
-        // Use ptr
+        // ptr を使用
     }
 }
 ```
 
-#### Rust Safety Keywords
+#### Rust の安全性キーワード
 ```rust
-// unsafe - Disable borrow checker (use sparingly!)
+// unsafe - ボローチェッカーを無効化（使用は最小限に！）
 unsafe {
     let ptr = &variable as *const i32;
-    let value = *ptr; // Dereference raw pointer
+    let value = *ptr; // 生ポインタの参照解決
 }
 
-// Raw pointer types (no C# equivalent - usually not needed)
-let ptr: *const i32 = &42;  // Immutable raw pointer
-let ptr: *mut i32 = &mut 42; // Mutable raw pointer
+// 生ポインタ型（C# に直接の対応なし - 通常は不要）
+let ptr: *const i32 = &42;  // 不変生ポインタ
+let ptr: *mut i32 = &mut 42; // 可変生ポインタ
 ```
 
-### Common Rust Keywords Not in C#
+### C# には存在しない一般的な Rust キーワード
 
 ```rust
-// where - Generic constraints (more flexible than C# where)
+// where - ジェネリック制約（C# の where より柔軟）
 fn generic_function<T>() 
 where 
     T: Clone + Send + Sync,
 {
-    // T must implement Clone, Send, and Sync traits
+    // T は Clone、Send、Sync トレイトを実装している必要がある
 }
 
-// dyn - Dynamic trait objects (like C# object but type-safe)
+// dyn - 動的トレイトオブジェクト（C# の object に似ているが型安全）
 let drawable: Box<dyn Draw> = Box::new(Circle::new());
 
-// Self - Refer to the implementing type (like C# this but for types)
+// Self - 実装対象の型自身を参照（C# の this に似ているが型を指す）
 impl MyStruct {
     fn new() -> Self { // Self = MyStruct
         Self { field: 0 }
     }
 }
 
-// self - Method receiver
+// self - メソッドレシーバ
 impl MyStruct {
-    fn method(&self) { }        // Immutable borrow
-    fn method_mut(&mut self) { } // Mutable borrow  
-    fn consume(self) { }        // Take ownership
+    fn method(&self) { }        // 不変借用
+    fn method_mut(&mut self) { } // 可変借用  
+    fn consume(self) { }        // 所有権の移動（消費）
 }
 
-// crate - Refer to current crate root
-use crate::models::User; // Absolute path from crate root
+// crate - 現在のクレートのルートを参照
+use crate::models::User; // クレートルートからの絶対パス
 
-// super - Refer to parent module
-use super::utils; // Import from parent module
+// super - 親モジュールを参照
+use super::utils; // 親モジュールからインポート
 ```
 
-### Keywords Summary for C# Developers
+### C# 開発者のためのキーワードまとめ
 
-| Purpose | C# | Rust | Key Difference |
+| 用途 | C# | Rust | 主な相違点 |
 |---------|----|----|----------------|
-| Visibility | `public`, `private`, `internal` | `pub`, default private | More granular with `pub(crate)` |
-| Variables | `var`, `readonly`, `const` | `let`, `let mut`, `const` | Immutable by default |
-| Functions | `method()` | `fn` | Standalone functions |
-| Types | `class`, `struct`, `interface` | `struct`, `enum`, `trait` | Enums are algebraic types |
-| Generics | `<T> where T : IFoo` | `<T> where T: Foo` | More flexible constraints |
-| References | `ref`, `out`, `in` | `&`, `&mut` | Compile-time borrow checking |
-| Patterns | `switch`, `is` | `match`, `if let` | Exhaustive matching required |
+| 可視性 | `public`, `private`, `internal` | `pub`, デフォルトは非公開 | `pub(crate)` などでより細やかな制御が可能 |
+| 変数 | `var`, `readonly`, `const` | `let`, `let mut`, `const` | デフォルトで不変 |
+| 関数 | `method()` | `fn` | 単独の関数を定義可能 |
+| 型 | `class`, `struct`, `interface` | `struct`, `enum`, `trait` | enum は代数的データ型 |
+| ジェネリクス | `<T> where T : IFoo` | `<T> where T: Foo` | より柔軟な制約の記述が可能 |
+| 参照 | `ref`, `out`, `in` | `&`, `&mut` | コンパイル時の借用チェック |
+| パターン | `switch`, `is` | `match`, `if let` | 網羅的マッチングが必須 |
 
 ***
-
-

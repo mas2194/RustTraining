@@ -1,17 +1,14 @@
-# Protocol State Machines — Type-State for Real Hardware 🔴
+# プロトコル状態機械 — 実ハードウェア向け型状態（タイプステート） 🔴
 
-> **What you'll learn:** How type-state encoding makes protocol violations (wrong-order commands, use-after-close) into compile errors, applied to IPMI session lifecycles and PCIe link training.
+> **学修目標:** 型状態（タイプステート）のエンコーディングによってプロトコル違反（順序の誤ったコマンド送信、クローズ後の使用など）をコンパイルエラーにする方法を、IPMIセッションのライフサイクルとPCIeリンク訓練への適用を通じて学びます。
 >
-> **Cross-references:** [ch01](ch01-the-philosophy-why-types-beat-tests.md) (level 2 — state correctness), [ch04](ch04-capability-tokens-zero-cost-proof-of-aut.md) (tokens), [ch09](ch09-phantom-types-for-resource-tracking.md) (phantom types), [ch11](ch11-fourteen-tricks-from-the-trenches.md) (trick 4 — typestate builder, trick 8 — async type-state)
+> **関連章:** [第1章](ch01-the-philosophy-why-types-beat-tests.md)（レベル2 — 状態の正しさ）、[第4章](ch04-capability-tokens-zero-cost-proof-of-aut.md)（トークン）、[第9章](ch09-phantom-types-for-resource-tracking.md)（Phantom型）、[第11章](ch11-fourteen-tricks-from-the-trenches.md)（テクニック4 — タイプステートビルダー、テクニック8 — 非同期型状態）
 
-## The Problem: Protocol Violations
+## 課題: プロトコル違反
 
-Hardware protocols have **strict state machines**. An IPMI session has states:
-Unauthenticated → Authenticated → Active → Closed. PCIe link training goes through
-Detect → Polling → Configuration → L0. Sending a command in the wrong state
-corrupts the session or hangs the bus.
+ハードウェアプロトコルには**厳密な状態機械（ステートマシン）**が存在します。たとえばIPMIセッションには、Unauthenticated（未認証）→ Authenticated（認証済み）→ Active（アクティブ）→ Closed（クローズ）という状態があります。PCIeのリンク訓練（LTSSM）は、Detect（検出）→ Polling（ポーリング）→ Configuration（設定）→ L0 という遷移をたどります。誤った状態でコマンドを送信すると、セッションが破損したりバスがハングアップしたりします。
 
-**IPMI session state machine:**
+**IPMIセッション状態機械:**
 
 ```mermaid
 stateDiagram-v2
@@ -22,27 +19,27 @@ stateDiagram-v2
     Active --> Closed : close()
     Closed --> [*]
 
-    note right of Active : send_command() only exists here
-    note right of Idle : send_command() → compile error
+    note right of Active : send_command() はこの状態でのみ存在
+    note right of Idle : send_command() → コンパイルエラー
 ```
 
-**PCIe Link Training State Machine (LTSSM):**
+**PCIeリンク訓練状態機械（LTSSM）:**
 
 ```mermaid
 stateDiagram-v2
     [*] --> Detect
-    Detect --> Polling : receiver detected
-    Polling --> Configuration : bit lock + symbol lock
-    Configuration --> L0 : link number + lane assigned
+    Detect --> Polling : 受信機検出（receiver detected）
+    Polling --> Configuration : ビットロック + シンボルロック
+    Configuration --> L0 : リンク番号 + レーン割り当て
     L0 --> L0 : send_tlp() / receive_tlp()
-    L0 --> Recovery : error threshold
-    Recovery --> L0 : retrained
-    Recovery --> Detect : retraining failed
+    L0 --> Recovery : エラー閾値到達
+    Recovery --> L0 : 再訓練成功（retrained）
+    Recovery --> Detect : 再訓練失敗（retraining failed）
 
-    note right of L0 : TLP transmit only in L0
+    note right of L0 : TLP送信はL0でのみ可能
 ```
 
-In C/C++, state is tracked with an enum and runtime checks:
+C/C++では、状態は列挙型（enum）と実行時チェックで追跡されます：
 
 ```c
 typedef enum { IDLE, AUTHENTICATED, ACTIVE, CLOSED } session_state_t;
@@ -54,24 +51,22 @@ typedef struct {
 } ipmi_session_t;
 
 int ipmi_send_command(ipmi_session_t *s, uint8_t cmd, uint8_t *data, int len) {
-    if (s->state != ACTIVE) {        // runtime check — easy to forget
+    if (s->state != ACTIVE) {        // 実行時チェック — 忘れがち
         return -EINVAL;
     }
-    // ... send command ...
+    // ... コマンド送信 ...
     return 0;
 }
 ```
 
-## Type-State Pattern
+## 型状態（タイプステート）パターン
 
-With type-state, each protocol state is a **distinct type**. Transitions are methods
-that consume one state and return another. The compiler prevents calling methods in
-the wrong state because **those methods don't exist on that type**.
+型状態パターンでは、各プロトコル状態が**個別の型**になります。状態遷移は、ある状態を消費して別の状態を返すメソッドとして表現されます。誤った状態でのメソッド呼び出しは、**その型にそのメソッドが存在しない**ため、コンパイラによって防がれます。
 
 ```rust,ignore
 use std::marker::PhantomData;
 
-// States — zero-sized marker types
+// 状態 — サイズゼロのマーカー型
 pub struct Idle;
 ## Case Study: IPMI Session Lifecycle
 
@@ -79,15 +74,15 @@ pub struct Authenticated;
 pub struct Active;
 pub struct Closed;
 
-/// IPMI session parameterised by its current state.
-/// The state exists ONLY in the type system (PhantomData is zero-sized).
+/// 現在の状態でパラメタライズされたIPMIセッション。
+/// 状態は型システム上にのみ存在します（PhantomDataはサイズゼロ）。
 pub struct IpmiSession<State> {
-    transport: String,     // e.g., "192.168.1.100"
+    transport: String,     // 例: "192.168.1.100"
     session_id: Option<u32>,
     _state: PhantomData<State>,
 }
 
-// Transition: Idle → Authenticated
+// 遷移: Idle → Authenticated
 impl IpmiSession<Idle> {
     pub fn new(host: &str) -> Self {
         IpmiSession {
@@ -98,11 +93,11 @@ impl IpmiSession<Idle> {
     }
 
     pub fn authenticate(
-        self,              // ← consumes Idle session
+        self,              // ← Idleセッションを消費
         user: &str,
         pass: &str,
     ) -> Result<IpmiSession<Authenticated>, String> {
-        println!("Authenticating {user} on {}", self.transport);
+        println!("{user} を {} で認証中", self.transport);
         Ok(IpmiSession {
             transport: self.transport,
             session_id: Some(42),
@@ -111,11 +106,11 @@ impl IpmiSession<Idle> {
     }
 }
 
-// Transition: Authenticated → Active
+// 遷移: Authenticated → Active
 impl IpmiSession<Authenticated> {
     pub fn activate(self) -> Result<IpmiSession<Active>, String> {
-        // session_id is guaranteed Some by the type-state transition path.
-        println!("Activating session {}", self.session_id.unwrap());
+        // session_idは型状態の遷移パスによってSomeであることが保証される
+        println!("セッション {} をアクティブ化中", self.session_id.unwrap());
         Ok(IpmiSession {
             transport: self.transport,
             session_id: self.session_id,
@@ -124,17 +119,17 @@ impl IpmiSession<Authenticated> {
     }
 }
 
-// Operations available ONLY in Active state
+// Active状態でのみ利用可能な操作
 impl IpmiSession<Active> {
     pub fn send_command(&mut self, netfn: u8, cmd: u8, data: &[u8]) -> Vec<u8> {
-        // session_id is guaranteed Some in Active state.
-        println!("Sending cmd 0x{cmd:02X} on session {}", self.session_id.unwrap());
-        vec![0x00] // stub: completion code OK
+        // Active状態ではsession_idがSomeであることが保証される
+        println!("セッション {} でコマンド 0x{cmd:02X} を送信中", self.session_id.unwrap());
+        vec![0x00] // スタブ: 完了コード OK
     }
 
     pub fn close(self) -> IpmiSession<Closed> {
-        // session_id is guaranteed Some in Active state.
-        println!("Closing session {}", self.session_id.unwrap());
+        // Active状態ではsession_idがSomeであることが保証される
+        println!("セッション {} をクローズ中", self.session_id.unwrap());
         IpmiSession {
             transport: self.transport,
             session_id: None,
@@ -147,50 +142,49 @@ fn ipmi_workflow() -> Result<(), String> {
     let session = IpmiSession::new("192.168.1.100");
 
     // session.send_command(0x04, 0x2D, &[]);
-    //  ^^^^^^ ERROR: no method `send_command` on IpmiSession<Idle> ❌
+    //  ^^^^^^ エラー: IpmiSession<Idle> に `send_command` メソッドは存在しない ❌
 
     let session = session.authenticate("admin", "password")?;
 
     // session.send_command(0x04, 0x2D, &[]);
-    //  ^^^^^^ ERROR: no method `send_command` on IpmiSession<Authenticated> ❌
+    //  ^^^^^^ エラー: IpmiSession<Authenticated> に `send_command` メソッドは存在しない ❌
 
     let mut session = session.activate()?;
 
-    // ✅ NOW send_command exists:
+    // ✅ これで send_command が利用可能になる:
     let response = session.send_command(0x04, 0x2D, &[1]);
 
     let _closed = session.close();
 
     // _closed.send_command(0x04, 0x2D, &[]);
-    //  ^^^^^^ ERROR: no method `send_command` on IpmiSession<Closed> ❌
+    //  ^^^^^^ エラー: IpmiSession<Closed> に `send_command` メソッドは存在しない ❌
 
     Ok(())
 }
 ```
 
-**No runtime state checks anywhere.** The compiler enforces:
-- Authentication before activation
-- Activation before sending commands
-- No commands after close
+**実行時状態チェックは一切不要です。** コンパイラが以下を強制します：
+- アクティブ化前の認証
+- コマンド送信前のアクティブ化
+- クローズ後はコマンドを送信できないこと
 
-## PCIe Link Training State Machine
+## PCIeリンク訓練状態機械（LTSSM）
 
-PCIe link training is a multi-phase protocol defined in the PCIe specification.
-Type-state prevents sending data before the link is ready:
+PCIeリンク訓練は、PCIe仕様で定義されたマルチフェーズプロトコルです。型状態パターンを使うことで、リンクの準備が整う前にデータが送信されるのを防止できます：
 
 ```rust,ignore
 use std::marker::PhantomData;
 
-// PCIe LTSSM states (simplified)
+// PCIe LTSSM状態（簡略化版）
 pub struct Detect;
 pub struct Polling;
 pub struct Configuration;
-pub struct L0;         // fully operational
+pub struct L0;         // 完全に動作可能な状態
 pub struct Recovery;
 
 pub struct PcieLink<State> {
     slot: u32,
-    width: u8,          // negotiated width (x1, x4, x8, x16)
+    width: u8,          // ネゴシエートされたリンク幅 (x1, x4, x8, x16)
     speed: u8,          // Gen1=1, Gen2=2, Gen3=3, Gen4=4, Gen5=5
     _state: PhantomData<State>,
 }
@@ -204,7 +198,7 @@ impl PcieLink<Detect> {
     }
 
     pub fn detect_receiver(self) -> Result<PcieLink<Polling>, String> {
-        println!("Slot {}: receiver detected", self.slot);
+        println!("スロット {}: 受信機を検出しました", self.slot);
         Ok(PcieLink {
             slot: self.slot, width: 0, speed: 0,
             _state: PhantomData,
@@ -214,7 +208,7 @@ impl PcieLink<Detect> {
 
 impl PcieLink<Polling> {
     pub fn poll_compliance(self) -> Result<PcieLink<Configuration>, String> {
-        println!("Slot {}: polling complete, entering configuration", self.slot);
+        println!("スロット {}: ポーリング完了、設定状態に入ります", self.slot);
         Ok(PcieLink {
             slot: self.slot, width: 0, speed: 0,
             _state: PhantomData,
@@ -224,7 +218,7 @@ impl PcieLink<Polling> {
 
 impl PcieLink<Configuration> {
     pub fn negotiate(self, width: u8, speed: u8) -> Result<PcieLink<L0>, String> {
-        println!("Slot {}: negotiated x{width} Gen{speed}", self.slot);
+        println!("スロット {}: x{width} Gen{speed} をネゴシエートしました", self.slot);
         Ok(PcieLink {
             slot: self.slot, width, speed,
             _state: PhantomData,
@@ -233,13 +227,13 @@ impl PcieLink<Configuration> {
 }
 
 impl PcieLink<L0> {
-    /// Send a TLP — only possible when the link is fully trained (L0).
+    /// TLPを送信 — リンクが完全に訓練された（L0）状態でのみ可能
     pub fn send_tlp(&mut self, tlp: &[u8]) -> Vec<u8> {
-        println!("Slot {}: sending {} byte TLP", self.slot, tlp.len());
-        vec![0x00] // stub
+        println!("スロット {}: {} バイトのTLPを送信中", self.slot, tlp.len());
+        vec![0x00] // スタブ
     }
 
-    /// Enter recovery — returns to Recovery state.
+    /// リカバリ状態へ遷移 — Recovery状態を返す
     pub fn enter_recovery(self) -> PcieLink<Recovery> {
         PcieLink {
             slot: self.slot, width: self.width, speed: self.speed,
@@ -254,7 +248,7 @@ impl PcieLink<L0> {
 
 impl PcieLink<Recovery> {
     pub fn retrain(self, speed: u8) -> Result<PcieLink<L0>, String> {
-        println!("Slot {}: retrained at Gen{speed}", self.slot);
+        println!("スロット {}: Gen{speed} で再訓練しました", self.slot);
         Ok(PcieLink {
             slot: self.slot, width: self.width, speed,
             _state: PhantomData,
@@ -265,29 +259,28 @@ impl PcieLink<Recovery> {
 fn pcie_workflow() -> Result<(), String> {
     let link = PcieLink::new(0);
 
-    // link.send_tlp(&[0x01]);  // ❌ no method `send_tlp` on PcieLink<Detect>
+    // link.send_tlp(&[0x01]);  // ❌ エラー: PcieLink<Detect> に `send_tlp` メソッドは存在しない
 
     let link = link.detect_receiver()?;
     let link = link.poll_compliance()?;
     let mut link = link.negotiate(16, 5)?; // x16 Gen5
 
-    // ✅ NOW we can send TLPs:
+    // ✅ これでTLPを送信可能:
     let _resp = link.send_tlp(&[0x00, 0x01, 0x02]);
-    println!("Link: {}", link.link_info());
+    println!("リンク情報: {}", link.link_info());
 
-    // Recovery and retrain:
+    // リカバリと再訓練:
     let recovery = link.enter_recovery();
-    let mut link = recovery.retrain(4)?;  // downgrade to Gen4
+    let mut link = recovery.retrain(4)?;  // Gen4にダウングレード
     let _resp = link.send_tlp(&[0x03]);
 
     Ok(())
 }
 ```
 
-## Combining Type-State with Capability Tokens
+## 型状態と機能トークンの結合
 
-Type-state and capability tokens compose naturally. A diagnostic that requires
-an active IPMI session AND admin privileges:
+型状態と機能トークン（ケーパビリティトークン）は自然に組み合わせることができます。たとえば、アクティブなIPMIセッション**かつ**管理者権限を要求する診断処理を考えてみましょう：
 
 ```rust,ignore
 # use std::marker::PhantomData;
@@ -298,35 +291,32 @@ an active IPMI session AND admin privileges:
 #     pub fn send_command(&mut self, _nf: u8, _cmd: u8, _d: &[u8]) -> Vec<u8> { vec![] }
 # }
 
-/// Run a firmware update — requires:
-/// 1. Active IPMI session (type-state)
-/// 2. Admin privileges (capability token)
+/// ファームウェア更新の実行 — 以下を要求:
+/// 1. アクティブなIPMIセッション（型状態）
+/// 2. 管理者権限（機能トークン）
 pub fn firmware_update(
-    session: &mut IpmiSession<Active>,   // proves session is active
-    _admin: &AdminToken,                 // proves caller is admin
+    session: &mut IpmiSession<Active>,   // セッションがアクティブであることを証明
+    _admin: &AdminToken,                 // 呼び出し元が管理者であることを証明
     image: &[u8],
 ) -> Result<(), String> {
-    // No runtime checks needed — the signature IS the check
+    // 実行時チェックは不要 — シグネチャ自体がチェックそのもの
     session.send_command(0x2C, 0x01, image);
     Ok(())
 }
 ```
 
-The caller must:
-1. Create a session (`Idle`)
-2. Authenticate it (`Authenticated`)
-3. Activate it (`Active`)
-4. Obtain an `AdminToken`
-5. Then and only then call `firmware_update()`
+呼び出し元は次の手順を踏む必要があります：
+1. セッションを作成する（`Idle`）
+2. 認証する（`Authenticated`）
+3. アクティブ化する（`Active`）
+4. `AdminToken` を取得する
+5. これらすべてを満たして初めて `firmware_update()` を呼び出すことができる
 
-All enforced at compile time, zero runtime cost.
+これらはすべてコンパイル時に強制され、実行時コストはゼロです。
 
-## Beat 3: Firmware Update — Multi-Phase FSM with Composition
+## ビート3: ファームウェア更新 — 合成によるマルチフェーズ有限状態機械
 
-A firmware update lifecycle has more states than a session and composition with
-both capability tokens AND single-use types (ch03). This is the most complex
-type-state example in the book — if you're comfortable with it, you've mastered
-the pattern.
+ファームウェア更新のライフサイクルは、通常のセッションよりも多くの状態を持ち、機能トークンおよび単一使用（使い捨て）型（[第3章](ch03-linear-types-single-use-enforcement-f.md)）の双方と合成されます。これは本書で最も複雑な型状態の例ですが、これを理解できればこのパターンを完全にマスターしたと言えます。
 
 ```mermaid
 stateDiagram-v2
@@ -340,14 +330,14 @@ stateDiagram-v2
     Applying --> WaitingReboot : apply_complete()
     WaitingReboot --> [*] : reboot()
 
-    note right of Verified : VerifiedImage token consumed by apply()
-    note right of Uploading : abort() returns to Idle (safe)
+    note right of Verified : VerifiedImage トークンは apply() で消費される
+    note right of Uploading : abort() は Idle に戻る（安全）
 ```
 
 ```rust,ignore
 use std::marker::PhantomData;
 
-// ── States ──
+// ── 状態 ──
 pub struct Idle;
 pub struct Uploading;
 pub struct Verifying;
@@ -355,13 +345,13 @@ pub struct Verified;
 pub struct Applying;
 pub struct WaitingReboot;
 
-// ── Single-use proof that image passed verification (ch03) ──
+// ── イメージが検証に合格したことを示す単一使用の証明（第3章） ──
 pub struct VerifiedImage {
     _private: (),
     pub digest: [u8; 32],
 }
 
-// ── Capability token: only admins can initiate (ch04) ──
+// ── 機能トークン: 管理者のみが開始可能（第4章） ──
 pub struct FirmwareAdminToken { _private: () }
 
 pub struct FwUpdate<S> {
@@ -374,34 +364,34 @@ impl FwUpdate<Idle> {
         FwUpdate { version: String::new(), _state: PhantomData }
     }
 
-    /// Begin upload — requires admin privilege.
+    /// アップロード開始 — 管理者権限が必要
     pub fn begin_upload(
         self,
         _admin: &FirmwareAdminToken,
         version: &str,
     ) -> FwUpdate<Uploading> {
-        println!("Uploading firmware v{version}...");
+        println!("ファームウェア v{version} をアップロード中...");
         FwUpdate { version: version.to_string(), _state: PhantomData }
     }
 }
 
 impl FwUpdate<Uploading> {
     pub fn finish_upload(self) -> FwUpdate<Verifying> {
-        println!("Upload complete, verifying v{}...", self.version);
+        println!("アップロード完了、v{} を検証中...", self.version);
         FwUpdate { version: self.version, _state: PhantomData }
     }
 
-    /// Abort returns to Idle — safe at any point during upload.
+    /// 中止すると Idle に戻る — アップロード中のどの時点でも安全
     pub fn abort(self) -> FwUpdate<Idle> {
-        println!("Upload aborted.");
+        println!("アップロードを中止しました。");
         FwUpdate { version: String::new(), _state: PhantomData }
     }
 }
 
 impl FwUpdate<Verifying> {
-    /// On success, produces a single-use VerifiedImage token.
+    /// 成功時、単一使用の VerifiedImage トークンを生成
     pub fn verify_ok(self, digest: [u8; 32]) -> (FwUpdate<Verified>, VerifiedImage) {
-        println!("Verification passed for v{}", self.version);
+        println!("v{} の検証に合格しました", self.version);
         (
             FwUpdate { version: self.version, _state: PhantomData },
             VerifiedImage { _private: (), digest },
@@ -409,84 +399,82 @@ impl FwUpdate<Verifying> {
     }
 
     pub fn verify_fail(self) -> FwUpdate<Idle> {
-        println!("Verification failed — returning to idle.");
+        println!("検証に失敗しました — アイドル状態に戻ります。");
         FwUpdate { version: String::new(), _state: PhantomData }
     }
 }
 
 impl FwUpdate<Verified> {
-    /// Apply CONSUMES the VerifiedImage token — can't apply twice.
+    /// apply は VerifiedImage トークンを消費する — 2回適用することはできない
     pub fn apply(self, proof: VerifiedImage) -> FwUpdate<Applying> {
-        println!("Applying v{} (digest: {:02x?})", self.version, &proof.digest[..4]);
-        // proof is moved — can't be reused
+        println!("v{} を適用中 (ダイジェスト: {:02x?})", self.version, &proof.digest[..4]);
+        // proof はムーブされる — 再利用不可
         FwUpdate { version: self.version, _state: PhantomData }
     }
 }
 
 impl FwUpdate<Applying> {
     pub fn apply_complete(self) -> FwUpdate<WaitingReboot> {
-        println!("Apply complete — waiting for reboot.");
+        println!("適用完了 — 再起動待機中。");
         FwUpdate { version: self.version, _state: PhantomData }
     }
 }
 
 impl FwUpdate<WaitingReboot> {
     pub fn reboot(self) {
-        println!("Rebooting into v{}...", self.version);
+        println!("v{} への再起動を実行中...", self.version);
     }
 }
 
-// ── Usage ──
+// ── 使用例 ──
 
 fn firmware_workflow() {
     let fw = FwUpdate::new();
 
-    // fw.finish_upload();  // ❌ no method `finish_upload` on FwUpdate<Idle>
+    // fw.finish_upload();  // ❌ エラー: FwUpdate<Idle> に `finish_upload` メソッドは存在しない
 
-    let admin = FirmwareAdminToken { _private: () }; // from auth system
+    let admin = FirmwareAdminToken { _private: () }; // 認証システムから取得
     let fw = fw.begin_upload(&admin, "2.10.1");
     let fw = fw.finish_upload();
 
-    let digest = [0xAB; 32]; // computed during verification
+    let digest = [0xAB; 32]; // 検証中に計算
     let (fw, token) = fw.verify_ok(digest);
 
     let fw = fw.apply(token);
-    // fw.apply(token);  // ❌ use of moved value: `token`
+    // fw.apply(token);  // ❌ ムーブされた値の使用: `token`
 
     let fw = fw.apply_complete();
     fw.reboot();
 }
 ```
 
-**What the three beats illustrate together:**
+**3つのビートが全体として示すもの:**
 
-| Beat | Protocol | States | Composition |
+| ビート | プロトコル | 状態数 | 合成 |
 |:----:|----------|:------:|-------------|
-| 1 | IPMI session | 4 | Pure type-state |
-| 2 | PCIe LTSSM | 5 | Type-state + recovery branch |
-| 3 | Firmware update | 6 | Type-state + capability tokens (ch04) + single-use proof (ch03) |
+| 1 | IPMIセッション | 4 | 純粋な型状態 |
+| 2 | PCIe LTSSM | 5 | 型状態 + リカバリ分岐 |
+| 3 | ファームウェア更新 | 6 | 型状態 + 機能トークン（[第4章](ch04-capability-tokens-zero-cost-proof-of-aut.md)） + 単一使用の証明（[第3章](ch03-linear-types-single-use-enforcement-f.md)） |
 
-Each beat adds a layer of complexity. By beat 3, the compiler enforces state
-ordering, admin privilege, AND one-time application — three bug classes
-eliminated in a single FSM.
+各ビートごとに複雑さの階層が追加されます。ビート3に達する頃には、コンパイラが状態の順序、管理者権限、**そして**1回限りの適用をすべて強制するようになります。つまり、3種類のバグが単一の有限状態機械で根絶されるのです。
 
-### When to Use Type-State
+### いつ型状態を使用すべきか
 
-| Protocol | Type-State worthwhile? |
+| プロトコル | 型状態を適用する価値があるか？ |
 |----------|:------:|
-| IPMI session lifecycle | ✅ Yes — authenticate → activate → command → close |
-| PCIe link training | ✅ Yes — detect → poll → configure → L0 |
-| TLS handshake | ✅ Yes — ClientHello → ServerHello → Finished |
-| USB enumeration | ✅ Yes — Attached → Powered → Default → Addressed → Configured |
-| Simple request/response | ⚠️ Probably not — only 2 states |
-| Fire-and-forget messages | ❌ No — no state to track |
+| IPMIセッションライフサイクル | ✅ あり — 認証 → アクティブ化 → コマンド送信 → クローズ |
+| PCIeリンク訓練 | ✅ あり — 検出 → ポーリング → 設定 → L0 |
+| TLSハンドシェイク | ✅ あり — ClientHello → ServerHello → Finished |
+| USB列挙 | ✅ あり — Attached → Powered → Default → Addressed → Configured |
+| 単純なリクエスト/レスポンス | ⚠️ おそらく不要 — 2状態のみ |
+| 送りっぱなし（Fire-and-forget）のメッセージ | ❌ 不要 — 追跡すべき状態がない |
 
-## Exercise: USB Device Enumeration Type-State
+## 演習問題: USBデバイス列挙の型状態
 
-Model a USB device that must go through: `Attached` → `Powered` → `Default` → `Addressed` → `Configured`. Each transition should consume the previous state and produce the next. `send_data()` should only be available in `Configured`.
+USBデバイスが `Attached` → `Powered` → `Default` → `Addressed` → `Configured` という状態を経由するモデルを作成してください。各遷移は前の状態を消費して次の状態を生成する必要があります。`send_data()` は `Configured` 状態でのみ利用可能にしてください。
 
 <details>
-<summary>Solution</summary>
+<summary>解答例</summary>
 
 ```rust,ignore
 use std::marker::PhantomData;
@@ -531,21 +519,20 @@ impl UsbDevice<Addressed> {
 
 impl UsbDevice<Configured> {
     pub fn send_data(&self, _data: &[u8]) {
-        // Only available in Configured state
+        // Configured 状態でのみ利用可能
     }
 }
 ```
 
 </details>
 
-## Key Takeaways
+## 重要なポイント
 
-1. **Type-state makes wrong-order calls impossible** — methods only exist on the state where they're valid.
-2. **Each transition consumes `self`** — you can't hold onto an old state after transitioning.
-3. **Combine with capability tokens** — `firmware_update()` requires *both* `Session<Active>` and `AdminToken`.
-4. **Three beats, increasing complexity** — IPMI (pure FSM), PCIe LTSSM (recovery branches), and firmware update (FSM + tokens + single-use proofs) show the pattern scales from simple to richly composed.
-5. **Don't over-apply** — two-state request/response protocols are simpler without type-state.
-6. **The pattern extends to full Redfish workflows** — ch17 applies type-state to Redfish session lifecycles, and ch18 uses builder type-state for response construction.
+1. **型状態により誤った順序の呼び出しが不可能になる** — メソッドはその呼び出しが妥当な状態の型にのみ存在します。
+2. **各遷移は `self` を消費する** — 遷移後に古い状態を保持し続けることはできません。
+3. **機能トークンと組み合わせる** — `firmware_update()` は `Session<Active>` と `AdminToken` の*両方*を要求します。
+4. **3つのビートによる段階的な複雑さ** — IPMI（純粋な状態機械）、PCIe LTSSM（リカバリ分岐）、ファームウェア更新（状態機械 + トークン + 単一使用の証明）は、このパターンがシンプルなものからリッチに合成されたものまでスケールすることを示しています。
+5. **過剰な適用を避ける** — 2状態のリクエスト/レスポンスプロトコルなどは、型状態を使わない方がシンプルです。
+6. **このパターンは完全なRedfishワークフローへと拡張される** — 第17章ではRedfishセッションのライフサイクルに型状態を適用し、第18章ではレスポンス構築にビルダー型状態を使用します。
 
 ---
-

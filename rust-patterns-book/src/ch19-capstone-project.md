@@ -1,59 +1,59 @@
-# Capstone Project: Type-Safe Task Scheduler
+# 総合演習プロジェクト: 型安全なタスクスケジューラ
 
-This project integrates patterns from across the book into a single, production-style system. You'll build a **type-safe, concurrent task scheduler** that uses generics, traits, typestate, channels, error handling, and testing.
+本書全体で学んだパターンを統合し、実用レベルの単一システムを構築します。ジェネリクス、トレイト、型状態（タイプステート）、チャンネル、エラー処理、テストを活用した、**型安全で並行なタスクスケジューラ**を作成します。
 
-**Estimated time**: 4–6 hours | **Difficulty**: ★★★
+**所要時間（目安）**: 4〜6 時間 | **難易度**: ★★★
 
-> **What you'll practice:**
-> - Generics and trait bounds (Ch 1–2)
-> - Typestate pattern for task lifecycle (Ch 3)
-> - PhantomData for zero-cost state markers (Ch 4)
-> - Channels for worker communication (Ch 5)
-> - Concurrency with scoped threads (Ch 6)
-> - Error handling with `thiserror` (Ch 9)
-> - Testing with property-based tests (Ch 13)
-> - API design with `TryFrom` and validated types (Ch 14)
+> **演習で実践する内容:**
+> - ジェネリクスとトレイト境界（第1〜2章）
+> - タスクライフサイクルのための型状態パターン（第3章）
+> - ゼロコスト状態マーカーのための PhantomData（第4章）
+> - ワーカー間通信のためのチャンネル（第5章）
+> - スコープ付きスレッドによる並行処理（第6章）
+> - `thiserror` によるエラー処理（第10章）
+> - プロパティベーステストによるテスト手法（第14章）
+> - `TryFrom` とバリデーション済み型による API 設計（第15章）
 
-## The Problem
+## 課題の概要
 
-Build a task scheduler where:
+以下を満たすタスクスケジューラを構築します:
 
-1. **Tasks** have a typed lifecycle: `Pending → Running → Completed` (or `Failed`)
-2. **Workers** pull tasks from a channel, execute them, and report results
-3. The **scheduler** manages task submission, worker coordination, and result collection
-4. Invalid state transitions are **compile-time errors**
+1. **タスク**は型付けされたライフサイクルを持つ: `Pending → Running → Completed`（または `Failed`）
+2. **ワーカー**はチャンネルからタスクを取り出して実行し、結果を報告する
+3. **スケジューラ**はタスクの登録、ワーカーの協調、および結果の収集を管理する
+4. 不正な状態遷移は**コンパイル時エラー**となる
 
 ```mermaid
 stateDiagram-v2
     [*] --> Pending: scheduler.submit(task)
-    Pending --> Running: worker picks up task
-    Running --> Completed: task succeeds
-    Running --> Failed: task returns Err
+    Pending --> Running: ワーカーがタスクを取得
+    Running --> Completed: タスク成功
+    Running --> Failed: タスクが Err を返却
     Completed --> [*]: scheduler.results()
     Failed --> [*]: scheduler.results()
 
-    Pending --> Pending: ❌ can't execute directly
-    Completed --> Running: ❌ can't re-run
+    Pending --> Pending: ❌ 直接実行は不可
+    Completed --> Running: ❌ 再実行は不可
 ```
 
-## Step 1: Define the Task Types
+## ステップ 1: タスク型の定義
 
-Start with the typestate markers and a generic `Task`:
+型状態マーカーとジェネリックな `Task` から始めます:
 
 ```rust
 use std::marker::PhantomData;
 
-// --- State markers (zero-sized) ---
+// --- 状態マーカー（ゼロサイズ型） ---
 struct Pending;
 struct Running;
 struct Completed;
 struct Failed;
 
-// --- Task ID (newtype for type safety) ---
+// --- タスク ID（型安全性のためのニュータイプ） ---
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct TaskId(u64);
 
-// --- The Task struct, parameterized by lifecycle state ---
+// --- ライフサイクルの状態によってパラメータ化された Task 構造体 ---
 struct Task<State, R> {
     id: TaskId,
     name: String,
@@ -62,15 +62,15 @@ struct Task<State, R> {
 }
 ```
 
-**Your job**: Implement state transitions so that:
-- `Task<Pending, R>` can transition to `Task<Running, R>` (via `start()`)
-- `Task<Running, R>` can transition to `Task<Completed, R>` or `Task<Failed, R>`
-- No other transitions compile
+**課題**: 以下を満たすように状態遷移を実装してください:
+- `Task<Pending, R>` は `Task<Running, R>` へ遷移可能（`start()` 経由）
+- `Task<Running, R>` は `Task<Completed, R>` または `Task<Failed, R>` へ遷移可能
+- それ以外の遷移はコンパイルエラーとなる
 
 <details>
-<summary>💡 Hint</summary>
+<summary>💡 ヒント</summary>
 
-Each transition method should consume `self` and return the new state:
+各遷移メソッドは `self` を消費し、新しい状態を返すべきです:
 
 ```rust
 impl<R> Task<Pending, R> {
@@ -87,9 +87,9 @@ impl<R> Task<Pending, R> {
 
 </details>
 
-## Step 2: Define the Work Function
+## ステップ 2: 処理関数の定義
 
-Tasks need a function to execute. Use a boxed closure:
+タスクには実行すべき処理関数が必要です。Box 化されたクロージャを使用します:
 
 ```rust
 struct WorkItem<R: Send + 'static> {
@@ -99,35 +99,35 @@ struct WorkItem<R: Send + 'static> {
 }
 ```
 
-**Your job**: Implement `WorkItem::new()` that accepts a task name and closure.
-Add a `TaskId` generator (simple atomic counter or mutex-protected counter).
+**課題**: タスク名とクロージャを受け取る `WorkItem::new()` を実装してください。
+`TaskId` 生成器（単純なアトミックカウンタまたは Mutex で保護されたカウンタ）を追加してください。
 
-## Step 3: Error Handling
+## ステップ 3: エラー処理
 
-Define the scheduler's error types using `thiserror`:
+`thiserror` を用いてスケジューラのエラー型を定義します:
 
 ```rust,ignore
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum SchedulerError {
-    #[error("scheduler is shut down")]
+    #[error("スケジューラはシャットダウンされています")]
     ShutDown,
 
-    #[error("task {0:?} failed: {1}")]
+    #[error("タスク {0:?} が失敗しました: {1}")]
     TaskFailed(TaskId, String),
 
-    #[error("channel send error")]
+    #[error("チャンネル送信エラー")]
     ChannelError(#[from] std::sync::mpsc::SendError<()>),
 
-    #[error("worker panicked")]
+    #[error("ワーカーがパニックしました")]
     WorkerPanic,
 }
 ```
 
-## Step 4: The Scheduler
+## ステップ 4: スケジューラの実装
 
-Build the scheduler using channels (Ch 5) and scoped threads (Ch 6):
+チャンネル（第5章）とスコープ付きスレッド（第6章）を用いてスケジューラを構築します:
 
 ```rust
 use std::sync::mpsc;
@@ -145,13 +145,13 @@ struct TaskResult<R> {
 }
 ```
 
-**Your job**: Implement:
-- `Scheduler::new(num_workers: usize) -> Self` — creates channels and spawns workers
+**課題**: 以下を実装してください:
+- `Scheduler::new(num_workers: usize) -> Self` — チャンネルを作成し、ワーカーを生成する
 - `Scheduler::submit(&self, item: WorkItem<R>) -> Result<TaskId, SchedulerError>`
-- `Scheduler::shutdown(self) -> Vec<TaskResult<R>>` — drops the sender, joins workers, collects results
+- `Scheduler::shutdown(self) -> Vec<TaskResult<R>>` — 送信側をドロップし、ワーカーを join し、結果を収集する
 
 <details>
-<summary>💡 Hint — Worker loop</summary>
+<summary>💡 ヒント — ワーカーのループ処理</summary>
 
 ```rust
 fn worker_loop<R: Send + 'static>(
@@ -173,7 +173,7 @@ fn worker_loop<R: Send + 'static>(
                     outcome,
                 });
             }
-            Err(_) => break, // Channel closed
+            Err(_) => break, // チャンネルが閉じた
         }
     }
 }
@@ -181,14 +181,14 @@ fn worker_loop<R: Send + 'static>(
 
 </details>
 
-## Step 5: Integration Test
+## ステップ 5: 統合テスト
 
-Write tests that verify:
+以下を検証するテストを作成してください:
 
-1. **Happy path**: Submit 10 tasks, shut down, verify all 10 results are `Ok`
-2. **Error handling**: Submit tasks that fail, verify `TaskResult.outcome` is `Err`
-3. **Empty scheduler**: Create and immediately shut down — no panics
-4. **Property test** (bonus): Use `proptest` to verify that for any N tasks (1..100), the scheduler always returns exactly N results
+1. **正常系（Happy path）**: 10 個のタスクを投入し、シャットダウンして、10 個すべての結果が `Ok` であることを検証
+2. **エラー処理**: 失敗するタスクを投入し、`TaskResult.outcome` が `Err` であることを検証
+3. **空のスケジューラ**: 作成して直ちにシャットダウン — パニックが発生しないこと
+4. **プロパティテスト**（発展）: `proptest` を使用して、任意の N 個のタスク (1..100) に対して、スケジューラが常に正確に N 個の結果を返すことを検証
 
 ```rust
 #[cfg(test)]
@@ -232,69 +232,69 @@ mod tests {
 }
 ```
 
-## Step 6: Put It All Together
+## ステップ 6: すべてを組み合わせる
 
-Here's the `main()` that demonstrates the full system:
+システム全体の実演を行う `main()` の例です:
 
 ```rust,ignore
 fn main() {
     let scheduler = Scheduler::<String>::new(4);
 
-    // Submit tasks with varying workloads
+    // 様々なワークロードを持つタスクを投入
     for i in 0..20 {
         let item = WorkItem::new(
             format!("compute-{i}"),
             move || {
-                // Simulate work
+                // 処理をシミュレート
                 std::thread::sleep(std::time::Duration::from_millis(10));
                 if i % 7 == 0 {
-                    Err(format!("task {i} hit a simulated error"))
+                    Err(format!("タスク {i} でシミュレートされたエラーが発生"))
                 } else {
-                    Ok(format!("task {i} completed with value {}", i * i))
+                    Ok(format!("タスク {i} が値 {} で完了", i * i))
                 }
             },
         );
-        // NOTE: .unwrap() is used for brevity — handle SendError in production.
+        // 注: 簡潔さのために .unwrap() を使用しています — 本番コードでは SendError を適切に処理してください。
         scheduler.submit(item).unwrap();
     }
 
-    println!("All tasks submitted. Shutting down...");
+    println!("すべてのタスクを投入しました。シャットダウン中...");
     let results = scheduler.shutdown();
 
     let (ok, err): (Vec<_>, Vec<_>) = results.iter()
         .partition(|r| r.outcome.is_ok());
 
-    println!("\n✅ Succeeded: {}", ok.len());
+    println!("\n✅ 成功: {}", ok.len());
     for r in &ok {
         println!("  {} → {}", r.name, r.outcome.as_ref().unwrap());
     }
 
-    println!("\n❌ Failed: {}", err.len());
+    println!("\n❌ 失敗: {}", err.len());
     for r in &err {
         println!("  {} → {}", r.name, r.outcome.as_ref().unwrap_err());
     }
 }
 ```
 
-## Evaluation Criteria
+## 評価基準
 
-| Criterion | Target |
+| 基準 | 目標 |
 |-----------|--------|
-| Type safety | Invalid state transitions don't compile |
-| Concurrency | Workers run in parallel, no data races |
-| Error handling | All failures captured in `TaskResult`, no panics |
-| Testing | At least 3 tests; bonus for proptest |
-| Code organization | Clean module structure, public API uses validated types |
-| Documentation | Key types have doc comments explaining invariants |
+| 型安全性 | 不正な状態遷移がコンパイルエラーになること |
+| 並行性 | ワーカーが並列に動作し、データ競合が発生しないこと |
+| エラー処理 | すべての失敗が `TaskResult` に捕捉され、パニックしないこと |
+| テスト | 3つ以上のテストが存在すること（proptest があれば加点） |
+| コード構成 | クリーンなモジュール構成、公開 API でバリデーション済み型を採用していること |
+| ドキュメント | 主要な型に不変条件（invariant）を説明する doc コメントが付与されていること |
 
-## Extension Ideas
+## 発展アイデア
 
-Once the basic scheduler works, try these enhancements:
+基本のスケジューラが動作したら、以下の機能拡張に挑戦してみてください:
 
-1. **Priority queue**: Add a `Priority` newtype (1–10) and process higher-priority tasks first
-2. **Retry policy**: Failed tasks retry up to N times before being marked permanently failed
-3. **Cancellation**: Add a `cancel(TaskId)` method that removes pending tasks
-4. **Async version**: Port to `tokio::spawn` with `tokio::sync::mpsc` channels (Ch 15)
-5. **Metrics**: Track per-worker task counts, average execution time, and failure rates
+1. **優先度付きキュー**: `Priority` ニュータイプ (1〜10) を追加し、高優先度のタスクを先に処理する
+2. **リトライポリシー**: 失敗したタスクを完全に失敗とみなす前に、最大 N 回再試行する
+3. **キャンセル処理**: 待機中のタスクを削除する `cancel(TaskId)` メソッドを追加する
+4. **非同期版への移行**: `tokio::spawn` と `tokio::sync::mpsc` チャンネルを使用する構成に移植する（第16章）
+5. **メトリクス計測**: ワーカーごとのタスク処理数、平均実行時間、失敗率を追跡・記録する
 
 ***

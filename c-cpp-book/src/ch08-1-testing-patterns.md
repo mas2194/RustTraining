@@ -1,12 +1,10 @@
-## Testing Patterns for C++ Programmers
+## C++プログラマのためのテストパターン
 
-> **What you'll learn:** Rust's built-in test framework — `#[test]`, `#[should_panic]`, `Result`-returning tests, builder patterns for test data, trait-based mocking, property testing with `proptest`, snapshot testing with `insta`, and integration test organization. Zero-config testing that replaces Google Test + CMake.
+> **学習目標:** Rustの組み込みテストフレームワーク（`#[test]`、`#[should_panic]`、`Result` を返すテスト、テストデータ向けのビルダーパターン、トレイトベースのモック、`proptest` によるプロパティベーステスト、`insta` によるスナップショットテスト、統合テストの構成）を学びます。Google Test + CMake を置き換える、設定不要（ゼロコンフィグ）のテスト環境です。
 
-C++ testing typically relies on external frameworks (Google Test, Catch2, Boost.Test)
-with complex build integration. Rust's test framework is **built into the language
-and toolchain** — no dependencies, no CMake integration, no test runner configuration.
+C++のテストは通常、外部フレームワーク（Google Test、Catch2、Boost.Test など）と複雑なビルド統合に依存しています。Rustのテストフレームワークは**言語とツールチェーンに組み込まれて**おり、外部依存関係、CMake統合、テストランナーの設定などは一切不要です。
 
-### Test attributes beyond `#[test]`
+### `#[test]` 以外のテスト属性
 
 ```rust
 #[cfg(test)]
@@ -18,15 +16,15 @@ mod tests {
         assert_eq!(2 + 2, 4);
     }
 
-    // Expect a panic — equivalent to GTest's EXPECT_DEATH
+    // パニックを期待する — GTestの EXPECT_DEATH に相当
     #[test]
     #[should_panic]
     fn out_of_bounds_panics() {
         let v = vec![1, 2, 3];
-        let _ = v[10]; // Panics — test passes
+        let _ = v[10]; // パニックする — テストは合格
     }
 
-    // Expect a panic with a specific message substring
+    // 特定のメッセージ部分文字列を含むパニックを期待する
     #[test]
     #[should_panic(expected = "index out of bounds")]
     fn specific_panic_message() {
@@ -34,7 +32,7 @@ mod tests {
         let _ = v[10];
     }
 
-    // Tests that return Result<(), E> — use ? instead of unwrap()
+    // Result<(), E> を返すテスト — unwrap() の代わりに ? を使用
     #[test]
     fn test_with_result() -> Result<(), String> {
         let value: u32 = "42".parse().map_err(|e| format!("{e}"))?;
@@ -42,7 +40,7 @@ mod tests {
         Ok(())
     }
 
-    // Ignore slow tests by default — run with `cargo test -- --ignored`
+    // デフォルトで低速なテストを無視（スキップ）する — cargo test -- --ignored で実行
     #[test]
     #[ignore]
     fn slow_integration_test() {
@@ -52,25 +50,24 @@ mod tests {
 ```
 
 ```bash
-cargo test                          # Run all non-ignored tests
-cargo test -- --ignored             # Run only ignored tests
-cargo test -- --include-ignored     # Run ALL tests including ignored
-cargo test test_name                # Run tests matching a name pattern
-cargo test -- --nocapture           # Show println! output during tests
-cargo test -- --test-threads=1      # Run tests serially (for shared state)
+cargo test                          # 無視されていないすべてのテストを実行
+cargo test -- --ignored             # 無視されたテストのみを実行
+cargo test -- --include-ignored     # 無視されたテストを含めすべてのテストを実行
+cargo test test_name                # 名前のパターンに一致するテストを実行
+cargo test -- --nocapture           # テスト中の println! の出力を表示
+cargo test -- --test-threads=1      # テストを直列（逐次）実行（共有状態を扱う場合）
 ```
 
-### Test helpers: builder pattern for test data
+### テストヘルパー: テストデータ向けのビルダーパターン
 
-In C++ you'd use Google Test fixtures (`class MyTest : public ::testing::Test`).
-In Rust, use builder functions or the `Default` trait:
+C++では、Google Testのフィクスチャ（`class MyTest : public ::testing::Test`）を使用することが多いでしょう。Rustでは、ビルダー関数や `Default` トレイトを使用します:
 
 ```rust
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // Builder function — creates test data with sensible defaults
+    // ビルダー関数 — 適切なデフォルト値を持つテストデータを作成
     fn make_gpu_event(severity: Severity, fault_code: u32) -> DiagEvent {
         DiagEvent {
             source: "accel_diag".to_string(),
@@ -80,7 +77,7 @@ mod tests {
         }
     }
 
-    // Reusable test fixture — a set of pre-built events
+    // 再利用可能なテストフィクスチャ — 事前に構築されたイベントのセット
     fn sample_events() -> Vec<DiagEvent> {
         vec![
             make_gpu_event(Severity::Critical, 67956),
@@ -101,27 +98,26 @@ mod tests {
 }
 ```
 
-### Mocking with traits
+### トレイトによるモック
 
-In C++, mocking requires frameworks like Google Mock or manual virtual overrides.
-In Rust, define a trait for the dependency and swap implementations in tests:
+C++では、モックを作成するために Google Mock などのフレームワークや手動での仮想関数オーバーライドが必要です。Rustでは、依存関係に対してトレイトを定義し、テスト時に実装を差し替えます:
 
 ```rust
-// Production trait
+// 本番トレイト
 trait SensorReader {
     fn read_temperature(&self, sensor_id: u32) -> Result<f64, String>;
 }
 
-// Production implementation
+// 本番実装
 struct HwSensorReader;
 impl SensorReader for HwSensorReader {
     fn read_temperature(&self, sensor_id: u32) -> Result<f64, String> {
-        // Real hardware call...
+        // 実際のハードウェア呼び出し...
         Ok(72.5)
     }
 }
 
-// Test mock — returns predictable values
+// テスト用モック — 予測可能な値を返す
 #[cfg(test)]
 struct MockSensorReader {
     temperatures: std::collections::HashMap<u32, f64>,
@@ -136,7 +132,7 @@ impl SensorReader for MockSensorReader {
     }
 }
 
-// Function under test — generic over the reader
+// テスト対象の関数 — reader に対してジェネリック
 fn check_overtemp(reader: &impl SensorReader, ids: &[u32], threshold: f64) -> Vec<u32> {
     ids.iter()
         .filter(|&&id| reader.read_temperature(id).unwrap_or(0.0) > threshold)
@@ -152,7 +148,7 @@ mod tests {
     fn detect_overtemp_sensors() {
         let mut mock = MockSensorReader { temperatures: Default::default() };
         mock.temperatures.insert(0, 72.5);
-        mock.temperatures.insert(1, 91.0);  // Over threshold
+        mock.temperatures.insert(1, 91.0);  // 閾値超過
         mock.temperatures.insert(2, 65.0);
 
         let hot = check_overtemp(&mock, &[0, 1, 2], 80.0);
@@ -161,9 +157,9 @@ mod tests {
 }
 ```
 
-### Temporary files and directories in tests
+### テストにおける一時ファイルと一時ディレクトリ
 
-C++ tests often use platform-specific temp directories. Rust has `tempfile`:
+C++のテストでは、プラットフォーム固有の一時ディレクトリがよく使用されます。Rustには `tempfile` クレートがあります:
 
 ```rust
 // Cargo.toml: [dev-dependencies]
@@ -177,22 +173,21 @@ mod tests {
 
     #[test]
     fn parse_config_from_file() -> Result<(), Box<dyn std::error::Error>> {
-        // Create a temp file that's auto-deleted when dropped
+        // ドロップ時に自動削除される一時ファイルを作成
         let mut file = NamedTempFile::new()?;
         writeln!(file, r#"{{"sku": "ServerNode", "level": "Quick"}}"#)?;
 
         let config = load_config(file.path().to_str().unwrap())?;
         assert_eq!(config.sku, "ServerNode");
         Ok(())
-        // file is deleted here — no cleanup code needed
+        // file はここで削除される — クリーンアップコードは不要
     }
 }
 ```
 
-### Property-based testing with `proptest`
+### `proptest` によるプロパティベーステスト
 
-Instead of writing specific test cases, describe **properties** that should hold
-for all inputs. `proptest` generates random inputs and finds minimal failing cases:
+個別のテストケースを記述する代わりに、すべての入力に対して成立すべき**プロパティ（性質）**を記述します。`proptest` はランダムな入力を生成し、失敗する最小のケース（反例）を探索します:
 
 ```rust
 // Cargo.toml: [dev-dependencies]
@@ -209,6 +204,7 @@ mod tests {
     proptest! {
         #[test]
         fn roundtrip_u32(n: u32) {
+            // プロパティ: フォーマットした後にパースすると元の値に戻るはず
             let formatted = parse_and_format(n);
             let parsed: u32 = formatted.parse().unwrap();
             prop_assert_eq!(n, parsed);
@@ -216,16 +212,16 @@ mod tests {
 
         #[test]
         fn string_contains_no_null(s in "[a-zA-Z0-9 ]{0,100}") {
+            // プロパティ: 文字列にヌル文字が含まれないこと
             prop_assert!(!s.contains('\0'));
         }
     }
 }
 ```
 
-### Snapshot testing with `insta`
+### `insta` によるスナップショットテスト
 
-For tests that produce complex output (JSON, formatted strings), `insta` auto-generates
-and manages reference snapshots:
+複雑な出力（JSON、フォーマットされた文字列など）を生成するテストの場合、`insta` は基準となるスナップショットを自動生成して管理します:
 
 ```rust
 // Cargo.toml: [dev-dependencies]
@@ -242,55 +238,55 @@ mod tests {
             component: "GPU".to_string(),
             message: "ECC error detected".to_string(),
         };
-        // First run: creates a snapshot file in tests/snapshots/
-        // Subsequent runs: compares against the saved snapshot
+        // 初回実行時: tests/snapshots/ にスナップショットファイルを作成
+        // 2回目以降の実行時: 保存されたスナップショットと比較
         assert_json_snapshot!(entry);
     }
 }
 ```
 
 ```bash
-cargo insta test              # Run tests and review new/changed snapshots
-cargo insta review            # Interactive review of snapshot changes
+cargo insta test              # テストを実行し、新規/変更されたスナップショットを確認
+cargo insta review            # スナップショットの変更を対話的にレビュー
 ```
 
-### C++ vs Rust testing comparison
+### C++とRustのテスト比較
 
-| **C++ (Google Test)** | **Rust** | **Notes** |
+| **C++ (Google Test)** | **Rust** | **備考** |
 |----------------------|---------|----------|
-| `TEST(Suite, Name) { }` | `#[test] fn name() { }` | No suite/class hierarchy needed |
-| `ASSERT_EQ(a, b)` | `assert_eq!(a, b)` | Built-in macro, no framework needed |
-| `ASSERT_NEAR(a, b, eps)` | `assert!((a - b).abs() < eps)` | Or use `approx` crate |
-| `EXPECT_THROW(expr, type)` | `#[should_panic(expected = "...")]` | Or `catch_unwind` for fine control |
+| `TEST(Suite, Name) { }` | `#[test] fn name() { }` | スイートやクラスの階層は不要 |
+| `ASSERT_EQ(a, b)` | `assert_eq!(a, b)` | 組み込みマクロ、フレームワーク不要 |
+| `ASSERT_NEAR(a, b, eps)` | `assert!((a - b).abs() < eps)` | または `approx` クレートを使用 |
+| `EXPECT_THROW(expr, type)` | `#[should_panic(expected = "...")]` | 詳細な制御には `catch_unwind` も利用可 |
 | `EXPECT_DEATH(expr, "msg")` | `#[should_panic(expected = "msg")]` | |
-| `class Fixture : public ::testing::Test` | Builder functions + `Default` | No inheritance needed |
-| Google Mock `MOCK_METHOD` | Trait + test impl | More explicit, no macro magic |
-| `INSTANTIATE_TEST_SUITE_P` (parameterized) | `proptest!` or macro-generated tests | |
-| `SetUp()` / `TearDown()` | RAII via `Drop` — cleanup is automatic | Variables dropped at end of test |
-| Separate test binary + CMake | `cargo test` — zero config | |
+| `class Fixture : public ::testing::Test` | ビルダー関数 + `Default` | 継承は不要 |
+| Google Mock `MOCK_METHOD` | トレイト + テスト用実装 | より明示的で、マクロの黒魔術が不要 |
+| `INSTANTIATE_TEST_SUITE_P` (パラメータ化) | `proptest!` またはマクロ生成テスト | |
+| `SetUp()` / `TearDown()` | `Drop` による RAII — クリーンアップは自動 | テスト終了時に変数がドロップされる |
+| 個別のテストバイナリ + CMake | `cargo test` — ゼロコンフィグ | |
 | `ctest --output-on-failure` | `cargo test -- --nocapture` | |
 
 ----
 
-### Integration tests: the `tests/` directory
+### 統合テスト: `tests/` ディレクトリ
 
-Unit tests live inside `#[cfg(test)]` modules alongside your code. **Integration tests** live in a separate `tests/` directory at the crate root and test your library's public API as an external consumer would:
+ユニットテストはコードと同じファイル内の `#[cfg(test)]` モジュールに配置されます。**統合テスト**はクレートルートの独立した `tests/` ディレクトリに配置され、外部の利用者の視点からライブラリの公開APIをテストします:
 
 ```
 my_crate/
 ├── src/
-│   └── lib.rs          # Your library code
+│   └── lib.rs          # ライブラリのコード
 ├── tests/
-│   ├── smoke.rs        # Each .rs file is a separate test binary
+│   ├── smoke.rs        # 各.rsファイルが個別のテストバイナリになる
 │   ├── regression.rs
 │   └── common/
-│       └── mod.rs      # Shared test helpers (NOT a test itself)
+│       └── mod.rs      # 共有テストヘルパー（それ自体はテストではない）
 └── Cargo.toml
 ```
 
 ```rust
-// tests/smoke.rs — tests your crate as an external user would
-use my_crate::DiagEngine;  // Only public API is accessible
+// tests/smoke.rs — 外部ユーザーの視点でクレートをテストする
+use my_crate::DiagEngine;  // 公開APIのみアクセス可能
 
 #[test]
 fn engine_starts_successfully() {
@@ -306,7 +302,7 @@ fn engine_rejects_invalid_config() {
 ```
 
 ```rust
-// tests/common/mod.rs — shared helpers, NOT compiled as a test binary
+// tests/common/mod.rs — 共有ヘルパー（テストバイナリとしてはコンパイルされない）
 pub fn setup_test_environment() -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("config.json"), r#"{"log_level": "debug"}"#).unwrap();
@@ -315,7 +311,7 @@ pub fn setup_test_environment() -> tempfile::TempDir {
 ```
 
 ```rust
-// tests/regression.rs — can use shared helpers
+// tests/regression.rs — 共有ヘルパーを使用可能
 mod common;
 
 #[test]
@@ -328,16 +324,14 @@ fn regression_issue_42() {
 }
 ```
 
-**Running integration tests:**
+**統合テストの実行:**
 ```bash
-cargo test                          # Runs unit AND integration tests
-cargo test --test smoke             # Run only tests/smoke.rs
-cargo test --test regression        # Run only tests/regression.rs
-cargo test --lib                    # Run ONLY unit tests (skip integration)
+cargo test                          # ユニットテストと統合テストの両方を実行
+cargo test --test smoke             # tests/smoke.rs のみを実行
+cargo test --test regression        # tests/regression.rs のみを実行
+cargo test --lib                    # ユニットテストのみを実行（統合テストをスキップ）
 ```
 
-> **Key difference from unit tests**: Integration tests cannot access private functions or `pub(crate)` items. This forces you to verify that your public API is sufficient — a valuable design signal. In C++ terms, it's like testing against only the public header with no `friend` access.
+> **ユニットテストとの主な違い**: 統合テストは非公開関数や `pub(crate)` アイテムにアクセスできません。これにより、公開APIだけで十分であるかを検証せざるを得なくなり、API設計上の有益な指針となります。C++の用語で言えば、`friend` アクセスを持たずに公開ヘッダーに対してのみテストを行うようなものです。
 
 ----
-
-

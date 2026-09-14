@@ -9,44 +9,44 @@ use std::process::Command;
 const BOOKS: &[(&str, &str, &str, &str)] = &[
     (
         "c-cpp-book",
-        "Rust for C/C++ Programmers",
-        "Move semantics, RAII, FFI, embedded, no_std",
+        "C/C++ プログラマーのための Rust 入門",
+        "ムーブセマンティクス、RAII、FFI、組み込み、no_std",
         "bridge",
     ),
     (
         "csharp-book",
-        "Rust for C# Programmers",
-        "Best for Swift / C# / Java developers",
+        "C# プログラマーのための Rust 入門",
+        "Swift / C# / Java 開発者向け — 所有権と型システム",
         "bridge",
     ),
     (
         "python-book",
-        "Rust for Python Programmers",
-        "Dynamic → static typing, GIL-free concurrency",
+        "Python プログラマーのための Rust 入門",
+        "動的型付けから静的型付けへ、GIL不要の並行性",
         "bridge",
     ),
     (
         "async-book",
-        "Async Rust: From Futures to Production",
-        "Tokio, streams, cancellation safety",
+        "非同期 Rust: Future から実践まで",
+        "Tokio、ストリーム、キャンセル安全性",
         "deep-dive",
     ),
     (
         "rust-patterns-book",
-        "Rust Patterns",
-        "Pin, allocators, lock-free structures, unsafe",
+        "Rust 実践パターン",
+        "Pin、アロケータ、ロックフリーデータ構造、Unsafe",
         "advanced",
     ),
     (
         "type-driven-correctness-book",
-        "Type-Driven Correctness",
-        "Type-state, phantom types, capability tokens",
+        "型主導の正当性",
+        "型状態（タイプステート）、幽霊型、ケーパビリティトークン",
         "expert",
     ),
     (
         "engineering-book",
-        "Rust Engineering Practices",
-        "Build scripts, cross-compilation, coverage, CI/CD",
+        "Rust エンジニアリング実践",
+        "ビルドスクリプト、クロスコンパイル、カバレッジ、CI/CD",
         "practices",
     ),
 ];
@@ -195,11 +195,11 @@ fn write_landing_page(site: &Path) {
 
     let html = format!(
         r##"<!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Rust Training Books</title>
+  <title>Rust トレーニングブック</title>
   <style>
     :root {{
       --bg: #1a1a2e;
@@ -285,11 +285,11 @@ fn write_landing_page(site: &Path) {
   </style>
 </head>
 <body>
-  <h1>🦀 <span>Rust</span> Training Books</h1>
-  <p class="subtitle">Pick the guide that matches your background</p>
+  <h1>🦀 <span>Rust</span> トレーニングブック</h1>
+  <p class="subtitle">バックグラウンドに合わせて最適なガイドを選択してください</p>
 
   <div class="legend">
-    <span class="legend-item"><span class="legend-dot" style="background:var(--clr-bridge)"></span> Bridge &mdash; learn Rust from another language</span>
+    <span class="legend-item"><span class="legend-dot" style="background:var(--clr-bridge)"></span> Bridge &mdash; 他の言語から学ぶ Rust</span>
     <span class="legend-item"><span class="legend-dot" style="background:var(--clr-deep-dive)"></span> Deep Dive</span>
     <span class="legend-item"><span class="legend-dot" style="background:var(--clr-advanced)"></span> Advanced</span>
     <span class="legend-item"><span class="legend-dot" style="background:var(--clr-expert)"></span> Expert</span>
@@ -299,7 +299,7 @@ fn write_landing_page(site: &Path) {
   <div class="grid">
 {cards}
   </div>
-  <footer>Built with <a href="https://rust-lang.github.io/mdBook/" style="color:var(--accent)">mdBook</a></footer>
+  <footer><a href="https://rust-lang.github.io/mdBook/" style="color:var(--accent)">mdBook</a> で構築されています</footer>
 </body>
 </html>
 "##

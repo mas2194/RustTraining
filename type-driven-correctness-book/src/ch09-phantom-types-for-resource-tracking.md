@@ -1,44 +1,43 @@
-# Phantom Types for Resource Tracking 🟡
+# リソース追跡のためのPhantom型 🟡
 
-> **What you'll learn:** How `PhantomData` markers encode register width, DMA direction, and file-descriptor state at the type level — preventing an entire class of resource-mismatch bugs at zero runtime cost.
+> **学修目標:** `PhantomData` マーカーを使用してレジスタ幅、DMA転送方向、ファイルディスクリプタの状態を型レベルでエンコードし、実行時コストゼロでリソース不一致によるバグを根絶する方法を学びます。
 >
-> **Cross-references:** [ch05](ch05-protocol-state-machines-type-state-for-r.md) (type-state), [ch06](ch06-dimensional-analysis-making-the-compiler.md) (dimensional types), [ch08](ch08-capability-mixins-compile-time-hardware-.md) (mixins), [ch10](ch10-putting-it-all-together-a-complete-diagn.md) (integration)
+> **関連章:** [第5章](ch05-protocol-state-machines-type-state-for-r.md)（型状態）、[第6章](ch06-dimensional-analysis-making-the-compiler.md)（次元型）、[第8章](ch08-capability-mixins-compile-time-hardware-.md)（ミックスイン）、[第10章](ch10-putting-it-all-together-a-complete-diagn.md)（総合演習）
 
-## The Problem: Mixing Up Resources
+## 課題: リソースの取り違え
 
-Hardware resources look alike in code but aren't interchangeable:
+ハードウェアリソースはコード上では似たように見えますが、相互に互換性があるわけではありません：
 
-- A 32-bit register and a 16-bit register are both "registers"
-- A DMA buffer for read and a DMA buffer for write both look like `*mut u8`
-- An open file descriptor and a closed one are both `i32`
+- 32ビットレジスタと16ビットレジスタは、どちらも単なる「レジスタ」に見える
+- 読み込み用DMAバッファと書き込み用DMAバッファは、どちらも `*mut u8` に見える
+- オープン状態のファイルディスクリプタとクローズ済みのそれは、どちらも `i32` に見える
 
-In C:
+C言語では次のようになります：
 
 ```c
-// C — all registers look the same
+// C — すべてのレジスタが同じに見える
 uint32_t read_reg32(volatile void *base, uint32_t offset);
 uint16_t read_reg16(volatile void *base, uint32_t offset);
 
-// Bug: reading a 16-bit register with the 32-bit function
-uint32_t status = read_reg32(pcie_bar, LINK_STATUS_REG);  // should be reg16!
+// バグ: 16ビットレジスタを32ビット関数で読み取ってしまう
+uint32_t status = read_reg32(pcie_bar, LINK_STATUS_REG);  // 本来は reg16 であるべき！
 ```
 
-## Phantom Type Parameters
+## Phantom型パラメータ
 
-A **phantom type** is a type parameter that appears in the struct definition but
-not in any field. It exists purely to carry type-level information:
+**Phantom型（幽霊型）**とは、構造体の定義に現れるものの、どのフィールドでも値として使用されない型パラメータのことです。純粋に型レベルの情報を保持するために存在します：
 
 ```rust,ignore
 use std::marker::PhantomData;
 
-// Register width markers — zero-sized
+// レジスタ幅マーカー — サイズゼロ
 pub struct Width8;
 pub struct Width16;
 pub struct Width32;
 pub struct Width64;
 
-/// A register handle parameterised by its width.
-/// PhantomData<W> costs zero bytes — it's a compile-time-only marker.
+/// レジスタ幅によってパラメタライズされたレジスタハンドル。
+/// PhantomData<W> のサイズは0バイト — コンパイル時のみのマーカー。
 pub struct Register<W> {
     base: usize,
     offset: usize,
@@ -47,35 +46,35 @@ pub struct Register<W> {
 
 impl Register<Width8> {
     pub fn read(&self) -> u8 {
-        // ... read 1 byte from base + offset ...
-        0 // stub
+        // ... base + offset から1バイト読み取る ...
+        0 // スタブ
     }
     pub fn write(&self, _value: u8) {
-        // ... write 1 byte ...
+        // ... 1バイト書き込む ...
     }
 }
 
 impl Register<Width16> {
     pub fn read(&self) -> u16 {
-        // ... read 2 bytes from base + offset ...
-        0 // stub
+        // ... base + offset から2バイト読み取る ...
+        0 // スタブ
     }
     pub fn write(&self, _value: u16) {
-        // ... write 2 bytes ...
+        // ... 2バイト書き込む ...
     }
 }
 
 impl Register<Width32> {
     pub fn read(&self) -> u32 {
-        // ... read 4 bytes from base + offset ...
-        0 // stub
+        // ... base + offset から4バイト読み取る ...
+        0 // スタブ
     }
     pub fn write(&self, _value: u32) {
-        // ... write 4 bytes ...
+        // ... 4バイト書き込む ...
     }
 }
 
-/// PCIe config space register definitions.
+/// PCIeコンフィグレーション空間のレジスタ定義。
 pub struct PcieConfig {
     base: usize,
 }
@@ -105,80 +104,77 @@ impl PcieConfig {
 fn pcie_example() {
     let cfg = PcieConfig { base: 0xFE00_0000 };
 
-    let vid: u16 = cfg.vendor_id().read();    // returns u16 ✅
-    let bar: u32 = cfg.bar0().read();         // returns u32 ✅
+    let vid: u16 = cfg.vendor_id().read();    // u16 を返す ✅
+    let bar: u32 = cfg.bar0().read();         // u32 を返す ✅
 
-    // Can't mix them up:
-    // let bad: u32 = cfg.vendor_id().read(); // ❌ ERROR: expected u16
-    // cfg.bar0().write(0u16);                // ❌ ERROR: expected u32
+    // 混同することはできない:
+    // let bad: u32 = cfg.vendor_id().read(); // ❌ エラー: u16 が期待される
+    // cfg.bar0().write(0u16);                // ❌ エラー: u32 が期待される
 }
 ```
 
-## DMA Buffer Access Control
+## DMAバッファのアクセス制御
 
-DMA buffers have direction: some are for **device-to-host** (read), others for
-**host-to-device** (write). Using the wrong direction corrupts data or causes
-bus errors:
+DMAバッファには転送方向が存在します。**デバイスからホストへ**（読み取り）のものもあれば、**ホストからデバイスへ**（書き込み）のものもあります。誤った方向で使用すると、データが破損したりバスエラーが発生したりします：
 
 ```rust,ignore
 use std::marker::PhantomData;
 
-// Direction markers
-pub struct ToDevice;     // host writes, device reads
-pub struct FromDevice;   // device writes, host reads
+// 方向マーカー
+pub struct ToDevice;     // ホストが書き込み、デバイスが読み取る
+pub struct FromDevice;   // デバイスが書き込み、ホストが読み取る
 
-/// A DMA buffer with direction enforcement.
+/// 転送方向が強制されたDMAバッファ。
 pub struct DmaBuffer<Dir> {
     ptr: *mut u8,
     len: usize,
-    dma_addr: u64,  // physical address for the device
+    dma_addr: u64,  // デバイス用の物理アドレス
     _dir: PhantomData<Dir>,
 }
 
 impl DmaBuffer<ToDevice> {
-    /// Fill the buffer with data to send to the device.
+    /// デバイスに送信するデータをバッファに書き込む。
     pub fn write_data(&mut self, data: &[u8]) {
         assert!(data.len() <= self.len);
-        // SAFETY: ptr is valid for self.len bytes (allocated at construction),
-        // and data.len() <= self.len (asserted above).
+        // SAFETY: ptr は self.len バイトに対して有効であり（構築時に割り当て済み）、
+        // data.len() <= self.len である（上記のアサートで確認済み）。
         unsafe { std::ptr::copy_nonoverlapping(data.as_ptr(), self.ptr, data.len()) }
     }
 
-    /// Get the DMA address for the device to read from.
+    /// デバイスが読み取るためのDMAアドレスを取得。
     pub fn device_addr(&self) -> u64 {
         self.dma_addr
     }
 }
 
 impl DmaBuffer<FromDevice> {
-    /// Read data that the device wrote into the buffer.
+    /// デバイスがバッファに書き込んだデータを読み取る。
     pub fn read_data(&self) -> &[u8] {
-        // SAFETY: ptr is valid for self.len bytes, and the device
-        // has finished writing (caller ensures DMA transfer is complete).
+        // SAFETY: ptr は self.len バイトに対して有効であり、
+        // デバイスの書き込みが完了している（呼び出し元がDMA転送完了を保証）。
         unsafe { std::slice::from_raw_parts(self.ptr, self.len) }
     }
 
-    /// Get the DMA address for the device to write to.
+    /// デバイスが書き込むためのDMAアドレスを取得。
     pub fn device_addr(&self) -> u64 {
         self.dma_addr
     }
 }
 
-// Can't write to a FromDevice buffer:
+// FromDevice バッファへの書き込みは不可:
 // fn oops(buf: &mut DmaBuffer<FromDevice>) {
-//     buf.write_data(&[1, 2, 3]);  // ❌ no method `write_data` on DmaBuffer<FromDevice>
+//     buf.write_data(&[1, 2, 3]);  // ❌ DmaBuffer<FromDevice> に `write_data` メソッドは存在しない
 // }
 
-// Can't read from a ToDevice buffer:
+// ToDevice バッファからの読み取りは不可:
 // fn oops2(buf: &DmaBuffer<ToDevice>) {
-//     let data = buf.read_data();  // ❌ no method `read_data` on DmaBuffer<ToDevice>
+//     let data = buf.read_data();  // ❌ DmaBuffer<ToDevice> に `read_data` メソッドは存在しない
 // }
 ```
 
-## File Descriptor Ownership
+## ファイルディスクリプタの所有権
 
-A common bug: using a file descriptor after it's been closed. Phantom types can
-track open/closed state:
+よくあるバグとして、クローズされた後のファイルディスクリプタを使用してしまう（use-after-close）問題があります。Phantom型を使用すれば、オープン/クローズ状態を追跡できます：
 
 ```rust,ignore
 use std::marker::PhantomData;
@@ -186,7 +182,7 @@ use std::marker::PhantomData;
 pub struct Open;
 pub struct Closed;
 
-/// A file descriptor with state tracking.
+/// 状態追跡機能付きファイルディスクリプタ。
 pub struct Fd<State> {
     raw: i32,
     _state: PhantomData<State>,
@@ -194,31 +190,31 @@ pub struct Fd<State> {
 
 impl Fd<Open> {
     pub fn open(path: &str) -> Result<Self, String> {
-        // ... open the file ...
-        Ok(Fd { raw: 3, _state: PhantomData }) // stub
+        // ... ファイルをオープン ...
+        Ok(Fd { raw: 3, _state: PhantomData }) // スタブ
     }
 
     pub fn read(&self, buf: &mut [u8]) -> Result<usize, String> {
-        // ... read from fd ...
-        Ok(0) // stub
+        // ... fd から読み取り ...
+        Ok(0) // スタブ
     }
 
     pub fn write(&self, data: &[u8]) -> Result<usize, String> {
-        // ... write to fd ...
-        Ok(data.len()) // stub
+        // ... fd に書き込み ...
+        Ok(data.len()) // スタブ
     }
 
-    /// Close the fd — returns a Closed handle.
-    /// The Open handle is consumed, preventing use-after-close.
+    /// fd をクローズ — Closed ハンドルを返す。
+    /// Open ハンドルが消費されるため、クローズ後の使用（use-after-close）が防止される。
     pub fn close(self) -> Fd<Closed> {
-        // ... close the fd ...
+        // ... fd をクローズ ...
         Fd { raw: self.raw, _state: PhantomData }
     }
 }
 
 impl Fd<Closed> {
-    // No read() or write() methods — they don't exist on Fd<Closed>.
-    // This makes use-after-close a compile error.
+    // read() や write() メソッドは存在しない — Fd<Closed> には定義されていない。
+    // これにより、クローズ後の使用がコンパイルエラーになる。
 
     pub fn raw_fd(&self) -> i32 {
         self.raw
@@ -232,16 +228,16 @@ fn fd_example() -> Result<(), String> {
 
     let closed = fd.close();
 
-    // closed.read(&mut buf)?;  // ❌ no method `read` on Fd<Closed>
-    // closed.write(&[1])?;     // ❌ no method `write` on Fd<Closed>
+    // closed.read(&mut buf)?;  // ❌ Fd<Closed> に `read` メソッドは存在しない
+    // closed.write(&[1])?;     // ❌ Fd<Closed> に `write` メソッドは存在しない
 
     Ok(())
 }
 ```
 
-## Combining Phantom Types with Earlier Patterns
+## Phantom型とこれまでのパターンの結合
 
-Phantom types compose with everything we've seen:
+Phantom型は、これまでに学んだすべてのパターンと組み合わせることができます：
 
 ```rust,ignore
 # use std::marker::PhantomData;
@@ -253,43 +249,43 @@ Phantom types compose with everything we've seen:
 # #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 # pub struct Celsius(pub f64);
 
-/// Combine phantom types (register width) with dimensional types (Celsius).
+/// Phantom型（レジスタ幅）と次元型（Celsius）の結合。
 fn read_temp_sensor(reg: &Register<Width16>) -> Celsius {
-    let raw = reg.read();  // guaranteed u16 by phantom type
-    Celsius(raw as f64 * 0.0625)  // guaranteed Celsius by return type
+    let raw = reg.read();  // Phantom型により u16 であることが保証される
+    Celsius(raw as f64 * 0.0625)  // 戻り値の型により Celsius であることが保証される
 }
 
-// The compiler enforces:
-// 1. The register is 16-bit (phantom type)
-// 2. The result is Celsius (newtype)
-// Both at zero runtime cost.
+// コンパイラが以下を強制する:
+// 1. レジスタが16ビットであること（Phantom型）
+// 2. 結果が Celsius であること（ニュータイプ）
+// どちらも実行時コストはゼロ。
 ```
 
-### When to Use Phantom Types
+### いつPhantom型を使用すべきか
 
-| Scenario | Use phantom parameter? |
+| シナリオ | Phantom型パラメータを使うべきか？ |
 |----------|:------:|
-| Register width encoding | ✅ Always — prevents width mismatch |
-| DMA buffer direction | ✅ Always — prevents data corruption |
-| File descriptor state | ✅ Always — prevents use-after-close |
-| Memory region permissions (R/W/X) | ✅ Always — enforces access control |
-| Generic container (Vec, HashMap) | ❌ No — use concrete type parameters |
-| Runtime-variable attributes | ❌ No — phantom types are compile-time only |
+| レジスタ幅のエンコード | ✅ 常に使用 — 幅の不一致を防止 |
+| DMAバッファの転送方向 | ✅ 常に使用 — データ破損を防止 |
+| ファイルディスクリプタの状態 | ✅ 常に使用 — クローズ後の使用を防止 |
+| メモリ領域のパーミッション（R/W/X） | ✅ 常に使用 — アクセス制御を強制 |
+| 汎用コンテナ（Vec, HashMap） | ❌ 不要 — 具体的な型パラメータを使用 |
+| 実行時に変化する属性 | ❌ 不適 — Phantom型はコンパイル時専用 |
 
-## Phantom Type Resource Matrix
+## Phantom型のリソースマトリクス
 
 ```mermaid
 flowchart TD
-    subgraph "Width Markers"
+    subgraph "幅マーカー"
         W8["Width8"] 
         W16["Width16"]
         W32["Width32"]
     end
-    subgraph "Direction Markers"
+    subgraph "方向マーカー"
         RD["Read"]
         WR["Write"]
     end
-    subgraph "Typed Resources"
+    subgraph "型付けされたリソース"
         R1["Register<Width16>"]
         R2["DmaBuffer<Read>"]
         R3["DmaBuffer<Write>"]
@@ -297,7 +293,7 @@ flowchart TD
     W16 --> R1
     RD --> R2
     WR --> R3
-    R2 -.->|"write attempt"| ERR["❌ Compile Error"]
+    R2 -.->|"書き込みの試み"| ERR["❌ コンパイルエラー"]
     style W8 fill:#e1f5fe,color:#000
     style W16 fill:#e1f5fe,color:#000
     style W32 fill:#e1f5fe,color:#000
@@ -309,16 +305,16 @@ flowchart TD
     style ERR fill:#ffcdd2,color:#000
 ```
 
-## Exercise: Memory Region Permissions
+## 演習問題: メモリ領域パーミッション
 
-Design phantom types for memory regions with read, write, and execute permissions:
-- `MemRegion<ReadOnly>` has `fn read(&self, offset: usize) -> u8`
-- `MemRegion<ReadWrite>` has both `read` and `write`
-- `MemRegion<Executable>` has `read` and `fn execute(&self)`
-- Writing to `ReadOnly` or executing `ReadWrite` should not compile.
+読み取り、書き込み、実行のパーミッションを持つメモリ領域用のPhantom型を設計してください：
+- `MemRegion<ReadOnly>` は `fn read(&self, offset: usize) -> u8` を持つ
+- `MemRegion<ReadWrite>` は `read` と `write` の両方を持つ
+- `MemRegion<Executable>` は `read` と `fn execute(&self)` を持つ
+- `ReadOnly` への書き込みや、`ReadWrite` の実行はコンパイルできないようにする。
 
 <details>
-<summary>Solution</summary>
+<summary>解答例</summary>
 
 ```rust,ignore
 use std::marker::PhantomData;
@@ -333,11 +329,11 @@ pub struct MemRegion<Perm> {
     _perm: PhantomData<Perm>,
 }
 
-// Read available on all permission types
+// すべてのパーミッション型で read が利用可能
 impl<P> MemRegion<P> {
     pub fn read(&self, offset: usize) -> u8 {
         assert!(offset < self.len);
-        // SAFETY: offset < self.len (asserted above), base is valid for len bytes.
+        // SAFETY: offset < self.len（上記アサート）、base は len バイトに対して有効。
         unsafe { *self.base.add(offset) }
     }
 }
@@ -345,31 +341,30 @@ impl<P> MemRegion<P> {
 impl MemRegion<ReadWrite> {
     pub fn write(&mut self, offset: usize, val: u8) {
         assert!(offset < self.len);
-        // SAFETY: offset < self.len (asserted above), base is valid for len bytes,
-        // and &mut self ensures exclusive access.
+        // SAFETY: offset < self.len（上記アサート）、base は len バイトに対して有効、
+        // かつ &mut self により排他アクセスが保証される。
         unsafe { *self.base.add(offset) = val; }
     }
 }
 
 impl MemRegion<Executable> {
     pub fn execute(&self) {
-        // Jump to base address (conceptual)
+        // ベースアドレスにジャンプ（概念コード）
     }
 }
 
-// ❌ region_ro.write(0, 0xFF);  // Compile error: no method `write`
-// ❌ region_rw.execute();       // Compile error: no method `execute`
+// ❌ region_ro.write(0, 0xFF);  // コンパイルエラー: `write` メソッドが存在しない
+// ❌ region_rw.execute();       // コンパイルエラー: `execute` メソッドが存在しない
 ```
 
 </details>
 
-## Key Takeaways
+## 重要なポイント
 
-1. **PhantomData carries type-level information at zero size** — the marker exists only for the compiler.
-2. **Register width mismatches become compile errors** — `Register<Width16>` returns `u16`, not `u32`.
-3. **DMA direction is enforced structurally** — `DmaBuffer<Read>` has no `write()` method.
-4. **Combine with dimensional types (ch06)** — `Register<Width16>` can return `Celsius` via the parse step.
-5. **Phantom types are compile-time only** — they don't work for runtime-variable attributes; use enums for those.
+1. **PhantomData はサイズゼロで型レベルの情報を保持する** — マーカーはコンパイラのためだけに存在します。
+2. **レジスタ幅の不一致がコンパイルエラーになる** — `Register<Width16>` は `u32` ではなく `u16` を返します。
+3. **DMAの転送方向が構造的に強制される** — `DmaBuffer<Read>` には `write()` メソッドが存在しません。
+4. **次元型（[第6章](ch06-dimensional-analysis-making-the-compiler.md)）と組み合わせる** — `Register<Width16>` はパース工程を経由して `Celsius` を返すことができます。
+5. **Phantom型はコンパイル時限定** — 実行時に変化する属性には機能しないため、そうした用途には列挙型を使用してください。
 
 ---
-

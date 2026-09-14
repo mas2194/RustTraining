@@ -1,41 +1,41 @@
-# Rust `Box<T>`
+# Rustの `Box<T>`
 
-> **What you'll learn:** Rust's smart pointer types — `Box<T>` for heap allocation, `Rc<T>` for shared ownership, and `Cell<T>`/`RefCell<T>` for interior mutability. These build on the ownership and lifetime concepts from the previous sections. You'll also see a brief introduction to `Weak<T>` for breaking reference cycles.
+> **学習目標:** ヒープ割り当てを行う `Box<T>`、共有所有権を実現する `Rc<T>`、内部可変性を提供する `Cell<T>`/`RefCell<T>` など、Rustのスマートポインタ型を学びます。これらは前のセクションで学んだ所有権とライフタイムの概念に基づいています。また、循環参照を解消するための `Weak<T>` についても簡単に紹介します。
 
-**Why `Box<T>`?** In C, you use `malloc`/`free` for heap allocation. In C++, `std::unique_ptr<T>` wraps `new`/`delete`. Rust's `Box<T>` is the equivalent — a heap-allocated, single-owner pointer that is automatically freed when it goes out of scope. Unlike `malloc`, there's no matching `free` to forget. Unlike `unique_ptr`, there's no use-after-move — the compiler prevents it entirely.
+**なぜ `Box<T>` を使うのか？** C言語では、ヒープ割り当てに `malloc`/`free` を使用します。C++では、`std::unique_ptr<T>` が `new`/`delete` をラップします。Rustの `Box<T>` はこれらに相当するものであり、ヒープに割り当てられた単一所有権を持つポインタで、スコープを抜けると自動的に解放されます。`malloc` とは異なり解放（free）忘れが発生せず、`unique_ptr` とは異なりムーブ後の使用（use-after-move）もコンパイラによって完全に防止されます。
 
-**When to use `Box` vs stack allocation:**
-- The contained type is large and you don't want to copy it on the stack
-- You need a recursive type (e.g., a linked list node that contains itself)
-- You need trait objects (`Box<dyn Trait>`)
+**スタック割り当てではなく `Box` を使用すべき場面:**
+- 格納する型が大きく、スタック上でのコピーを避けたい場合
+- 再帰的な型を定義する必要がある場合（例: 自身を含む連結リストのノード）
+- トレイトオブジェクトが必要な場合（`Box<dyn Trait>`）
 
-- ```Box<T>``` can be use to create a pointer to a heap allocated type. The pointer is always a fixed size regardless of the type of ```<T>```
+- `Box<T>` を使用すると、ヒープ上に割り当てられた型へのポインタを作成できます。このポインタは、`<T>` の型に関係なく常に固定サイズです
 ```rust
 fn main() {
-    // Creates a pointer to an integer (with value 42) created on the heap
+    // ヒープ上に作成された整数（値: 42）へのポインタを作成
     let f = Box::new(42);
     println!("{} {}", *f, f);
-    // Cloning a box creates a new heap allocation
+    // Boxをクローンすると、新しいヒープ領域が割り当てられる
     let mut g = f.clone();
     *g = 43;
     println!("{f} {g}");
-    // g and f go out of scope here and are automatically deallocated
+    // g と f はここでスコープを抜け、自動的にメモリが解放される
 }
 ```
 ```mermaid
 graph LR
-    subgraph "Stack"
+    subgraph "スタック"
         F["f: Box&lt;i32&gt;"]
         G["g: Box&lt;i32&gt;"]
     end
 
-    subgraph "Heap"
+    subgraph "ヒープ"
         HF["42"]
         HG["43"]
     end
 
-    F -->|"owns"| HF
-    G -->|"owns (cloned)"| HG
+    F -->|"所有"| HF
+    G -->|"所有 (クローン後)"| HG
 
     style F fill:#51cf66,color:#000,stroke:#333
     style G fill:#51cf66,color:#000,stroke:#333
@@ -43,79 +43,79 @@ graph LR
     style HG fill:#91e5a3,color:#000,stroke:#333
 ```
 
-## Ownership and Borrowing Visualization
+## 所有権と借用の可視化
 
-### C/C++ vs Rust: Pointer and Ownership Management
+### C/C++ vs Rust: ポインタと所有権の管理
 
 ```c
-// C - Manual memory management, potential issues
+// C - 手動のメモリ管理と潜在的な問題
 void c_pointer_problems() {
     int* ptr1 = malloc(sizeof(int));
     *ptr1 = 42;
     
-    int* ptr2 = ptr1;  // Both point to same memory
-    int* ptr3 = ptr1;  // Three pointers to same memory
+    int* ptr2 = ptr1;  // 両方が同じメモリを指す
+    int* ptr3 = ptr1;  // 3つのポインタが同じメモリを指す
     
-    free(ptr1);        // Frees the memory
+    free(ptr1);        // メモリを解放
     
-    *ptr2 = 43;        // Use after free - undefined behavior!
-    *ptr3 = 44;        // Use after free - undefined behavior!
+    *ptr2 = 43;        // 解放後使用（Use after free） - 未定義動作！
+    *ptr3 = 44;        // 解放後使用（Use after free） - 未定義動作！
 }
 ```
 
-> **For C++ developers:** Smart pointers help, but don't prevent all issues:
+> **C++開発者向け:** スマートポインタは役立ちますが、すべての問題を防げるわけではありません:
 >
 > ```cpp
-> // C++ - Smart pointers help, but don't prevent all issues
+> // C++ - スマートポインタは役立ちますが、すべての問題を防げるわけではありません
 > void cpp_pointer_issues() {
 >     auto ptr1 = std::make_unique<int>(42);
 >     
->     // auto ptr2 = ptr1;  // Compile error: unique_ptr not copyable
->     auto ptr2 = std::move(ptr1);  // OK: ownership transferred
+>     // auto ptr2 = ptr1;  // コンパイルエラー: unique_ptrはコピー不可
+>     auto ptr2 = std::move(ptr1);  // OK: 所有権が移動
 >     
->     // But C++ still allows use-after-move:
->     // std::cout << *ptr1;  // Compiles! But undefined behavior!
+>     // しかしC++ではムーブ後の使用が依然として可能です:
+>     // std::cout << *ptr1;  // コンパイルは通る！しかし未定義動作！
 >     
->     // shared_ptr aliasing:
+>     // shared_ptrのエイリアシング:
 >     auto shared1 = std::make_shared<int>(42);
->     auto shared2 = shared1;  // Both own the data
->     // Who "really" owns it? Neither. Ref count overhead everywhere.
+>     auto shared2 = shared1;  // 両方がデータを所有
+>     // 誰が「真に」所有しているのか？どちらでもない。至る所で参照カウントのオーバーヘッドが発生する。
 > }
 > ```
 
 ```rust
-// Rust - Ownership system prevents these issues
+// Rust - 所有権システムがこれらの問題を防止
 fn rust_ownership_safety() {
-    let data = Box::new(42);  // data owns the heap allocation
+    let data = Box::new(42);  // dataがヒープ割り当てを所有
     
-    let moved_data = data;    // Ownership transferred to moved_data
-    // data is no longer accessible - compile error if used
+    let moved_data = data;    // 所有権がmoved_dataに移転（ムーブ）
+    // dataにはアクセスできなくなる - 使用するとコンパイルエラー
     
-    let borrowed = &moved_data;  // Immutable borrow
-    println!("{}", borrowed);    // Safe to use
+    let borrowed = &moved_data;  // 不変借用
+    println!("{}", borrowed);    // 安全に使用可能
     
-    // moved_data automatically freed when it goes out of scope
+    // moved_dataがスコープを抜けると自動的に解放される
 }
 ```
 
 ```mermaid
 graph TD
-    subgraph "C/C++ Memory Management Issues"
-        CP1["int* ptr1"] --> CM["Heap Memory<br/>value: 42"]
+    subgraph "C/C++のメモリ管理における問題"
+        CP1["int* ptr1"] --> CM["ヒープメモリ<br/>値: 42"]
         CP2["int* ptr2"] --> CM
         CP3["int* ptr3"] --> CM
-        CF["free(ptr1)"] --> CM_F["[ERROR] Freed Memory"]
-        CP2 -.->|"Use after free<br/>Undefined Behavior"| CM_F
-        CP3 -.->|"Use after free<br/>Undefined Behavior"| CM_F
+        CF["free(ptr1)"] --> CM_F["[エラー] 解放済みメモリ"]
+        CP2 -.->|"解放後使用 (Use after free)<br/>未定義動作"| CM_F
+        CP3 -.->|"解放後使用 (Use after free)<br/>未定義動作"| CM_F
     end
     
-    subgraph "Rust Ownership System"
-        RO1["data: Box<i32>"] --> RM["Heap Memory<br/>value: 42"]
-        RO1 -.->|"Move ownership"| RO2["moved_data: Box<i32>"]
+    subgraph "Rustの所有権システム"
+        RO1["data: Box<i32>"] --> RM["ヒープメモリ<br/>値: 42"]
+        RO1 -.->|"所有権のムーブ"| RO2["moved_data: Box<i32>"]
         RO2 --> RM
-        RO1_X["data: [WARNING] MOVED<br/>Cannot access"]
-        RB["&moved_data<br/>Immutable borrow"] -.->|"Safe reference"| RM
-        RD["Drop automatically<br/>when out of scope"] --> RM
+        RO1_X["data: [警告] ムーブ済み<br/>アクセス不可"]
+        RB["&moved_data<br/>不変借用"] -.->|"安全な参照"| RM
+        RD["スコープ終了時に<br/>自動ドロップ"] --> RM
     end
     
     style CM_F fill:#ff6b6b,color:#000
@@ -127,23 +127,23 @@ graph TD
     style RD fill:#91e5a3,color:#000
 ```
 
-### Borrowing Rules Visualization
+### 借用規則の可視化
 
 ```rust
 fn borrowing_rules_example() {
     let mut data = vec![1, 2, 3, 4, 5];
     
-    // Multiple immutable borrows - OK
+    // 複数の不変借用 - OK
     let ref1 = &data;
     let ref2 = &data;
-    println!("{:?} {:?}", ref1, ref2);  // Both can be used
+    println!("{:?} {:?}", ref1, ref2);  // 両方とも使用可能
     
-    // Mutable borrow - exclusive access
+    // 可変借用 - 排他的アクセス
     let ref_mut = &mut data;
     ref_mut.push(6);
-    // ref1 and ref2 can't be used while ref_mut is active
+    // ref_mutがアクティブな間はref1とref2は使用できない
     
-    // After ref_mut is done, immutable borrows work again
+    // ref_mutが終了した後、不変借用が再び利用可能になる
     let ref3 = &data;
     println!("{:?}", ref3);
 }
@@ -151,40 +151,40 @@ fn borrowing_rules_example() {
 
 ```mermaid
 graph TD
-    subgraph "Rust Borrowing Rules"
+    subgraph "Rustの借用規則"
         D["mut data: Vec<i32>"]
         
-        subgraph "Phase 1: Multiple Immutable Borrows [OK]"
+        subgraph "フェーズ1: 複数の不変借用 [OK]"
             IR1["&data (ref1)"]
             IR2["&data (ref2)"]
             D --> IR1
             D --> IR2
-            IR1 -.->|"Read-only access"| MEM1["Memory: [1,2,3,4,5]"]
-            IR2 -.->|"Read-only access"| MEM1
+            IR1 -.->|"読み取り専用アクセス"| MEM1["メモリ: [1,2,3,4,5]"]
+            IR2 -.->|"読み取り専用アクセス"| MEM1
         end
         
-        subgraph "Phase 2: Exclusive Mutable Borrow [OK]"
+        subgraph "フェーズ2: 排他的な可変借用 [OK]"
             MR["&mut data (ref_mut)"]
             D --> MR
-            MR -.->|"Exclusive read/write"| MEM2["Memory: [1,2,3,4,5,6]"]
-            BLOCK["[ERROR] Other borrows blocked"]
+            MR -.->|"排他的な読み書き"| MEM2["メモリ: [1,2,3,4,5,6]"]
+            BLOCK["[エラー] 他の借用はブロックされる"]
         end
         
-        subgraph "Phase 3: Immutable Borrows Again [OK]"
+        subgraph "フェーズ3: 再び不変借用 [OK]"
             IR3["&data (ref3)"]
             D --> IR3
-            IR3 -.->|"Read-only access"| MEM3["Memory: [1,2,3,4,5,6]"]
+            IR3 -.->|"読み取り専用アクセス"| MEM3["メモリ: [1,2,3,4,5,6]"]
         end
     end
     
-    subgraph "What C/C++ Allows (Dangerous)"
+    subgraph "C/C++で許可されている動作 (危険)"
         CP["int* ptr"]
         CP2["int* ptr2"]
         CP3["int* ptr3"]
-        CP --> CMEM["Same Memory"]
+        CP --> CMEM["同一メモリ"]
         CP2 --> CMEM
         CP3 --> CMEM
-        RACE["[ERROR] Data races possible<br/>[ERROR] Use after free possible"]
+        RACE["[エラー] データ競合の可能性<br/>[エラー] 解放後使用の可能性"]
     end
     
     style MEM1 fill:#91e5a3,color:#000
@@ -197,47 +197,47 @@ graph TD
 
 ---
 
-## Interior Mutability: `Cell<T>` and `RefCell<T>`
+## 内部可変性: `Cell<T>` と `RefCell<T>`
 
-Recall that by default variables are immutable in Rust. Sometimes it's desirable to have most of a type read-only while permitting write access to a single field.
+Rustではデフォルトで変数が不変（イミュータブル）であることを思い出してください。しかし、型の大半のフィールドを読み取り専用にしつつ、特定の1つのフィールドだけに書き込みアクセスを許可したい場合があります。
 
 ```rust
 struct Employee {
-    employee_id : u64,   // This must be immutable
-    on_vacation: bool,   // What if we wanted to permit write-access to this field, but make employee_id immutable?
+    employee_id : u64,   // これは不変である必要がある
+    on_vacation: bool,   // employee_idを不変にしたまま、このフィールドへの書き込みアクセスを許可したい場合はどうすればよいか？
 }
 ```
 
-- Recall that Rust permits a *single mutable* reference to a variable and any number of *immutable* references — enforced at *compile-time*
-- What if we wanted to pass an *immutable* vector of employees, *but* allow the `on_vacation` field to be updated, while ensuring `employee_id` cannot be mutated?
+- Rustでは、変数に対して*単一の可変*参照、または任意の数の*不変*参照のみが許可され、これが*コンパイル時*に強制されることを思い出してください
+- 従業員の*不変*ベクタを渡しつつ、`employee_id` は絶対に変更できないように保証した上で、`on_vacation` フィールドの更新だけを許可したい場合はどうすればよいでしょうか？
 
-### `Cell<T>` — interior mutability for Copy types
+### `Cell<T>` — Copy型向けの内部可変性
 
-- `Cell<T>` provides **interior mutability**, i.e., write access to specific elements of references that are otherwise read-only
-- Works by copying values in and out (requires `T: Copy` for `.get()`)
+- `Cell<T>` は**内部可変性（interior mutability）**を提供します。つまり、本来読み取り専用である参照の特定要素に対する書き込みアクセスを可能にします
+- 値を出し入れしてコピーすることで機能します（`.get()` には `T: Copy` が必要です）
 
-### `RefCell<T>` — interior mutability with runtime borrow checking
+### `RefCell<T>` — 実行時借用チェックを伴う内部可変性
 
-- `RefCell<T>` provides a variation that works with references
-    - Enforces Rust borrow-checks at **runtime** instead of compile-time
-    - Allows a single *mutable* borrow, but **panics** if there are any other references outstanding
-    - Use `.borrow()` for immutable access and `.borrow_mut()` for mutable access
+- `RefCell<T>` は参照を扱えるバリエーションを提供します
+    - コンパイル時ではなく**実行時**にRustの借用チェックを強制します
+    - 単一の*可変*借用を許可しますが、他にアクティブな参照が存在する場合は**パニック**します
+    - 不変アクセスには `.borrow()` を、可変アクセスには `.borrow_mut()` を使用します
 
-### When to Choose `Cell` vs `RefCell`
+### `Cell` と `RefCell` の使い分け
 
-| Criterion | `Cell<T>` | `RefCell<T>` |
+| 基準 | `Cell<T>` | `RefCell<T>` |
 |-----------|-----------|-------------|
-| Works with | `Copy` types (integers, bools, floats) | Any type (`String`, `Vec`, structs) |
-| Access pattern | Copies values in/out (`.get()`, `.set()`) | Borrows in place (`.borrow()`, `.borrow_mut()`) |
-| Failure mode | Cannot fail — no runtime checks | **Panics** if you borrow mutably while another borrow is active |
-| Overhead | Zero — just copies bytes | Small — tracks borrow state at runtime |
-| Use when | You need a mutable flag, counter, or small value inside an immutable struct | You need to mutate a `String`, `Vec`, or complex type inside an immutable struct |
+| 対象となる型 | `Copy` 型（整数、bool、浮動小数点数など） | 任意の型（`String`, `Vec`, 構造体など） |
+| アクセスパターン | 値をコピーして出し入れ（`.get()`, `.set()`） | その場で参照を借用（`.borrow()`, `.borrow_mut()`） |
+| 失敗時の挙動 | 失敗しない（実行時チェックなし） | 別の借用がアクティブな状態で可変借用すると**パニック**する |
+| オーバーヘッド | ゼロ（単なるバイトのコピー） | 小（実行時に借用状態を追跡） |
+| 使用する場面 | 不変な構造体の中で、可変フラグ、カウンタ、小さな値が必要な場合 | 不変な構造体の中で、`String`、`Vec`、または複雑な型を変更する必要がある場合 |
 
 ---
 
-## Shared Ownership: `Rc<T>`
+## 共有所有権: `Rc<T>`
 
-`Rc<T>` allows reference-counted shared ownership of *immutable* data. What if we wanted to store the same `Employee` in multiple places without copying?
+`Rc<T>` は、参照カウント方式によって*不変*データの共有所有権を可能にします。同じ `Employee` をコピーせずに複数の場所に保持したい場合はどうすればよいでしょうか？
 
 ```rust
 #[derive(Debug)]
@@ -249,14 +249,14 @@ fn main() {
     let mut all_global_employees = Vec::<Employee>::new();
     let employee = Employee { employee_id: 42 };
     us_employees.push(employee);
-    // Won't compile — employee was already moved
+    // コンパイルエラー — employeeはすでにムーブされている
     //all_global_employees.push(employee);
 }
 ```
 
-`Rc<T>` solves the problem by allowing shared *immutable* access:
-- The contained type is automatically dereferenced
-- The type is dropped when the reference count goes to 0
+`Rc<T>` は、共有された*不変*アクセスを許可することでこの問題を解決します:
+- 格納されている型は自動的に参照外し（dereference）されます
+- 参照カウントが0になると型がドロップされます
 
 ```rust
 use std::rc::Rc;
@@ -269,76 +269,76 @@ fn main() {
     let employee_rc = Rc::new(employee);
     us_employees.push(employee_rc.clone());
     all_global_employees.push(employee_rc.clone());
-    let employee_one = all_global_employees.get(0); // Shared immutable reference
+    let employee_one = all_global_employees.get(0); // 共有された不変参照
     for e in us_employees {
-        println!("{}", e.employee_id);  // Shared immutable reference
+        println!("{}", e.employee_id);  // 共有された不変参照
     }
     println!("{employee_one:?}");
 }
 ```
 
-> **For C++ developers: Smart Pointer Mapping**
+> **C++開発者向け: スマートポインタの対応関係**
 >
-> | C++ Smart Pointer | Rust Equivalent | Key Difference |
+> | C++ スマートポインタ | Rust 相当 | 主な相違点 |
 > |---|---|---|
-> | `std::unique_ptr<T>` | `Box<T>` | Rust's version is the default — move is language-level, not opt-in |
-> | `std::shared_ptr<T>` | `Rc<T>` (single-thread) / `Arc<T>` (multi-thread) | No atomic overhead for `Rc`; use `Arc` only when sharing across threads |
-> | `std::weak_ptr<T>` | `Weak<T>` (from `Rc::downgrade()` or `Arc::downgrade()`) | Same purpose: break reference cycles |
+> | `std::unique_ptr<T>` | `Box<T>` | Rust版がデフォルト — ムーブはオプトインではなく言語レベルの基本動作 |
+> | `std::shared_ptr<T>` | `Rc<T>`（シングルスレッド） / `Arc<T>`（マルチスレッド） | `Rc` にはアトミック操作のオーバーヘッドなし。スレッド間で共有する場合にのみ `Arc` を使用 |
+> | `std::weak_ptr<T>` | `Weak<T>`（`Rc::downgrade()` または `Arc::downgrade()` から取得） | 目的は同じ: 循環参照の解消 |
 >
-> **Key distinction**: In C++, you *choose* to use smart pointers. In Rust, owned values (`T`) and borrowing (`&T`) cover most use cases — reach for `Box`/`Rc`/`Arc` only when you need heap allocation or shared ownership.
+> **重要な違い**: C++では、スマートポインタをあえて*選んで*使用します。Rustでは、所有された値（`T`）と借用（`&T`）がほとんどのユースケースをカバーします。ヒープ割り当てや共有所有権がどうしても必要な場合にのみ `Box`/`Rc`/`Arc` を検討してください。
 
-### Breaking Reference Cycles with `Weak<T>`
+### `Weak<T>` による循環参照の解消
 
-`Rc<T>` uses reference counting — if two `Rc` values point to each other, neither will ever be dropped (a cycle). `Weak<T>` solves this:
+`Rc<T>` は参照カウントを使用するため、2つの `Rc` 値が互いを参照し合うと、どちらもドロップされなくなります（循環参照）。`Weak<T>` はこれを解決します:
 
 ```rust
 use std::rc::{Rc, Weak};
 
 struct Node {
     value: i32,
-    parent: Option<Weak<Node>>,  // Weak reference — doesn't prevent drop
+    parent: Option<Weak<Node>>,  // 弱参照（Weak reference） — ドロップを妨げない
 }
 
 fn main() {
     let parent = Rc::new(Node { value: 1, parent: None });
     let child = Rc::new(Node {
         value: 2,
-        parent: Some(Rc::downgrade(&parent)),  // Weak ref to parent
+        parent: Some(Rc::downgrade(&parent)),  // 親への弱参照
     });
 
-    // To use a Weak, try to upgrade it — returns Option<Rc<T>>
+    // Weakを使用するには upgrade() を試行する — Option<Rc<T>> が返される
     if let Some(parent_rc) = child.parent.as_ref().unwrap().upgrade() {
-        println!("Parent value: {}", parent_rc.value);
+        println!("親の値: {}", parent_rc.value);
     }
-    println!("Parent strong count: {}", Rc::strong_count(&parent)); // 1, not 2
+    println!("親の強参照カウント: {}", Rc::strong_count(&parent)); // 2ではなく1
 }
 ```
 
-> `Weak<T>` is covered in more depth in [Avoiding Excessive clone()](ch17-1-avoiding-excessive-clone.md). For now, the key takeaway: **use `Weak` for "back-references" in tree/graph structures to avoid memory leaks.**
+> `Weak<T>` の詳細については、[過度なclone()の回避](ch17-1-avoiding-excessive-clone.md) で詳しく説明します。現時点での要点は次のとおりです: **ツリーやグラフ構造の「親や逆方向への参照」には `Weak` を使用してメモリリークを防ぎます。**
 
 ---
 
-## Combining `Rc` with Interior Mutability
+## `Rc` と内部可変性の組み合わせ
 
-The real power emerges when you combine `Rc<T>` (shared ownership) with `Cell<T>` or `RefCell<T>` (interior mutability). This lets multiple owners **read and modify** shared data:
+`Rc<T>`（共有所有権）と `Cell<T>` または `RefCell<T>`（内部可変性）を組み合わせることで、真の力が発揮されます。これにより、複数の所有者が共有データを**読み取りおよび変更**できるようになります:
 
-| Pattern | Use case |
+| パターン | ユースケース |
 |---------|----------|
-| `Rc<RefCell<T>>` | Shared, mutable data (single-threaded) |
-| `Arc<Mutex<T>>` | Shared, mutable data (multi-threaded — see [ch13](ch13-concurrency.md)) |
-| `Rc<Cell<T>>` | Shared, mutable Copy types (simple flags, counters) |
+| `Rc<RefCell<T>>` | 共有可能で可変なデータ（シングルスレッド） |
+| `Arc<Mutex<T>>` | 共有可能で可変なデータ（マルチスレッド — [第13章](ch13-concurrency.md) 参照） |
+| `Rc<Cell<T>>` | 共有可能で可変な Copy 型（単純なフラグ、カウンタなど） |
 
 ---
 
-# Exercise: Shared ownership and interior mutability
+# 演習: 共有所有権と内部可変性
 
-🟡 **Intermediate**
+🟡 **中級**
 
-- **Part 1 (Rc)**: Create an `Employee` struct with `employee_id: u64` and `name: String`. Place it in an `Rc<Employee>` and clone it into two separate `Vec`s (`us_employees` and `global_employees`). Print from both vectors to show they share the same data.
-- **Part 2 (Cell)**: Add an `on_vacation: Cell<bool>` field to `Employee`. Pass an immutable `&Employee` reference to a function and toggle `on_vacation` from inside that function — without making the reference mutable.
-- **Part 3 (RefCell)**: Replace `name: String` with `name: RefCell<String>` and write a function that appends a suffix to the employee's name through an `&Employee` (immutable reference).
+- **パート1 (Rc)**: `employee_id: u64` と `name: String` を持つ `Employee` 構造体を作成します。それを `Rc<Employee>` に格納し、2つの独立した `Vec`（`us_employees` と `global_employees`）にクローンします。両方のベクタから出力して、同じデータを共有していることを確認します。
+- **パート2 (Cell)**: `Employee` に `on_vacation: Cell<bool>` フィールドを追加します。不変な `&Employee` 参照を関数に渡し、参照を可変にすることなく、その関数内から `on_vacation` を切り替えます。
+- **パート3 (RefCell)**: `name: String` を `name: RefCell<String>` に置き換え、`&Employee`（不変参照）を介して従業員の名前の末尾にサフィックスを追加する関数を作成します。
 
-**Starter code:**
+**スターターコード:**
 ```rust
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -351,20 +351,20 @@ struct Employee {
 }
 
 fn toggle_vacation(emp: &Employee) {
-    // TODO: Flip on_vacation using Cell::set()
+    // TODO: Cell::set() を使用して on_vacation を反転させる
 }
 
 fn append_title(emp: &Employee, title: &str) {
-    // TODO: Borrow name mutably via RefCell and push_str the title
+    // TODO: RefCell を介して name を可変借用し、push_str で title を追加する
 }
 
 fn main() {
-    // TODO: Create an employee, wrap in Rc, clone into two Vecs,
-    // call toggle_vacation and append_title, print results
+    // TODO: 従業員を作成し、Rcでラップして2つのVecにクローンする。
+    // toggle_vacation と append_title を呼び出し、結果を出力する
 }
 ```
 
-<details><summary>Solution (click to expand)</summary>
+<details><summary>解答例（クリックして展開）</summary>
 
 ```rust
 use std::cell::{Cell, RefCell};
@@ -397,25 +397,25 @@ fn main() {
     us_employees.push(Rc::clone(&emp));
     global_employees.push(Rc::clone(&emp));
 
-    // Toggle vacation through an immutable reference
+    // 不変参照を介して休暇状態を切り替える
     toggle_vacation(&emp);
-    println!("On vacation: {}", emp.on_vacation.get()); // true
+    println!("休暇中: {}", emp.on_vacation.get()); // true
 
-    // Append title through an immutable reference
+    // 不変参照を介して肩書きを追加する
     append_title(&emp, ", Sr. Engineer");
-    println!("Name: {}", emp.name.borrow()); // "Alice, Sr. Engineer"
+    println!("名前: {}", emp.name.borrow()); // "Alice, Sr. Engineer"
 
-    // Both Vecs see the same data (Rc shares ownership)
+    // 両方のVecが同じデータを参照している（Rcが所有権を共有）
     println!("US: {:?}", us_employees[0].name.borrow());
     println!("Global: {:?}", global_employees[0].name.borrow());
-    println!("Rc strong count: {}", Rc::strong_count(&emp));
+    println!("Rcの強参照カウント: {}", Rc::strong_count(&emp));
 }
-// Output:
-// On vacation: true
-// Name: Alice, Sr. Engineer
+// 出力:
+// 休暇中: true
+// 名前: Alice, Sr. Engineer
 // US: "Alice, Sr. Engineer"
 // Global: "Alice, Sr. Engineer"
-// Rc strong count: 3
+// Rcの強参照カウント: 3
 ```
 
 </details>

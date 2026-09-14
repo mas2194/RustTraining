@@ -1,14 +1,14 @@
-# 5. Channels and Message Passing 🟢
+# 5. チャンネルとメッセージパッシング 🟢
 
-> **What you'll learn:**
-> - `std::sync::mpsc` basics and when to upgrade to crossbeam-channel
-> - Channel selection with `select!` for multi-source message handling
-> - Bounded vs unbounded channels and backpressure strategies
-> - The actor pattern for encapsulating concurrent state
+> **学習内容:**
+> - `std::sync::mpsc` の基本と crossbeam-channel への移行時期
+> - 複数ソースのメッセージを処理する `select!` によるチャンネル選択
+> - 有界チャンネル vs 無界チャンネルとバックプレッシャー戦略
+> - 並行状態をカプセル化するアクターパターン
 
-## std::sync::mpsc — The Standard Channel
+## std::sync::mpsc — 標準チャンネル
 
-Rust's standard library provides a multi-producer, single-consumer channel:
+Rust の標準ライブラリは、複数プロデューサー・単一コンシューマー（multi-producer, single-consumer）チャンネルを提供します：
 
 ```rust
 use std::sync::mpsc;
@@ -16,11 +16,11 @@ use std::thread;
 use std::time::Duration;
 
 fn main() {
-    // Create a channel: tx (transmitter) and rx (receiver)
+    // チャンネルを作成: tx (送信側) と rx (受信側)
     let (tx, rx) = mpsc::channel();
 
-    // Spawn a producer thread
-    let tx1 = tx.clone(); // Clone for multiple producers
+    // プロデューサースレッドを生成
+    let tx1 = tx.clone(); // 複数のプロデューサー用にクローン
     thread::spawn(move || {
         for i in 0..5 {
             tx1.send(format!("producer-1: msg {i}")).unwrap();
@@ -28,7 +28,7 @@ fn main() {
         }
     });
 
-    // Second producer
+    // 2つ目のプロデューサー
     thread::spawn(move || {
         for i in 0..5 {
             tx.send(format!("producer-2: msg {i}")).unwrap();
@@ -36,40 +36,40 @@ fn main() {
         }
     });
 
-    // Consumer: receive all messages
+    // コンシューマー: すべてのメッセージを受信
     for msg in rx {
-        // rx iterator ends when ALL senders are dropped
-        println!("Received: {msg}");
+        // すべての送信側がドロップされると rx イテレータが終了する
+        println!("受信: {msg}");
     }
-    println!("All producers done.");
+    println!("すべてのプロデューサーが完了しました。");
 }
 ```
 
-> **Note:** `.unwrap()` on `.send()` is used for brevity. It panics if the receiver has been dropped. Production code should handle `SendError` gracefully.
+> **注意:** `.send()` に対する `.unwrap()` は簡潔さのために使用しています。受信側がドロップされている場合はパニックします。プロダクションコードでは `SendError` を適切に処理すべきです。
 
-**Key properties**:
-- **Unbounded** by default (can fill memory if consumer is slow)
-- `mpsc::sync_channel(N)` creates a **bounded** channel with backpressure
-- `rx.recv()` blocks the current thread until a message arrives
-- `rx.try_recv()` returns immediately with `Err(TryRecvError::Empty)` if nothing is ready
-- The channel closes when all `Sender`s are dropped
+**主な特性**:
+- デフォルトで**無界（Unbounded）**（コンシューマーが遅い場合、メモリを消費し続ける可能性があります）
+- `mpsc::sync_channel(N)` はバックプレッシャーを持つ**有界（Bounded）**チャンネルを作成します
+- `rx.recv()` はメッセージが届くまでカレントスレッドをブロックします
+- `rx.try_recv()` は準備完了したメッセージがない場合、即座に `Err(TryRecvError::Empty)` を返します
+- すべての `Sender` がドロップされるとチャンネルはクローズします
 
 ```rust
-// Bounded channel with backpressure:
-let (tx, rx) = mpsc::sync_channel(10); // Buffer of 10 messages
+// バックプレッシャーを持つ有界チャンネル:
+let (tx, rx) = mpsc::sync_channel(10); // 10メッセージのバッファ
 
 thread::spawn(move || {
     for i in 0..1000 {
-        tx.send(i).unwrap(); // BLOCKS if buffer is full — natural backpressure
+        tx.send(i).unwrap(); // バッファがいっぱいの場合はブロック — 自然なバックプレッシャー
     }
 });
 ```
 
-> **Note:** `.unwrap()` is used for brevity. In production, handle `SendError` (receiver dropped) instead of panicking.
+> **注意:** `.unwrap()` は簡潔さのために使用しています。プロダクション環境では、パニックする代わりに `SendError`（受信側がドロップされた）を処理してください。
 
-### crossbeam-channel — The Production Workhorse
+### crossbeam-channel — プロダクションにおける主力
 
-`crossbeam-channel` is the de facto standard for production channel usage. It's faster than `std::sync::mpsc` and supports multi-consumer (`mpmc`):
+`crossbeam-channel` は、プロダクション環境でのチャンネル利用における事実上の標準です。`std::sync::mpsc` よりも高速で、複数コンシューマー（`mpmc`）をサポートしています：
 
 ```rust,ignore
 // Cargo.toml:
@@ -80,10 +80,10 @@ use std::thread;
 use std::time::Duration;
 
 fn main() {
-    // Bounded MPMC channel
+    // 有界 MPMC チャンネル
     let (tx, rx) = bounded::<String>(100);
 
-    // Multiple producers
+    // 複数のプロデューサー
     for id in 0..4 {
         let tx = tx.clone();
         thread::spawn(move || {
@@ -92,9 +92,9 @@ fn main() {
             }
         });
     }
-    drop(tx); // Drop the original sender so the channel can close
+    drop(tx); // チャンネルがクローズできるようにオリジナルの送信側をドロップ
 
-    // Multiple consumers (not possible with std::sync::mpsc!)
+    // 複数のコンシューマー（std::sync::mpsc では不可！）
     let rx2 = rx.clone();
     let consumer1 = thread::spawn(move || {
         while let Ok(msg) = rx.recv() {
@@ -112,9 +112,9 @@ fn main() {
 }
 ```
 
-### Channel Selection (select!)
+### チャンネル選択 (select!)
 
-Listen on multiple channels simultaneously — like `select` in Go:
+複数のチャンネルを同時にリッスンする — Go 言語の `select` と同様です：
 
 ```rust,ignore
 use crossbeam_channel::{bounded, tick, after, select};
@@ -122,10 +122,10 @@ use std::time::Duration;
 
 fn main() {
     let (work_tx, work_rx) = bounded::<String>(10);
-    let ticker = tick(Duration::from_secs(1));        // Periodic tick
-    let deadline = after(Duration::from_secs(10));     // One-shot timeout
+    let ticker = tick(Duration::from_secs(1));        // 定期的なティック
+    let deadline = after(Duration::from_secs(10));     // ワンショットタイムアウト
 
-    // Producer
+    // プロデューサー
     let tx = work_tx.clone();
     std::thread::spawn(move || {
         for i in 0..100 {
@@ -139,18 +139,18 @@ fn main() {
         select! {
             recv(work_rx) -> msg => {
                 match msg {
-                    Ok(job) => println!("Processing: {job}"),
+                    Ok(job) => println!("処理中: {job}"),
                     Err(_) => {
-                        println!("Work channel closed");
+                        println!("ワークチャンネルがクローズしました");
                         break;
                     }
                 }
             },
             recv(ticker) -> _ => {
-                println!("Tick — heartbeat");
+                println!("Tick — ハートビート");
             },
             recv(deadline) -> _ => {
-                println!("Deadline reached — shutting down");
+                println!("デッドラインに到達 — シャットダウンします");
                 break;
             },
         }
@@ -158,40 +158,39 @@ fn main() {
 }
 ```
 
-> **Go comparison**: This is exactly like Go's `select` statement over channels.
-> crossbeam's `select!` macro randomizes order to prevent starvation, just like Go.
+> **Go との比較**: これは Go のチャンネルに対する `select` 文とまったく同じです。
+> crossbeam の `select!` マクロは、Go と同様に飢餓（スターベーション）を防ぐために順序をランダム化します。
 
-### Bounded vs Unbounded and Backpressure
+### 有界 vs 無界とバックプレッシャー
 
-| Type | Behavior When Full | Memory | Use Case |
+| 種類 | バッファ満杯時の動作 | メモリ | ユースケース |
 |------|-------------------|--------|----------|
-| **Unbounded** | Never blocks (grows heap) | Unbounded ⚠️ | Rare — only when producer is slower than consumer |
-| **Bounded** | `send()` blocks until space | Fixed | Production default — prevents OOM |
-| **Rendezvous** (bounded(0)) | `send()` blocks until receiver is ready | None | Synchronization / handoff |
+| **無界（Unbounded）** | 決してブロックしない（ヒープを拡張） | 無制限 ⚠️ | 稀 — プロデューサーがコンシューマーより遅い場合のみ |
+| **有界（Bounded）** | 空きができるまで `send()` がブロック | 固定 | プロダクションのデフォルト — OOM を防止 |
+| **ランデブー（Rendezvous）** (bounded(0)) | 受信側の準備ができるまで `send()` がブロック | なし | 同期 / ハンドオフ |
 
 ```rust
-// Rendezvous channel — zero capacity, direct handoff
+// ランデブーチャンネル — 容量ゼロ、直接の受け渡し
 let (tx, rx) = crossbeam_channel::bounded(0);
-// tx.send(x) blocks until rx.recv() is called, and vice versa.
-// This synchronizes the two threads precisely.
+// tx.send(x) は rx.recv() が呼ばれるまでブロックし、逆も同様です。
+// これにより、2つのスレッドを正確に同期させます。
 ```
 
-**Rule**: Always use bounded channels in production unless you can prove the
-producer will never outpace the consumer.
+**ルール**: プロデューサーがコンシューマーの処理速度を上回ることが決してないと証明できる場合を除き、プロダクションでは常に有界チャンネルを使用してください。
 
-### Actor Pattern with Channels
+### チャンネルを用いたアクターパターン
 
-The actor pattern uses channels to serialize access to mutable state — no mutexes needed:
+アクターパターンは、チャンネルを使用して可変状態へのアクセスを直列化します — Mutex は不要です：
 
 ```rust
 use std::sync::mpsc;
 use std::thread;
 
-// Messages the actor can receive
+// アクターが受信できるメッセージ
 enum CounterMsg {
     Increment,
     Decrement,
-    Get(mpsc::Sender<i64>), // Reply channel
+    Get(mpsc::Sender<i64>), // 返信用チャンネル
 }
 
 struct CounterActor {
@@ -217,7 +216,7 @@ impl CounterActor {
     }
 }
 
-// Actor handle — cheap to clone, Send + Sync
+// アクターハンドル — クローンが安価で、Send + Sync
 #[derive(Clone)]
 struct Counter {
     tx: mpsc::Sender<CounterMsg>,
@@ -243,7 +242,7 @@ impl Counter {
 fn main() {
     let counter = Counter::spawn();
 
-    // Multiple threads can safely use the counter — no mutex!
+    // 複数のスレッドがカウンターを安全に使用可能 — Mutex は不要！
     let handles: Vec<_> = (0..10).map(|_| {
         let counter = counter.clone();
         thread::spawn(move || {
@@ -254,32 +253,30 @@ fn main() {
     }).collect();
 
     for h in handles { h.join().unwrap(); }
-    println!("Final count: {}", counter.get()); // 10000
+    println!("最終カウント: {}", counter.get()); // 10000
 }
 ```
 
-> **When to use actors vs mutexes**: Actors are great when the state has complex
-> invariants, operations take a long time, or you want to serialize access
-> without thinking about lock ordering. Mutexes are simpler for short critical sections.
+> **アクター vs Mutex の使い分け**: アクターは、状態に複雑な不変条件がある場合、操作に長い時間がかかる場合、またはロックの順序を意識せずにアクセスを直列化したい場合に最適です。短いクリティカルセクションには Mutex の方がシンプルです。
 
-> **Key Takeaways — Channels**
-> - `crossbeam-channel` is the production workhorse — faster and more feature-rich than `std::sync::mpsc`
-> - `select!` replaces complex multi-source polling with declarative channel selection
-> - Bounded channels provide natural backpressure; unbounded channels risk OOM
+> **重要なポイント — チャンネル**
+> - `crossbeam-channel` はプロダクションにおける主力であり、`std::sync::mpsc` よりも高速で機能が豊富です
+> - `select!` は複雑な複数ソースのポーリングを宣言的なチャンネル選択に置き換えます
+> - 有界チャンネルは自然なバックプレッシャーを提供し、無界チャンネルは OOM のリスクがあります
 
-> **See also:** [Ch 6 — Concurrency](ch06-concurrency-vs-parallelism-vs-threads.md) for threads, Mutex, and shared state. [Ch 15 — Async](ch16-asyncawait-essentials.md) for async channels (`tokio::sync::mpsc`).
+> **関連項目:** スレッド、Mutex、共有状態については [第6章 — 並行性](ch06-concurrency-vs-parallelism-vs-threads.md) を参照してください。非同期チャンネル（`tokio::sync::mpsc`）については [第15章 — 非同期](ch16-asyncawait-essentials.md) を参照してください。
 
 ---
 
-### Exercise: Channel-Based Worker Pool ★★★ (~45 min)
+### 演習: チャンネルベースのワーカープール ★★★（約45分）
 
-Build a worker pool using channels where:
-- A dispatcher sends `Job` structs through a channel
-- N workers consume jobs and send results back
-- Use `std::sync::mpsc` with `Arc<Mutex<Receiver>>` for a shared work queue
+チャンネルを使用してワーカープールを構築してください：
+- ディスパッチャーがチャンネルを通じて `Job` 構造体を送信する
+- N 個のワーカーがジョブを消費し、結果を送り返す
+- 共有ワークキューに `Arc<Mutex<Receiver>>` とともに `std::sync::mpsc` を使用する
 
 <details>
-<summary>🔑 Solution</summary>
+<summary>🔑 解答例</summary>
 
 ```rust
 use std::sync::mpsc;
@@ -354,4 +351,3 @@ fn main() {
 </details>
 
 ***
-

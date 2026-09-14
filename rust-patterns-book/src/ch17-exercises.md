@@ -1,11 +1,11 @@
-## Exercises
+## 総合演習
 
-### Exercise 1: Type-Safe State Machine ★★ (~30 min)
+### 演習 1: 型安全な状態機械 ★★ (約30分)
 
-Build a traffic light state machine using the type-state pattern. The light must transition `Red → Green → Yellow → Red` and no other order should be possible.
+型状態（タイプステート）パターンを用いて信号機の状態機械を構築してください。信号は `Red → Green → Yellow → Red` の順でのみ遷移し、他の順序での遷移は不可能なように設計します。
 
 <details>
-<summary>🔑 Solution</summary>
+<summary>🔑 解答例</summary>
 
 ```rust
 use std::marker::PhantomData;
@@ -20,26 +20,26 @@ struct TrafficLight<State> {
 
 impl TrafficLight<Red> {
     fn new() -> Self {
-        println!("🔴 Red — STOP");
+        println!("🔴 赤 — 停止");
         TrafficLight { _state: PhantomData }
     }
 
     fn go(self) -> TrafficLight<Green> {
-        println!("🟢 Green — GO");
+        println!("🟢 青 — 進行");
         TrafficLight { _state: PhantomData }
     }
 }
 
 impl TrafficLight<Green> {
     fn caution(self) -> TrafficLight<Yellow> {
-        println!("🟡 Yellow — CAUTION");
+        println!("🟡 黄 — 注意");
         TrafficLight { _state: PhantomData }
     }
 }
 
 impl TrafficLight<Yellow> {
     fn stop(self) -> TrafficLight<Red> {
-        println!("🔴 Red — STOP");
+        println!("🔴 赤 — 停止");
         TrafficLight { _state: PhantomData }
     }
 }
@@ -50,27 +50,27 @@ fn main() {
     let light = light.caution();     // Yellow
     let light = light.stop();        // Red
 
-    // light.caution(); // ❌ Compile error: no method `caution` on Red
-    // TrafficLight::new().stop(); // ❌ Compile error: no method `stop` on Red
+    // light.caution(); // ❌ コンパイルエラー: Red には caution メソッドが存在しない
+    // TrafficLight::new().stop(); // ❌ コンパイルエラー: Red には stop メソッドが存在しない
 }
 ```
 
-**Key takeaway**: Invalid transitions are compile errors, not runtime panics.
+**重要ポイント**: 不正な遷移は実行時パニックではなく、コンパイルエラーとして検出されます。
 
 </details>
 
 ---
 
-### Exercise 2: Unit-of-Measure with PhantomData ★★ (~30 min)
+### 演習 2: PhantomData による計量単位システム ★★ (約30分)
 
-Extend the unit-of-measure pattern from Ch4 to support:
-- `Meters`, `Seconds`, `Kilograms`
-- Addition of same units
-- Multiplication: `Meters * Meters = SquareMeters`
-- Division: `Meters / Seconds = MetersPerSecond`
+第4章の計量単位パターンを拡張し、以下をサポートしてください:
+- `Meters`、`Seconds`、`Kilograms`
+- 同一単位同士の加算
+- 乗算: `Meters * Meters = SquareMeters`
+- 除算: `Meters / Seconds = MetersPerSecond`
 
 <details>
-<summary>🔑 Solution</summary>
+<summary>🔑 解答例</summary>
 
 ```rust
 use std::marker::PhantomData;
@@ -120,17 +120,17 @@ fn main() {
     let width = Qty::<Meters>::new(5.0);
     let height = Qty::<Meters>::new(3.0);
     let area = width * height; // Qty<SquareMeters>
-    println!("Area: {:.1} m²", area.value);
+    println!("面積: {:.1} m²", area.value);
 
     let dist = Qty::<Meters>::new(100.0);
     let time = Qty::<Seconds>::new(9.58);
     let speed = dist / time;
-    println!("Speed: {:.2} m/s", speed.value);
+    println!("速度: {:.2} m/s", speed.value);
 
-    let sum = width + height; // Same unit ✅
-    println!("Sum: {:.1} m", sum.value);
+    let sum = width + height; // 同一単位 ✅
+    println!("合計: {:.1} m", sum.value);
 
-    // let bad = width + time; // ❌ Compile error: can't add Meters + Seconds
+    // let bad = width + time; // ❌ コンパイルエラー: Meters と Seconds は加算できない
 }
 ```
 
@@ -138,15 +138,15 @@ fn main() {
 
 ---
 
-### Exercise 3: Channel-Based Worker Pool ★★★ (~45 min)
+### 演習 3: チャンネルベースのワーカープール ★★★ (約45分)
 
-Build a worker pool using channels where:
-- A dispatcher sends `Job` structs through a channel
-- N workers consume jobs and send results back
-- Use `crossbeam-channel` (or `std::sync::mpsc` if crossbeam is unavailable)
+チャンネルを用いたワーカープールを構築してください。要件は以下の通りです:
+- ディスパッチャがチャンネル経由で `Job` 構造体を送信する
+- N 個のワーカーがジョブを消費し、結果を送り返す
+- `crossbeam-channel` を使用する（利用できない場合は `std::sync::mpsc` を使用）
 
 <details>
-<summary>🔑 Solution</summary>
+<summary>🔑 解答例</summary>
 
 ```rust
 use std::sync::mpsc;
@@ -167,45 +167,45 @@ fn worker_pool(jobs: Vec<Job>, num_workers: usize) -> Vec<JobResult> {
     let (job_tx, job_rx) = mpsc::channel::<Job>();
     let (result_tx, result_rx) = mpsc::channel::<JobResult>();
 
-    // Wrap receiver in Arc<Mutex> for sharing among workers
+    // ワーカー間で共有するためにレシーバを Arc<Mutex> でラップする
     let job_rx = std::sync::Arc::new(std::sync::Mutex::new(job_rx));
 
-    // Spawn workers
+    // ワーカーを生成
     let mut handles = Vec::new();
     for worker_id in 0..num_workers {
         let job_rx = job_rx.clone();
         let result_tx = result_tx.clone();
         handles.push(thread::spawn(move || {
             loop {
-                // Lock, receive, unlock — short critical section
+                // ロック取得、受信、ロック解除 — クリティカルセクションを最小化
                 let job = {
                     let rx = job_rx.lock().unwrap();
-                    rx.recv() // Blocks until a job or channel closes
+                    rx.recv() // ジョブを受信するかチャンネルが閉じるまでブロック
                 };
                 match job {
                     Ok(job) => {
-                        let output = format!("processed '{}' by worker {worker_id}", job.data);
+                        let output = format!("ワーカー {worker_id} により '{}' を処理完了", job.data);
                         result_tx.send(JobResult {
                             job_id: job.id,
                             output,
                             worker_id,
                         }).unwrap();
                     }
-                    Err(_) => break, // Channel closed — exit
+                    Err(_) => break, // チャンネルが閉じた — 終了
                 }
             }
         }));
     }
-    drop(result_tx); // Drop our copy so result channel closes when workers finish
+    drop(result_tx); // ワーカー完了時に結果チャンネルが閉じるよう、自身のコピーをドロップ
 
-    // Dispatch jobs
+    // ジョブをディスパッチ
     let num_jobs = jobs.len();
     for job in jobs {
         job_tx.send(job).unwrap();
     }
-    drop(job_tx); // Close the job channel — workers will exit after draining
+    drop(job_tx); // ジョブチャンネルを閉じる — ワーカーはすべてのジョブを処理した後に終了する
 
-    // Collect results
+    // 結果を収集
     let mut results = Vec::new();
     for result in result_rx {
         results.push(result);
@@ -224,7 +224,7 @@ fn main() {
 
     let results = worker_pool(jobs, 4);
     for r in &results {
-        println!("[worker {}] job {}: {}", r.worker_id, r.job_id, r.output);
+        println!("[ワーカー {}] ジョブ {}: {}", r.worker_id, r.job_id, r.output);
     }
 }
 ```
@@ -233,12 +233,12 @@ fn main() {
 
 ---
 
-### Exercise 4: Higher-Order Combinator Pipeline ★★ (~25 min)
+### 演習 4: 高階コンビネータパイプライン ★★ (約25分)
 
-Create a `Pipeline` struct that chains transformations. It should support `.pipe(f)` to add a transformation and `.execute(input)` to run the full chain.
+変換処理をチェーンする `Pipeline` 構造体を作成してください。変換を追加する `.pipe(f)` と、チェーン全体を実行する `.execute(input)` をサポートする必要があります。
 
 <details>
-<summary>🔑 Solution</summary>
+<summary>🔑 解答例</summary>
 
 ```rust
 struct Pipeline<T> {
@@ -269,7 +269,7 @@ fn main() {
 
     println!("{result}"); // >>> HELLO WORLD <<<
 
-    // Numeric pipeline:
+    // 数値パイプライン:
     let result = Pipeline::new()
         .pipe(|x: i32| x * 2)
         .pipe(|x| x + 10)
@@ -280,43 +280,43 @@ fn main() {
 }
 ```
 
-**Bonus**: Generic pipeline that changes type between stages would use a different design — each `.pipe()` returns a `Pipeline` with a different output type (this requires more advanced generic plumbing).
+**発展**: ステージ間で型が変化するジェネリックパイプラインは異なる設計になります。各 `.pipe()` が異なる出力型を持つ `Pipeline` を返す形となり、より高度なジェネリクスの配線が必要となります。
 
 </details>
 
 ---
 
-### Exercise 5: Error Hierarchy with thiserror ★★ (~30 min)
+### 演習 5: thiserror によるエラー階層の設計 ★★ (約30分)
 
-Design an error type hierarchy for a file-processing application that can fail during I/O, parsing (JSON and CSV), and validation. Use `thiserror` and demonstrate `?` propagation.
+I/O、パース（JSON および CSV）、およびバリデーションの各フェーズで失敗する可能性があるファイル処理アプリケーション向けのエラー型階層を設計してください。`thiserror` を使用し、`?` 演算子によるエラー伝播を実証してください。
 
 <details>
-<summary>🔑 Solution</summary>
+<summary>🔑 解答例</summary>
 
 ```rust,ignore
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum AppError {
-    #[error("I/O error: {0}")]
+    #[error("I/O エラー: {0}")]
     Io(#[from] std::io::Error),
 
-    #[error("JSON parse error: {0}")]
+    #[error("JSON パースエラー: {0}")]
     Json(#[from] serde_json::Error),
 
-    #[error("CSV error at line {line}: {message}")]
+    #[error("CSV エラー ({line} 行目): {message}")]
     Csv { line: usize, message: String },
 
-    #[error("validation error: {field} — {reason}")]
+    #[error("バリデーションエラー: {field} — {reason}")]
     Validation { field: String, reason: String },
 }
 
 fn read_file(path: &str) -> Result<String, AppError> {
-    Ok(std::fs::read_to_string(path)?) // io::Error → AppError::Io via #[from]
+    Ok(std::fs::read_to_string(path)?) // #[from] により io::Error → AppError::Io に自動変換
 }
 
 fn parse_json(content: &str) -> Result<serde_json::Value, AppError> {
-    Ok(serde_json::from_str(content)?) // serde_json::Error → AppError::Json
+    Ok(serde_json::from_str(content)?) // serde_json::Error → AppError::Json に自動変換
 }
 
 fn validate_name(value: &serde_json::Value) -> Result<String, AppError> {
@@ -324,13 +324,13 @@ fn validate_name(value: &serde_json::Value) -> Result<String, AppError> {
         .and_then(|v| v.as_str())
         .ok_or_else(|| AppError::Validation {
             field: "name".into(),
-            reason: "must be a non-null string".into(),
+            reason: "null 以外の文字列である必要があります".into(),
         })?;
 
     if name.is_empty() {
         return Err(AppError::Validation {
             field: "name".into(),
-            reason: "must not be empty".into(),
+            reason: "空文字にすることはできません".into(),
         });
     }
 
@@ -346,8 +346,8 @@ fn process_file(path: &str) -> Result<String, AppError> {
 
 fn main() {
     match process_file("config.json") {
-        Ok(name) => println!("Name: {name}"),
-        Err(e) => eprintln!("Error: {e}"),
+        Ok(name) => println!("名前: {name}"),
+        Err(e) => eprintln!("エラー: {e}"),
     }
 }
 ```
@@ -356,12 +356,12 @@ fn main() {
 
 ---
 
-### Exercise 6: Generic Trait with Associated Types ★★★ (~40 min)
+### 演習 6: 関連型を持つジェネリックトレイト ★★★ (約40分)
 
-Design a `Repository<T>` trait with associated `Error` and `Id` types. Implement it for an in-memory store and demonstrate compile-time type safety.
+関連型 `Error` および `Id` を持つ `Repository` トレイトを設計してください。インメモリストアに対してこれを実装し、コンパイル時の型安全性を実証してください。
 
 <details>
-<summary>🔑 Solution</summary>
+<summary>🔑 解答例</summary>
 
 ```rust
 use std::collections::HashMap;
@@ -393,7 +393,7 @@ impl InMemoryUserRepo {
     }
 }
 
-// Error type is Infallible — in-memory ops never fail
+// エラー型は Infallible — インメモリ操作は決して失敗しない
 impl Repository for InMemoryUserRepo {
     type Item = User;
     type Id = u64;
@@ -415,16 +415,16 @@ impl Repository for InMemoryUserRepo {
     }
 }
 
-// Generic function works with ANY repository:
+// 任意の Repository で動作するジェネリック関数:
 fn create_and_fetch<R: Repository>(repo: &mut R, item: R::Item) -> Result<(), R::Error>
 where
     R::Item: std::fmt::Debug,
     R::Id: std::fmt::Debug,
 {
     let id = repo.insert(item)?;
-    println!("Inserted with id: {id:?}");
+    println!("ID を付与して挿入完了: {id:?}");
     let retrieved = repo.get(&id)?;
-    println!("Retrieved: {retrieved:?}");
+    println!("取得結果: {retrieved:?}");
     Ok(())
 }
 
@@ -441,20 +441,20 @@ fn main() {
 
 ---
 
-### Exercise 7: Safe Wrapper around Unsafe (Ch11) ★★★ (~45 min)
+### 演習 7: Unsafe をカプセル化する安全なラッパー（第11章） ★★★ (約45分)
 
-Write a `FixedVec<T, const N: usize>` — a fixed-capacity, stack-allocated vector.
-Requirements:
-- `push(&mut self, value: T) -> Result<(), T>` returns `Err(value)` when full
-- `pop(&mut self) -> Option<T>` returns and removes the last element
-- `as_slice(&self) -> &[T]` borrows initialized elements
-- All public methods must be safe; all unsafe must be encapsulated with `SAFETY:` comments
-- `Drop` must clean up initialized elements
+固定容量のスタック割り当てベクターである `FixedVec<T, const N: usize>` を実装してください。
+要件:
+- `push(&mut self, value: T) -> Result<(), T>` は満杯時に `Err(value)` を返す
+- `pop(&mut self) -> Option<T>` は最後の要素を取り出して削除する
+- `as_slice(&self) -> &[T]` は初期化済みの要素を参照として借用する
+- すべての公開メソッドは安全（safe）でなければならず、すべての unsafe コードは `SAFETY:` コメントでカプセル化すること
+- `Drop` は初期化済みの要素を適切に破棄・クリーンアップすること
 
-**Hint**: Use `MaybeUninit<T>` and `[const { MaybeUninit::uninit() }; N]`.
+**ヒント**: `MaybeUninit<T>` および `[const { MaybeUninit::uninit() }; N]` を使用してください。
 
 <details>
-<summary>🔑 Solution</summary>
+<summary>🔑 解答例</summary>
 
 ```rust
 use std::mem::MaybeUninit;
@@ -474,7 +474,7 @@ impl<T, const N: usize> FixedVec<T, N> {
 
     pub fn push(&mut self, value: T) -> Result<(), T> {
         if self.len >= N { return Err(value); }
-        // SAFETY: len < N, so data[len] is within bounds.
+        // SAFETY: len < N であるため、data[len] は境界内に収まる。
         self.data[self.len] = MaybeUninit::new(value);
         self.len += 1;
         Ok(())
@@ -483,13 +483,13 @@ impl<T, const N: usize> FixedVec<T, N> {
     pub fn pop(&mut self) -> Option<T> {
         if self.len == 0 { return None; }
         self.len -= 1;
-        // SAFETY: data[len] was initialized (len was > 0 before decrement).
+        // SAFETY: data[len] は初期化済みである（デクリメント前は len > 0 であった）。
         Some(unsafe { self.data[self.len].assume_init_read() })
     }
 
     pub fn as_slice(&self) -> &[T] {
-        // SAFETY: data[0..len] are all initialized, and MaybeUninit<T>
-        // has the same layout as T.
+        // SAFETY: data[0..len] はすべて初期化済みであり、MaybeUninit<T>
+        // は T と同じメモリレイアウトを持つ。
         unsafe { std::slice::from_raw_parts(self.data.as_ptr() as *const T, self.len) }
     }
 
@@ -499,7 +499,7 @@ impl<T, const N: usize> FixedVec<T, N> {
 
 impl<T, const N: usize> Drop for FixedVec<T, N> {
     fn drop(&mut self) {
-        // SAFETY: data[0..len] are initialized — drop each one.
+        // SAFETY: data[0..len] は初期化済みであるため、それぞれをドロップする。
         for i in 0..self.len {
             unsafe { self.data[i].assume_init_drop(); }
         }
@@ -513,7 +513,7 @@ fn main() {
     assert_eq!(v.as_slice(), &["hello", "world"]);
     assert_eq!(v.pop(), Some("world".into()));
     assert_eq!(v.len(), 1);
-    // Drop cleans up remaining "hello"
+    // Drop が残りの "hello" をクリーンアップする
 }
 ```
 
@@ -521,9 +521,9 @@ fn main() {
 
 ---
 
-### Exercise 8: Declarative Macro — `map!` (Ch12) ★ (~15 min)
+### 演習 8: 宣言的マクロ — `map!`（第12章） ★ (約15分)
 
-Write a `map!` macro that creates a `HashMap` from key-value pairs, similar to `vec![]`:
+キー・バリューのペアから `HashMap` を生成する、`vec![]` に似た `map!` マクロを作成してください:
 
 ```rust
 let m = map! {
@@ -534,21 +534,21 @@ assert_eq!(m.get("host"), Some(&"localhost"));
 assert_eq!(m.len(), 2);
 ```
 
-Requirements:
-- Support trailing comma
-- Support empty invocation `map!{}`
-- Work with any types that implement `Into<K>` and `Into<V>` for maximum flexibility
+要件:
+- 末尾のカンマ（trailing comma）をサポートする
+- 空の呼び出し `map!{}` をサポートする
+- 柔軟性を最大化するため、`Into<K>` および `Into<V>` を実装した任意の型で動作するようにする
 
 <details>
-<summary>🔑 Solution</summary>
+<summary>🔑 解答例</summary>
 
 ```rust
 macro_rules! map {
-    // Empty case
+    // 空の場合
     () => {
         std::collections::HashMap::new()
     };
-    // One or more key => value pairs (trailing comma optional)
+    // 1つ以上の key => value のペア（末尾カンマは任意）
     ( $( $key:expr => $val:expr ),+ $(,)? ) => {{
         let mut m = std::collections::HashMap::new();
         $( m.insert($key, $val); )+
@@ -557,7 +557,7 @@ macro_rules! map {
 }
 
 fn main() {
-    // Basic usage:
+    // 基本的な使用法:
     let config = map! {
         "host" => "localhost",
         "port" => "8080",
@@ -566,11 +566,11 @@ fn main() {
     assert_eq!(config.len(), 3);
     assert_eq!(config["host"], "localhost");
 
-    // Empty map:
+    // 空のマップ:
     let empty: std::collections::HashMap<String, String> = map!();
     assert!(empty.is_empty());
 
-    // Different types:
+    // 異なる型:
     let scores = map! {
         1 => 100,
         2 => 200,
@@ -583,12 +583,12 @@ fn main() {
 
 ---
 
-### Exercise 9: Custom serde Deserialization (Ch10) ★★★ (~45 min)
+### 演習 9: カスタム serde デシリアライゼーション（第10章） ★★★ (約45分)
 
-Design a `Duration` wrapper that deserializes from human-readable strings like `"30s"`, `"5m"`, `"2h"` using a custom serde deserializer. The struct should also serialize back to the same format.
+カスタム serde デシリアライザーを用いて、`"30s"`、`"5m"`、`"2h"` のような人間が読める文字列からデシリアライズする `Duration` ラッパーを設計してください。また、同一フォーマットへと再シリアライズできるようにしてください。
 
 <details>
-<summary>🔑 Solution</summary>
+<summary>🔑 解答例</summary>
 
 ```rust,ignore
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -600,20 +600,20 @@ struct HumanDuration(std::time::Duration);
 impl HumanDuration {
     fn from_str(s: &str) -> Result<Self, String> {
         let s = s.trim();
-        if s.is_empty() { return Err("empty duration string".into()); }
+        if s.is_empty() { return Err("空の期間文字列です".into()); }
 
         let (num_str, suffix) = s.split_at(
             s.find(|c: char| !c.is_ascii_digit()).unwrap_or(s.len())
         );
         let value: u64 = num_str.parse()
-            .map_err(|_| format!("invalid number: {num_str}"))?;
+            .map_err(|_| format!("無効な数値です: {num_str}"))?;
 
         let duration = match suffix {
             "s" | "sec"  => std::time::Duration::from_secs(value),
             "m" | "min"  => std::time::Duration::from_secs(value * 60),
             "h" | "hr"   => std::time::Duration::from_secs(value * 3600),
             "ms"         => std::time::Duration::from_millis(value),
-            other        => return Err(format!("unknown suffix: {other}")),
+            other        => return Err(format!("未知の接尾辞です: {other}")),
         };
         Ok(HumanDuration(duration))
     }
@@ -660,7 +660,7 @@ fn main() {
     assert_eq!(config.timeout.0, std::time::Duration::from_secs(30));
     assert_eq!(config.retry_interval.0, std::time::Duration::from_secs(300));
 
-    // Round-trips correctly:
+    // 正しく相互変換（ラウンドトリップ）される:
     let serialized = serde_json::to_string(&config).unwrap();
     assert!(serialized.contains("30s"));
     assert!(serialized.contains("5m"));
@@ -670,28 +670,21 @@ fn main() {
 
 </details>
 
-### Exercise 10 — Concurrent Fetcher with Timeout ★★ (~25 min)
+### 演習 10 — タイムアウト付き並行フェッチャー ★★ (約25分)
 
-Write an async function `fetch_all` that spawns three `tokio::spawn` tasks, each
-simulating a network call with `tokio::time::sleep`. Join all three with
-`tokio::try_join!` wrapped in `tokio::time::timeout(Duration::from_secs(5), ...)`.
-Return `Result<Vec<String>, ...>` or an error if any task fails or the deadline
-expires.
+それぞれ `tokio::time::sleep` でネットワーク呼び出しをシミュレートする3つの `tokio::spawn` タスクを起動する非同期関数 `fetch_all` を作成してください。3つのタスクすべてを `tokio::try_join!` で待ち合わせ、全体を `tokio::time::timeout(Duration::from_secs(5), ...)` でラップします。いずれかのタスクが失敗するか期限が切れた場合はエラーを返し、成功時は `Result<Vec<String>, ...>` を返すようにしてください。
 
-**Learning goals**: `tokio::spawn`, `try_join!`, `timeout`, error propagation
-across task boundaries.
+**学習目標**: `tokio::spawn`、`try_join!`、`timeout`、タスク境界を越えたエラー伝播。
 
 <details>
-<summary>Hint</summary>
+<summary>ヒント</summary>
 
-Each spawned task returns `Result<String, _>`. `try_join!` unwraps all three.
-Wrap the whole `try_join!` in `timeout()` — the `Elapsed` error means you hit the
-deadline.
+生成された各タスクは `Result<String, _>` を返します。`try_join!` は3つすべてを展開します。`try_join!` 全体を `timeout()` でラップします。`Elapsed` エラーは制限時間に達したことを意味します。
 
 </details>
 
 <details>
-<summary>Solution</summary>
+<summary>解答例</summary>
 
 ```rust,ignore
 use tokio::time::{sleep, timeout, Duration};
@@ -710,9 +703,9 @@ async fn fetch_all() -> Result<Vec<String>, Box<dyn std::error::Error>> {
         let h3 = tokio::spawn(fake_fetch("svc-c", 150));
         tokio::try_join!(h1, h2, h3)
     })
-    .await??; // first ? = timeout, second ? = join
+    .await??; // 最初の ? = タイムアウトの判定、2番目の ? = join の結果
 
-    Ok(vec![a?, b?, c?]) // unwrap inner Results
+    Ok(vec![a?, b?, c?]) // 内部の Result をアンラップ
 }
 
 #[tokio::main]
@@ -726,48 +719,46 @@ async fn main() {
 
 </details>
 
-### Exercise 11 — Async Channel Pipeline ★★★ (~40 min)
+### 演習 11 — 非同期チャンネルパイプライン ★★★ (約40分)
 
-Build a producer → transformer → consumer pipeline using `tokio::sync::mpsc`:
+`tokio::sync::mpsc` を用いて、プロデューサー → トランスフォーマー → コンシューマー のパイプラインを構築してください:
 
-1. **Producer**: sends integers 1..=20 into channel A (capacity 4).
-2. **Transformer**: reads from channel A, squares each value, sends into channel B.
-3. **Consumer**: reads from channel B, collects into a `Vec<u64>`, returns it.
+1. **Producer**: 整数 1..=20 をチャンネル A（容量 4）に送信します。
+2. **Transformer**: チャンネル A から読み取り、各値を2乗してチャンネル B に送信します。
+3. **Consumer**: チャンネル B から読み取り、`Vec<u64>` に収集して返します。
 
-All three stages run as concurrent `tokio::spawn` tasks. Use bounded channels to
-demonstrate back-pressure. Assert the final vec equals `[1, 4, 9, ..., 400]`.
+すべての3つのステージは並行な `tokio::spawn` タスクとして実行されます。バックプレッシャーを実証するために有界（bounded）チャンネルを使用してください。最終的なベクターが `[1, 4, 9, ..., 400]` と等しいことをアサートしてください。
 
-**Learning goals**: `mpsc::channel`, bounded back-pressure, `tokio::spawn` with
-move closures, graceful shutdown via channel close.
+**学習目標**: `mpsc::channel`、有界バックプレッシャー、move クロージャを伴う `tokio::spawn`、チャンネルクローズによるグレースフルシャットダウン。
 
 <details>
-<summary>Solution</summary>
+<summary>解答例</summary>
 
 ```rust,ignore
 use tokio::sync::mpsc;
 
 #[tokio::main]
 async fn main() {
-    let (tx_a, mut rx_a) = mpsc::channel::<u64>(4); // bounded — back-pressure
+    let (tx_a, mut rx_a) = mpsc::channel::<u64>(4); // 有界 — バックプレッシャー
     let (tx_b, mut rx_b) = mpsc::channel::<u64>(4);
 
-    // Producer
+    // プロデューサー
     let producer = tokio::spawn(async move {
         for i in 1..=20u64 {
             tx_a.send(i).await.unwrap();
         }
-        // tx_a dropped here → channel A closes
+        // tx_a はここでドロップされる → チャンネル A が閉じる
     });
 
-    // Transformer
+    // トランスフォーマー
     let transformer = tokio::spawn(async move {
         while let Some(val) = rx_a.recv().await {
             tx_b.send(val * val).await.unwrap();
         }
-        // tx_b dropped here → channel B closes
+        // tx_b はここでドロップされる → チャンネル B が閉じる
     });
 
-    // Consumer
+    // コンシューマー
     let consumer = tokio::spawn(async move {
         let mut results = Vec::new();
         while let Some(val) = rx_b.recv().await {
@@ -782,11 +773,10 @@ async fn main() {
 
     let expected: Vec<u64> = (1..=20).map(|x: u64| x * x).collect();
     assert_eq!(results, expected);
-    println!("Pipeline complete: {results:?}");
+    println!("パイプライン完了: {results:?}");
 }
 ```
 
 </details>
 
 ***
-

@@ -1,117 +1,116 @@
 ## `Vec<T>` vs `List<T>`
 
-> **What you'll learn:** `Vec<T>` vs `List<T>`, `HashMap` vs `Dictionary`, safe access patterns
-> (why Rust returns `Option` instead of throwing), and the ownership implications of collections.
+> **学習内容:** `Vec<T>` vs `List<T>`、`HashMap` vs `Dictionary`、安全なアクセスパターン（なぜ Rust は例外をスローする代わりに `Option` を返すのか）、そしてコレクションにおける所有権への影響を学びます。
 >
-> **Difficulty:** 🟢 Beginner
+> **難易度:** 🟢 初級
 
-`Vec<T>` is Rust's equivalent to C#'s `List<T>`, but with ownership semantics.
+`Vec<T>` は C# の `List<T>` に相当する Rust の型ですが、所有権セマンティクスが適用されます。
 
 ### C# `List<T>`
 ```csharp
-// C# List<T> - Reference type, heap allocated
+// C# List<T> - 参照型、ヒープ割り当て
 var numbers = new List<int>();
 numbers.Add(1);
 numbers.Add(2);
 numbers.Add(3);
 
-// Pass to method - reference is copied
+// メソッドに渡す - 参照がコピーされる
 ProcessList(numbers);
-Console.WriteLine(numbers.Count);  // Still accessible
+Console.WriteLine(numbers.Count);  // まだアクセス可能
 
 void ProcessList(List<int> list)
 {
-    list.Add(4);  // Modifies original list
+    list.Add(4);  // 元のリストを変更する
     Console.WriteLine($"Count in method: {list.Count}");
 }
 ```
 
 ### Rust `Vec<T>`
 ```rust
-// Rust Vec<T> - Owned type, heap allocated
+// Rust Vec<T> - 所有型、ヒープ割り当て
 let mut numbers = Vec::new();
 numbers.push(1);
 numbers.push(2);
 numbers.push(3);
 
-// Method that takes ownership
+// 所有権を受け取る関数
 process_vec(numbers);
-// println!("{:?}", numbers);  // ❌ Error: numbers was moved
+// println!("{:?}", numbers);  // ❌ エラー: numbers はムーブされました
 
-// Method that borrows
-let mut numbers = vec![1, 2, 3];  // vec! macro for convenience
+// 借用する関数
+let mut numbers = vec![1, 2, 3];  // 便宜のための vec! マクロ
 process_vec_borrowed(&mut numbers);
-println!("{:?}", numbers);  // ✅ Still accessible
+println!("{:?}", numbers);  // ✅ まだアクセス可能
 
-fn process_vec(mut vec: Vec<i32>) {  // Takes ownership
+fn process_vec(mut vec: Vec<i32>) {  // 所有権を取得
     vec.push(4);
-    println!("Count in method: {}", vec.len());
-    // vec is dropped here
+    println!("メソッド内での要素数: {}", vec.len());
+    // ここで vec はドロップ（破棄）される
 }
 
-fn process_vec_borrowed(vec: &mut Vec<i32>) {  // Borrows mutably
+fn process_vec_borrowed(vec: &mut Vec<i32>) {  // 可変借用
     vec.push(4);
-    println!("Count in method: {}", vec.len());
+    println!("メソッド内での要素数: {}", vec.len());
 }
 ```
 
-### Creating and Initializing Vectors
+### ベクタの作成と初期化
 ```csharp
-// C# List initialization
+// C# List の初期化
 var numbers = new List<int> { 1, 2, 3, 4, 5 };
 var empty = new List<int>();
-var sized = new List<int>(10);  // Initial capacity
+var sized = new List<int>(10);  // 初期容量
 
-// From other collections
+// 他のコレクションから
 var fromArray = new List<int>(new[] { 1, 2, 3 });
 ```
 
 ```rust
-// Rust Vec initialization
-let numbers = vec![1, 2, 3, 4, 5];  // vec! macro
-let empty: Vec<i32> = Vec::new();   // Type annotation needed for empty
-let sized = Vec::with_capacity(10); // Pre-allocate capacity
+// Rust Vec の初期化
+let numbers = vec![1, 2, 3, 4, 5];  // vec! マクロ
+let empty: Vec<i32> = Vec::new();   // 空の場合は型注釈が必要
+let sized = Vec::with_capacity(10); // 容量を事前確保
 
-// From iterator
+// イテレータから
 let from_range: Vec<i32> = (1..=5).collect();
 let from_array = vec![1, 2, 3];
 ```
 
-### Common Operations Comparison
+### 一般的な操作の比較
 ```csharp
-// C# List operations
+// C# List の操作
 var list = new List<int> { 1, 2, 3 };
 
-list.Add(4);                    // Add element
-list.Insert(0, 0);              // Insert at index
-list.Remove(2);                 // Remove first occurrence
-list.RemoveAt(1);               // Remove at index
-list.Clear();                   // Remove all
+list.Add(4);                    // 要素を追加
+list.Insert(0, 0);              // 指定インデックスに挿入
+list.Remove(2);                 // 最初に見つかった要素を削除
+list.RemoveAt(1);               // 指定インデックスの要素を削除
+list.Clear();                   // すべて削除
 
-int first = list[0];            // Index access
-int count = list.Count;         // Get count
-bool contains = list.Contains(3); // Check if contains
+int first = list[0];            // インデックスアクセス
+int count = list.Count;         // 要素数を取得
+bool contains = list.Contains(3); // 含まれているか確認
 ```
 
 ```rust
-// Rust Vec operations
+// Rust Vec の操作
 let mut vec = vec![1, 2, 3];
 
-vec.push(4);                    // Add element
-vec.insert(0, 0);               // Insert at index
-vec.retain(|&x| x != 2);        // Remove elements (functional style)
-vec.remove(1);                  // Remove at index
-vec.clear();                    // Remove all
+vec.push(4);                    // 要素を追加
+vec.insert(0, 0);               // 指定インデックスに挿入
+vec.retain(|&x| x != 2);        // 要素を削除（関数型スタイル）
+vec.remove(1);                  // 指定インデックスの要素を削除
+vec.clear();                    // すべて削除
 
-let first = vec[0];             // Index access (panics if out of bounds)
-let safe_first = vec.get(0);    // Safe access, returns Option<&T>
-let count = vec.len();          // Get count
-let contains = vec.contains(&3); // Check if contains
+let first = vec[0];             // インデックスアクセス（範囲外の場合はパニック）
+let safe_first = vec.get(0);    // 安全なアクセス、Option<&T> を返す
+let count = vec.len();          // 要素数を取得
+let contains = vec.contains(&3); // 含まれているか確認
 ```
 
-### Safe Access Patterns
+### 安全なアクセスパターン
 ```csharp
-// C# - Exception-based bounds checking
+// C# - 例外ベースの境界チェック
 public int SafeAccess(List<int> list, int index)
 {
     try
@@ -120,29 +119,29 @@ public int SafeAccess(List<int> list, int index)
     }
     catch (ArgumentOutOfRangeException)
     {
-        return -1;  // Default value
+        return -1;  // デフォルト値
     }
 }
 ```
 
 ```rust
-// Rust - Option-based safe access
+// Rust - Option ベースの安全なアクセス
 fn safe_access(vec: &[i32], index: usize) -> Option<i32> {
-    vec.get(index).copied()  // Returns Option<i32>
+    vec.get(index).copied()  // Option<i32> を返す
 }
 
 fn main() {
     let vec = vec![1, 2, 3];
     
-    // Safe access patterns
+    // 安全なアクセスパターン
     match vec.get(10) {
-        Some(value) => println!("Value: {}", value),
-        None => println!("Index out of bounds"),
+        Some(value) => println!("値: {}", value),
+        None => println!("インデックスが範囲外です"),
     }
     
-    // Or with unwrap_or
+    // または unwrap_or を使用
     let value = vec.get(10).copied().unwrap_or(-1);
-    println!("Value: {}", value);
+    println!("値: {}", value);
 }
 ```
 
@@ -150,7 +149,7 @@ fn main() {
 
 ## HashMap vs Dictionary
 
-HashMap is Rust's equivalent to C#'s `Dictionary<K,V>`.
+Rust の `HashMap` は C# の `Dictionary<K,V>` に相当します。
 
 ### C# Dictionary
 ```csharp
@@ -162,21 +161,21 @@ var scores = new Dictionary<string, int>
     ["Charlie"] = 92
 };
 
-// Add/Update
+// 追加 / 更新
 scores["Dave"] = 78;
-scores["Alice"] = 105;  // Update existing
+scores["Alice"] = 105;  // 既存の値を更新
 
-// Safe access
+// 安全なアクセス
 if (scores.TryGetValue("Eve", out int score))
 {
-    Console.WriteLine($"Eve's score: {score}");
+    Console.WriteLine($"Eve のスコア: {score}");
 }
 else
 {
-    Console.WriteLine("Eve not found");
+    Console.WriteLine("Eve は見つかりません");
 }
 
-// Iteration
+// 反復処理
 foreach (var kvp in scores)
 {
     Console.WriteLine($"{kvp.Key}: {kvp.Value}");
@@ -187,181 +186,181 @@ foreach (var kvp in scores)
 ```rust
 use std::collections::HashMap;
 
-// Create and initialize HashMap
+// HashMap の作成と初期化
 let mut scores = HashMap::new();
 scores.insert("Alice".to_string(), 100);
 scores.insert("Bob".to_string(), 85);
 scores.insert("Charlie".to_string(), 92);
 
-// Or use from iterator
+// またはイテレータから生成
 let scores: HashMap<String, i32> = [
     ("Alice".to_string(), 100),
     ("Bob".to_string(), 85),
     ("Charlie".to_string(), 92),
 ].into_iter().collect();
 
-// Add/Update
-let mut scores = scores;  // Make mutable
+// 追加 / 更新
+let mut scores = scores;  // 可変にする
 scores.insert("Dave".to_string(), 78);
-scores.insert("Alice".to_string(), 105);  // Update existing
+scores.insert("Alice".to_string(), 105);  // 既存の値を更新
 
-// Safe access
+// 安全なアクセス
 match scores.get("Eve") {
-    Some(score) => println!("Eve's score: {}", score),
-    None => println!("Eve not found"),
+    Some(score) => println!("Eve のスコア: {}", score),
+    None => println!("Eve は見つかりません"),
 }
 
-// Iteration
+// 反復処理
 for (name, score) in &scores {
     println!("{}: {}", name, score);
 }
 ```
 
-### HashMap Operations
+### HashMap の操作
 ```csharp
-// C# Dictionary operations
+// C# Dictionary の操作
 var dict = new Dictionary<string, int>();
 
-dict["key"] = 42;                    // Insert/update
-bool exists = dict.ContainsKey("key"); // Check existence
-bool removed = dict.Remove("key");    // Remove
-dict.Clear();                        // Clear all
+dict["key"] = 42;                    // 挿入 / 更新
+bool exists = dict.ContainsKey("key"); // 存在確認
+bool removed = dict.Remove("key");    // 削除
+dict.Clear();                        // すべてクリア
 
-// Get with default
+// デフォルト値付きで取得
 int value = dict.GetValueOrDefault("missing", 0);
 ```
 
 ```rust
 use std::collections::HashMap;
 
-// Rust HashMap operations
+// Rust HashMap の操作
 let mut map = HashMap::new();
 
-map.insert("key".to_string(), 42);   // Insert/update
-let exists = map.contains_key("key"); // Check existence
-let removed = map.remove("key");      // Remove, returns Option<V>
-map.clear();                         // Clear all
+map.insert("key".to_string(), 42);   // 挿入 / 更新
+let exists = map.contains_key("key"); // 存在確認
+let removed = map.remove("key");      // 削除、Option<V> を返す
+map.clear();                         // すべてクリア
 
-// Entry API for advanced operations
+// 高度な操作のための Entry API
 let mut map = HashMap::new();
-map.entry("key".to_string()).or_insert(42);  // Insert if not exists
-map.entry("key".to_string()).and_modify(|v| *v += 1); // Modify if exists
+map.entry("key".to_string()).or_insert(42);  // 存在しない場合のみ挿入
+map.entry("key".to_string()).and_modify(|v| *v += 1); // 存在する場合は変更
 
-// Get with default
+// デフォルト値付きで取得
 let value = map.get("missing").copied().unwrap_or(0);
 ```
 
-### Ownership with HashMap Keys and Values
+### HashMap のキーと値における所有権
 ```rust
-// Understanding ownership with HashMap
+// HashMap における所有権の理解
 fn ownership_example() {
     let mut map = HashMap::new();
     
-    // String keys and values are moved into the map
+    // String のキーと値はマップ内にムーブされる
     let key = String::from("name");
     let value = String::from("Alice");
     
     map.insert(key, value);
-    // println!("{}", key);   // ❌ Error: key was moved
-    // println!("{}", value); // ❌ Error: value was moved
+    // println!("{}", key);   // ❌ エラー: key はムーブされました
+    // println!("{}", value); // ❌ エラー: value はムーブされました
     
-    // Access via references
+    // 参照経由のアクセス
     if let Some(name) = map.get("name") {
-        println!("Name: {}", name);  // Borrowing the value
+        println!("名前: {}", name);  // 値を借用
     }
 }
 
-// Using &str keys (no ownership transfer)
+// &str キーの使用（所有権の移動なし）
 fn string_slice_keys() {
     let mut map = HashMap::new();
     
-    map.insert("name", "Alice");     // &str keys and values
+    map.insert("name", "Alice");     // &str のキーと値
     map.insert("age", "30");
     
-    // No ownership issues with string literals
-    println!("Name exists: {}", map.contains_key("name"));
+    // 文字列リテラルなら所有権の問題は発生しない
+    println!("名前の存在: {}", map.contains_key("name"));
 }
 ```
 
 ***
 
-## Working with Collections
+## コレクションの操作
 
-### Iteration Patterns
+### 反復処理パターン
 ```csharp
-// C# iteration patterns
+// C# の反復処理パターン
 var numbers = new List<int> { 1, 2, 3, 4, 5 };
 
-// For loop with index
+// インデックス付き for ループ
 for (int i = 0; i < numbers.Count; i++)
 {
-    Console.WriteLine($"Index {i}: {numbers[i]}");
+    Console.WriteLine($"インデックス {i}: {numbers[i]}");
 }
 
-// Foreach loop
+// Foreach ループ
 foreach (int num in numbers)
 {
     Console.WriteLine(num);
 }
 
-// LINQ methods
+// LINQ メソッド
 var doubled = numbers.Select(x => x * 2).ToList();
 var evens = numbers.Where(x => x % 2 == 0).ToList();
 ```
 
 ```rust
-// Rust iteration patterns
+// Rust の反復処理パターン
 let numbers = vec![1, 2, 3, 4, 5];
 
-// For loop with index
+// インデックス付き for ループ
 for (i, num) in numbers.iter().enumerate() {
-    println!("Index {}: {}", i, num);
+    println!("インデックス {}: {}", i, num);
 }
 
-// For loop over values
-for num in &numbers {  // Borrow each element
+// 値に対する for ループ
+for num in &numbers {  // 各要素を借用
     println!("{}", num);
 }
 
-// Iterator methods (like LINQ)
+// イテレータメソッド（LINQ に類似）
 let doubled: Vec<i32> = numbers.iter().map(|x| x * 2).collect();
 let evens: Vec<i32> = numbers.iter().filter(|&x| x % 2 == 0).cloned().collect();
 
-// Or more efficiently, consuming iterator
+// より効率的な、イテレータの消費
 let doubled: Vec<i32> = numbers.into_iter().map(|x| x * 2).collect();
 ```
 
 ### Iterator vs IntoIterator vs Iter
 ```rust
-// Understanding different iteration methods
+// さまざまなイテレーションメソッドの理解
 fn iteration_methods() {
     let vec = vec![1, 2, 3, 4, 5];
     
-    // 1. iter() - borrows elements (&T)
+    // 1. iter() - 要素を不変借用 (&T)
     for item in vec.iter() {
-        println!("{}", item);  // item is &i32
+        println!("{}", item);  // item は &i32
     }
-    // vec is still usable here
+    // vec はここでもまだ使用可能
     
-    // 2. into_iter() - takes ownership (T)
+    // 2. into_iter() - 所有権を取得 (T)
     for item in vec.into_iter() {
-        println!("{}", item);  // item is i32
+        println!("{}", item);  // item は i32
     }
-    // vec is no longer usable here
+    // vec はこれ以降使用不可
     
     let mut vec = vec![1, 2, 3, 4, 5];
     
-    // 3. iter_mut() - mutable borrows (&mut T)
+    // 3. iter_mut() - 可変借用 (&mut T)
     for item in vec.iter_mut() {
-        *item *= 2;  // item is &mut i32
+        *item *= 2;  // item は &mut i32
     }
     println!("{:?}", vec);  // [2, 4, 6, 8, 10]
 }
 ```
 
-### Collecting Results
+### 結果の収集（Collect）
 ```csharp
-// C# - Processing collections with potential errors
+// C# - エラーの可能性があるコレクションの処理
 public List<int> ParseNumbers(List<string> inputs)
 {
     var results = new List<int>();
@@ -371,50 +370,50 @@ public List<int> ParseNumbers(List<string> inputs)
         {
             results.Add(result);
         }
-        // Silently skip invalid inputs
+        // 無効な入力は暗黙的にスキップ
     }
     return results;
 }
 ```
 
 ```rust
-// Rust - Explicit error handling with collect
+// Rust - collect による明示的なエラーハンドリング
 fn parse_numbers(inputs: Vec<String>) -> Result<Vec<i32>, std::num::ParseIntError> {
     inputs.into_iter()
-        .map(|s| s.parse::<i32>())  // Returns Result<i32, ParseIntError>
-        .collect()                  // Collects into Result<Vec<i32>, ParseIntError>
+        .map(|s| s.parse::<i32>())  // Result<i32, ParseIntError> を返す
+        .collect()                  // Result<Vec<i32>, ParseIntError> に収集される
 }
 
-// Alternative: Filter out errors
+// 代替案: エラーをフィルタリングして除外
 fn parse_numbers_filter(inputs: Vec<String>) -> Vec<i32> {
     inputs.into_iter()
-        .filter_map(|s| s.parse::<i32>().ok())  // Keep only Ok values
+        .filter_map(|s| s.parse::<i32>().ok())  // Ok の値のみを保持
         .collect()
 }
 
 fn main() {
     let inputs = vec!["1".to_string(), "2".to_string(), "invalid".to_string(), "4".to_string()];
     
-    // Version that fails on first error
+    // 最初のエラーで失敗するバージョン
     match parse_numbers(inputs.clone()) {
-        Ok(numbers) => println!("All parsed: {:?}", numbers),
-        Err(error) => println!("Parse error: {}", error),
+        Ok(numbers) => println!("すべてパース成功: {:?}", numbers),
+        Err(error) => println!("パースエラー: {}", error),
     }
     
-    // Version that skips errors
+    // エラーをスキップするバージョン
     let numbers = parse_numbers_filter(inputs);
-    println!("Successfully parsed: {:?}", numbers);  // [1, 2, 4]
+    println!("パース成功分: {:?}", numbers);  // [1, 2, 4]
 }
 ```
 
 ---
 
-## Exercises
+## 演習問題
 
 <details>
-<summary><strong>🏋️ Exercise: LINQ to Iterators</strong> (click to expand)</summary>
+<summary><strong>🏋️ 演習: LINQ からイテレータへ</strong> (クリックして展開)</summary>
 
-Translate this C# LINQ query to idiomatic Rust iterators:
+以下の C# LINQ クエリを、慣用的な Rust イテレータに翻訳してください:
 
 ```csharp
 var result = students
@@ -425,22 +424,22 @@ var result = students
     .ToList();
 ```
 
-Use this struct:
+次の構造体を使用してください:
 ```rust
 struct Student { name: String, grade: u32 }
 ```
 
-Return a `Vec<String>` of the top 3 students with grade ≥ 90, formatted as `"Name: Grade"`.
+成績が 90 以上の生徒の上位 3 名を `"名前: 成績"` の形式にフォーマットした `Vec<String>` を返してください。
 
 <details>
-<summary>🔑 Solution</summary>
+<summary>🔑 解答</summary>
 
 ```rust
 #[derive(Debug)]
 struct Student { name: String, grade: u32 }
 
 fn top_students(students: &mut [Student]) -> Vec<String> {
-    students.sort_by(|a, b| b.grade.cmp(&a.grade)); // sort descending
+    students.sort_by(|a, b| b.grade.cmp(&a.grade)); // 降順ソート
     students.iter()
         .filter(|s| s.grade >= 90)
         .take(3)
@@ -462,11 +461,9 @@ fn main() {
 }
 ```
 
-**Key difference from C#**: Rust iterators are lazy (like LINQ), but `.sort_by()` is eager and in-place — there's no lazy `OrderBy`. You sort first, then chain lazy operations.
+**C# との主な違い**: Rust のイテレータは（LINQ と同様に）遅延評価されますが、`.sort_by()` は即座にインプレースで実行されます（遅延評価される `OrderBy` はありません）。そのため、まずソートを行ってから、遅延操作をチェーンします。
 
 </details>
 </details>
 
 ***
-
-

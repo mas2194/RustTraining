@@ -1,37 +1,37 @@
-# Case Study 3: Framework communication → Lifetime borrowing
+# ケーススタディ3: フレームワーク間通信 → ライフタイム借用
 
-> **What you'll learn:** How to convert C++ raw-pointer framework communication patterns to Rust's lifetime-based borrowing system, eliminating dangling pointer risks while maintaining zero-cost abstractions.
+> **学習内容:** C++における生ポインタを用いたフレームワーク間通信パターンを、Rustのライフタイムに基づく借用システムへと変換する方法。ゼロコスト抽象化を維持しながら、ダングリングポインタのリスクを排除します。
 
-## The C++ Pattern: Raw Pointer to Framework
+## C++のパターン: フレームワークへの生ポインタ
 ```cpp
-// C++ original: Every diagnostic module stores a raw pointer to the framework
+// C++の原型: すべての診断モジュールがフレームワークへの生ポインタを保持
 class DiagBase {
 protected:
-    DiagFramework* m_pFramework;  // Raw pointer — who owns this?
+    DiagFramework* m_pFramework;  // 生ポインタ — 所有者は誰か？
 public:
     DiagBase(DiagFramework* fw) : m_pFramework(fw) {}
     
     void LogEvent(uint32_t code, const std::string& msg) {
-        m_pFramework->GetEventLog()->Record(code, msg);  // Hope it's still alive!
+        m_pFramework->GetEventLog()->Record(code, msg);  // 生存していることを祈るしかない！
     }
 };
-// Problem: m_pFramework is a raw pointer with no lifetime guarantee
-// If framework is destroyed while modules still reference it → UB
+// 問題点: m_pFramework はライフタイム保証のない生ポインタ
+// モジュールが参照している間にフレームワークが破棄されると未定義動作（UB）になる
 ```
 
-## The Rust Solution: DiagContext with Lifetime Borrowing
+## Rustの解決策: ライフタイム借用を用いた DiagContext
 ```rust
-// Example: module.rs — Borrow, don't store
+// 実装例: module.rs — 保持するのではなく借用する
 
-/// Context passed to diagnostic modules during execution.
-/// The lifetime 'a guarantees the framework outlives the context.
+/// 実行中に診断モジュールへと渡されるコンテキスト。
+/// ライフタイム 'a により、フレームワークがコンテキストよりも長く生存することが保証される。
 pub struct DiagContext<'a> {
     pub der_log: &'a mut EventLogManager,
     pub config: &'a ModuleConfig,
     pub framework_opts: &'a HashMap<String, String>,
 }
 
-/// Modules receive context as a parameter — never store framework pointers
+/// モジュールはパラメータとしてコンテキストを受け取る — フレームワークのポインタを保持することは決してない
 pub trait DiagModule {
     fn id(&self) -> &str;
     fn execute(&mut self, ctx: &mut DiagContext) -> DiagResult<()>;
@@ -44,48 +44,48 @@ pub trait DiagModule {
 }
 ```
 
-### Key Insight
-- C++ modules **store** a pointer to the framework (danger: what if the framework is destroyed first?)
-- Rust modules **receive** a context as a function parameter — the borrow checker guarantees the framework is alive during the call
-- No raw pointers, no lifetime ambiguity, no "hope it's still alive"
+### 重要な知見
+- C++のモジュールはフレームワークへのポインタを**保持（store）**します（危険性: フレームワークが先に破棄されたらどうなるか？）
+- Rustのモジュールは関数の引数としてコンテキストを**受け取り（receive）**ます — 借用チェッカが呼び出し中のフレームワークの生存を保証します
+- 生ポインタも、ライフタイムの曖昧さも、「生存していることを祈る」必要もありません
 
 ----
 
-# Case Study 4: God object → Composable state
+# ケーススタディ4: 神オブジェクト（God object） → コンポーザブルな状態管理
 
-## The C++ Pattern: Monolithic Framework Class
+## C++のパターン: モノリシックなフレームワーククラス
 ```cpp
-// C++ original: The framework is god object
+// C++の原型: フレームワークが神オブジェクト化している
 class DiagFramework {
-    // Health-monitor trap processing
+    // ヘルスモニタのトラップ処理
     std::vector<AlertTriggerInfo> m_alertTriggers;
     std::vector<WarnTriggerInfo> m_warnTriggers;
     bool m_healthMonHasBootTimeError;
     uint32_t m_healthMonActionCounter;
     
-    // GPU diagnostics
+    // GPU診断
     std::map<uint32_t, GpuPcieInfo> m_gpuPcieMap;
     bool m_isRecoveryContext;
     bool m_healthcheckDetectedDevices;
-    // ... 30+ more GPU-related fields
+    // ... 他に30個以上のGPU関連フィールド
     
-    // PCIe tree
+    // PCIeツリー
     std::shared_ptr<CPcieTreeLinux> m_pPcieTree;
     
-    // Event logging
+    // イベントログ
     CEventLogMgr* m_pEventLogMgr;
     
-    // ... several other methods
+    // ... その他複数のメソッド
     void HandleGpuEvents();
     void HandleNicEvents();
     void RunGpuDiag();
-    // Everything depends on everything
+    // すべてがすべてに依存している
 };
 ```
 
-## The Rust Solution: Composable State Structs
+## Rustの解決策: コンポーザブルな状態構造体
 ```rust
-// Example: main.rs — State decomposed into focused structs
+// 実装例: main.rs — 関心事ごとに特化した構造体に状態を分解
 
 #[derive(Default)]
 struct HealthMonitorState {
@@ -93,7 +93,7 @@ struct HealthMonitorState {
     warn_triggers: Vec<WarnTriggerInfo>,
     health_monitor_action_counter: u32,
     health_monitor_has_boot_time_error: bool,
-    // Only health-monitor-related fields
+    // ヘルスモニタ関連のフィールドのみ
 }
 
 #[derive(Default)]
@@ -101,78 +101,78 @@ struct GpuDiagState {
     gpu_pcie_map: HashMap<u32, GpuPcieInfo>,
     is_recovery_context: bool,
     healthcheck_detected_devices: bool,
-    // Only GPU-related fields
+    // GPU関連のフィールドのみ
 }
 
-/// The framework composes these states rather than owning everything flat
+/// フレームワークはすべてをフラットに所有するのではなく、これらの状態を合成（コンポーズ）する
 struct DiagFramework {
-    ctx: DiagContext,             // Execution context
-    args: Args,                   // CLI arguments
-    pcie_tree: Option<DeviceTree>,  // No shared_ptr needed
-    event_log_mgr: EventLogManager,   // Owned, not raw pointer
-    fc_manager: FcManager,        // Fault code management
-    health: HealthMonitorState,   // Health-monitor state — its own struct
-    gpu: GpuDiagState,           // GPU state — its own struct
+    ctx: DiagContext,             // 実行コンテキスト
+    args: Args,                   // CLI引数
+    pcie_tree: Option<DeviceTree>,  // shared_ptr は不要
+    event_log_mgr: EventLogManager,   // 生ポインタではなく所有
+    fc_manager: FcManager,        // フォールトコード管理
+    health: HealthMonitorState,   // ヘルスモニタの状態 — 独立した構造体
+    gpu: GpuDiagState,           // GPUの状態 — 独立した構造体
 }
 ```
 
-### Key Insight
-- **Testability**: Each state struct can be unit-tested independently
-- **Readability**: `self.health.alert_triggers` vs `m_alertTriggers` — clear ownership
-- **Fearless refactoring**: Changing `GpuDiagState` can't accidentally affect health-monitor processing
-- **No method soup**: Functions that only need health-monitor state take `&mut HealthMonitorState`, not the entire framework
+### 重要な知見
+- **テスト容易性**: 各状態構造体を個別に単体テスト可能
+- **可読性**: `self.health.alert_triggers` 対 `m_alertTriggers` — 所有関係が明確
+- **安心できるリファクタリング**: `GpuDiagState` を変更しても、ヘルスモニタの処理に誤って影響を与えることがない
+- **巨大メソッド群（メソッドスープ）の解消**: ヘルスモニタの状態のみを必要とする関数は、フレームワーク全体ではなく `&mut HealthMonitorState` のみを受け取る
 
 ----
 
-# Case Study 5: Trait objects — when they ARE right
+# ケーススタディ5: トレイトオブジェクト — それが「真に適切な」場面
 
-- Not everything should be an enum! The **diagnostic module plugin system** is a genuine use case for trait objects
-- Why? Because diagnostic modules are **open for extension** — new modules can be added without modifying the framework
+- すべてを enum にすべきというわけではありません！ **診断モジュールのプラグインシステム**は、トレイトオブジェクトの真価が発揮されるユースケースです
+- なぜでしょうか？ それは診断モジュールが**拡張に対して開かれている（Open for Extension）**ためです — フレームワークを変更することなく、新しいモジュールを追加できます
 
 ```rust
-// Example: framework.rs — Vec<Box<dyn DiagModule>> is correct here
+// 実装例: framework.rs — ここでは Vec<Box<dyn DiagModule>> の使用が適切
 pub struct DiagFramework {
-    modules: Vec<Box<dyn DiagModule>>,        // Runtime polymorphism
+    modules: Vec<Box<dyn DiagModule>>,        // 実行時ポリモーフィズム
     pre_diag_modules: Vec<Box<dyn DiagModule>>,
     event_log_mgr: EventLogManager,
     // ...
 }
 
 impl DiagFramework {
-    /// Register a diagnostic module — any type implementing DiagModule
+    /// 診断モジュールを登録する — DiagModule を実装する任意の型
     pub fn register_module(&mut self, module: Box<dyn DiagModule>) {
-        info!("Registering module: {}", module.id());
+        info!("モジュールを登録中: {}", module.id());
         self.modules.push(module);
     }
 }
 ```
 
-### When to Use Each Pattern
+### 各パターンの使い分け
 
-| **Use Case** | **Pattern** | **Why** |
+| **ユースケース** | **パターン** | **理由** |
 |-------------|-----------|--------|
-| Fixed set of variants known at compile time | `enum` + `match` | Exhaustive checking, no vtable |
-| Hardware event types (Degrade, Fatal, Boot, ...) | `enum GpuEventKind` | All variants known, performance matters |
-| PCIe device types (GPU, NIC, Switch, ...) | `enum PcieDeviceKind` | Fixed set, each variant has different data |
-| Plugin/module system (open for extension) | `Box<dyn Trait>` | New modules added without modifying framework |
-| Test mocking | `Box<dyn Trait>` | Inject test doubles |
+| コンパイル時に既知の固定バリアント群 | `enum` + `match` | 網羅性チェック、vtableなし |
+| ハードウェアイベント型（Degrade, Fatal, Bootなど） | `enum GpuEventKind` | すべてのバリアントが既知、パフォーマンスが重視される |
+| PCIeデバイス型（GPU, NIC, Switchなど） | `enum PcieDeviceKind` | 固定されたバリアント群、各バリアントが異なるデータを保持 |
+| プラグイン/モジュールシステム（拡張に対してオープン） | `Box<dyn Trait>` | フレームワークを変更せずに新しいモジュールを追加可能 |
+| テスト用のモック | `Box<dyn Trait>` | テストダブル（代役オブジェクト）の注入 |
 
-### Exercise: Think Before You Translate
-Given this C++ code:
+### 演習: 移行する前に考えてみよう
+以下のC++コードがあるとします:
 ```cpp
 class Shape { public: virtual double area() = 0; };
 class Circle : public Shape { double r; double area() override { return 3.14*r*r; } };
 class Rect : public Shape { double w, h; double area() override { return w*h; } };
 std::vector<std::unique_ptr<Shape>> shapes;
 ```
-**Question**: Should the Rust translation use `enum Shape` or `Vec<Box<dyn Shape>>`?
+**問題**: Rustへの移行において、`enum Shape` と `Vec<Box<dyn Shape>>` のどちらを使うべきでしょうか？
 
-<details><summary>Solution (click to expand)</summary>
+<details><summary>解答（クリックして展開）</summary>
 
-**Answer**: `enum Shape` — because the set of shapes is **closed** (known at compile time). You'd only use `Box<dyn Shape>` if users could add new shape types at runtime.
+**解答**: `enum Shape` — 図形の種類が**閉じている**（コンパイル時にすべて判明している）ためです。`Box<dyn Shape>` を使うべきなのは、実行時にユーザーが新しい図形型を追加できるようにしたい場合のみです。
 
 ```rust
-// Correct Rust translation:
+// 正しいRustへの移行例:
 enum Shape {
     Circle { r: f64 },
     Rect { w: f64, h: f64 },
@@ -193,39 +193,37 @@ fn main() {
         Shape::Rect { w: 3.0, h: 4.0 },
     ];
     for shape in &shapes {
-        println!("Area: {:.2}", shape.area());
+        println!("面積: {:.2}", shape.area());
     }
 }
-// Output:
-// Area: 78.54
-// Area: 12.00
+// 出力:
+// 面積: 78.54
+// 面積: 12.00
 ```
 
 </details>
 
 ----
 
-# Translation metrics and lessons learned
+# 移行メトリクスと得られた教訓
 
-## What We Learned
-1. **Default to enum dispatch** — In ~100K lines of C++, only ~25 uses of `Box<dyn Trait>` were genuinely needed (plugin systems, test mocks). The other ~900 virtual methods became enums with match
-2. **Arena pattern eliminates reference cycles** — `shared_ptr` and `enable_shared_from_this` are symptoms of unclear ownership. Think about who **owns** the data first
-3. **Pass context, don't store pointers** — Lifetime-bounded `DiagContext<'a>` is safer and clearer than storing `Framework*` in every module
-4. **Decompose god objects** — If a struct has 30+ fields, it's probably 3-4 structs wearing a trenchcoat
-5. **The compiler is your pair programmer** — ~400 `dynamic_cast` calls meant ~400 potential runtime failures. Zero `dynamic_cast` equivalents in Rust means zero runtime type errors
+## 得られた教訓
+1. **Enumディスパッチをデフォルトにする** — 約10万行のC++の中で、`Box<dyn Trait>` が真に必要だったのは約25箇所（プラグインシステムやテストモック）のみでした。他の約900個の仮想メソッドはすべて enum と match に置き換えられました。
+2. **アリーナパターンによる循環参照の排除** — `shared_ptr` や `enable_shared_from_this` は所有権が曖昧であることの兆候です。まず誰がデータを**所有**しているのかを考えてください。
+3. **ポインタを保持せず、コンテキストを渡す** — ライフタイム境界を持つ `DiagContext<'a>` を渡す設計は、すべてのモジュールに `Framework*` を保持させるよりも安全で明確です。
+4. **神オブジェクトの分解** — ある構造体に30以上のフィールドがあるなら、それはおそらく3〜4個の構造体が1つにまとまってしまっている状態です。
+5. **コンパイラはペアプログラマ** — 約400箇所の `dynamic_cast` 呼び出しは、約400箇所の潜在的な実行時エラーを意味していました。Rustにおいて `dynamic_cast` に相当するものがゼロになったことで、実行時の型エラーもゼロになりました。
 
-## The Hardest Parts
-- **Lifetime annotations**: Getting borrows right takes time when you're used to raw pointers — but once it compiles, it's correct
-- **Fighting the borrow checker**: Wanting `&mut self` in two places at once. Solution: decompose state into separate structs
-- **Resisting literal translation**: The temptation to write `Vec<Box<dyn Base>>` everywhere. Ask: "Is this set of variants closed?" → If yes, use enum
+## 最も苦労した点
+- **ライフタイム注釈**: 生ポインタに慣れていると借用を正しく記述するのに時間がかかります — しかし、一度コンパイルが通れば、それは正しさが保証されたことになります。
+- **借用チェッカとの戦い**: `&mut self` を2箇所で同時に使いたくなるケース。解決策：状態を別々の構造体に分解すること。
+- **直訳の誘惑を抑えること**: いたる所に `Vec<Box<dyn Base>>` と書きたくなる衝動。問いかけるべきこと: 「このバリアントの集合は閉じているか？」→ Yesであれば enum を使用します。
 
-## Recommendation for C++ Teams
-1. Start with a small, self-contained module (not the god object)
-2. Translate data structures first, then behavior
-3. Let the compiler guide you — its error messages are excellent
-4. Reach for `enum` before `dyn Trait`
-5. Use the [Rust playground](https://play.rust-lang.org/) to prototype patterns before integrating
+## C++開発チームへの推奨事項
+1. 小さく自己完結したモジュールから始める（神オブジェクトから始めない）
+2. 振る舞い（ロジック）の前に、まずデータ構造を移行する
+3. コンパイラに導いてもらう — Rustのエラーメッセージは極めて優秀です
+4. `dyn Trait` に手を伸ばす前に、まず `enum` を検討する
+5. 統合前に [Rust Playground](https://play.rust-lang.org/) を使ってパターンをプロトタイピングする
 
 ----
-
-

@@ -1,50 +1,48 @@
-# Validated Boundaries — Parse, Don't Validate 🟡
+# 検証済み境界 — バリデーションではなくパースせよ 🟡
 
-> **What you'll learn:** How to validate data exactly once at the system boundary, carry the proof of validity in a dedicated type, and never re-check — applied to IPMI FRU records (flat bytes), Redfish JSON (structured documents), and IPMI SEL records (polymorphic binary with nested dispatch), with a complete end-to-end walkthrough.
+> **学修目標:** システム境界でデータを一度だけ検証し、その正当性の証明を専用の型に保持して二度と再検査しない設計手法を学びます。IPMI FRUレコード（フラットなバイト列）、Redfish JSON（構造化ドキュメント）、IPMI SELレコード（ネストされたディスパッチを持つ多相バイナリ）への適用と、完全なエンドツーエンドのウォークスルーを通じて理解を深めます。
 >
-> **Cross-references:** [ch02](ch02-typed-command-interfaces-request-determi.md) (typed commands), [ch06](ch06-dimensional-analysis-making-the-compiler.md) (dimensional types), [ch11](ch11-fourteen-tricks-from-the-trenches.md) (trick 2 — sealed traits, trick 3 — `#[non_exhaustive]`, trick 5 — FromStr), [ch14](ch14-testing-type-level-guarantees.md) (proptest)
+> **関連章:** [第2章](ch02-typed-command-interfaces-request-determi.md)（型付きコマンド）、[第6章](ch06-dimensional-analysis-making-the-compiler.md)（次元型）、[第11章](ch11-fourteen-tricks-from-the-trenches.md)（テクニック2 — シールされたトレイト、テクニック3 — `#[non_exhaustive]`、テクニック5 — FromStr）、[第14章](ch14-testing-type-level-guarantees.md)（proptest）
 
-## The Problem: Shotgun Validation
+## 課題: 散弾銃バリデーション（Shotgun Validation）
 
-In typical code, validation is scattered everywhere. Every function that receives
-data re-checks it "just in case":
+典型的なコードでは、バリデーションがいたるところに散乱しています。データを受け取るすべての関数が「念のため」とばかりに再検査を行います：
 
 ```c
-// C — validation scattered across the codebase
+// C — コードベース全体に散乱したバリデーション
 int process_fru_data(uint8_t *data, int len) {
-    if (data == NULL) return -1;          // check: non-null
-    if (len < 8) return -1;              // check: minimum length
-    if (data[0] != 0x01) return -1;      // check: format version
-    if (checksum(data, len) != 0) return -1; // check: checksum
+    if (data == NULL) return -1;          // チェック: nullでないこと
+    if (len < 8) return -1;              // チェック: 最小長
+    if (data[0] != 0x01) return -1;      // チェック: フォーマットバージョン
+    if (checksum(data, len) != 0) return -1; // チェック: チェックサム
 
-    // ... 10 more functions that repeat the same checks ...
+    // ... 同じチェックを繰り返す関数が他に10個もある ...
 }
 ```
 
-This pattern ("shotgun validation") has two problems:
-1. **Redundancy** — the same checks appear in dozens of places
-2. **Incompleteness** — forget one check in one function and you have a bug
+このパターン（「散弾銃バリデーション（Shotgun Validation）」）には2つの問題があります：
+1. **冗長性** — 同じチェックが何十箇所にも現れる
+2. **不完全性** — ひとつの関数でひとつのチェックを忘れただけでバグになる
 
-## Parse, Don't Validate
+## バリデーションではなくパースせよ（Parse, Don't Validate）
 
-The correct-by-construction approach: **validate once at the boundary, then carry
-the proof of validity in the type**.
+「正しさを構造によって担保する」アプローチでは、**境界で一度だけ検証し、その妥当性の証明を型に持たせます**。
 
 ```rust,ignore
-/// Raw bytes from the wire — not yet validated.
+/// 通信路（ワイヤ）からの生のバイト列 — まだ検証されていない
 #[derive(Debug)]
 pub struct RawFruData(Vec<u8>);
 ```
 
-### Case Study: IPMI FRU Data
+### ケーススタディ: IPMI FRU データ
 
 ```rust,ignore
 # #[derive(Debug)]
 # pub struct RawFruData(Vec<u8>);
 
-/// Validated IPMI FRU data. Can only be created via TryFrom,
-/// which enforces all invariants. Once you have a ValidFru,
-/// all data is guaranteed correct.
+/// 検証済みのIPMI FRUデータ。すべての不変条件を強制する
+/// TryFrom を経由してのみ作成可能。一度 ValidFru を取得すれば、
+/// すべてのデータが正しいことが保証される。
 #[derive(Debug)]
 pub struct ValidFru {
     format_version: u8,
@@ -67,13 +65,13 @@ impl std::fmt::Display for FruError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::TooShort { actual, minimum } =>
-                write!(f, "FRU data too short: {actual} bytes (minimum {minimum})"),
+                write!(f, "FRUデータが短すぎます: {actual} バイト（最小 {minimum}）"),
             Self::BadFormatVersion(v) =>
-                write!(f, "unsupported FRU format version: {v}"),
+                write!(f, "サポートされていないFRUフォーマットバージョン: {v}"),
             Self::ChecksumMismatch { expected, actual } =>
-                write!(f, "checksum mismatch: expected 0x{expected:02X}, got 0x{actual:02X}"),
+                write!(f, "チェックサム不一致: 期待値 0x{expected:02X}, 実際 0x{actual:02X}"),
             Self::InvalidAreaOffset { area, offset } =>
-                write!(f, "invalid {area} area offset: {offset}"),
+                write!(f, "不正な{area}領域オフセット: {offset}"),
         }
     }
 }
@@ -84,7 +82,7 @@ impl TryFrom<RawFruData> for ValidFru {
     fn try_from(raw: RawFruData) -> Result<Self, FruError> {
         let data = raw.0;
 
-        // 1. Length check
+        // 1. 長さチェック
         if data.len() < 8 {
             return Err(FruError::TooShort {
                 actual: data.len(),
@@ -92,12 +90,12 @@ impl TryFrom<RawFruData> for ValidFru {
             });
         }
 
-        // 2. Format version
+        // 2. フォーマットバージョン
         if data[0] != 0x01 {
             return Err(FruError::BadFormatVersion(data[0]));
         }
 
-        // 3. Checksum (header is first 8 bytes, checksum at byte 7)
+        // 3. チェックサム（ヘッダは先頭8バイト、チェックサムはバイト7）
         let checksum: u8 = data[..8].iter().fold(0u8, |acc, &b| acc.wrapping_add(b));
         if checksum != 0 {
             return Err(FruError::ChecksumMismatch {
@@ -106,7 +104,7 @@ impl TryFrom<RawFruData> for ValidFru {
             });
         }
 
-        // 4. Area offsets must be within bounds
+        // 4. 領域オフセットが範囲内であること
         for (name, idx) in [
             ("internal", 1), ("chassis", 2),
             ("board", 3), ("product", 4),
@@ -120,7 +118,7 @@ impl TryFrom<RawFruData> for ValidFru {
             }
         }
 
-        // All checks passed — construct the validated type
+        // すべてのチェックに合格 — 検証済み型を構築
         Ok(ValidFru {
             format_version: data[0],
             internal_area_offset: data[1],
@@ -133,13 +131,13 @@ impl TryFrom<RawFruData> for ValidFru {
 }
 
 impl ValidFru {
-    /// No validation needed — the type guarantees correctness.
+    /// バリデーション不要 — 型が正しさを保証している
     pub fn board_area(&self) -> Option<&[u8]> {
         if self.board_area_offset == 0 {
             return None;
         }
         let start = self.board_area_offset as usize * 8;
-        Some(&self.data[start..])  // safe — bounds checked during parsing
+        Some(&self.data[start..])  // 安全 — パース時に境界チェック済み
     }
 
     pub fn product_area(&self) -> Option<&[u8]> {
@@ -156,7 +154,7 @@ impl ValidFru {
 }
 ```
 
-Any function that takes `&ValidFru` **knows** the data is well-formed. No re-checking:
+`&ValidFru` を受け取る任意の関数は、データが整形式（well-formed）であることを**知っています**。再チェックは不要です：
 
 ```rust,ignore
 # pub struct ValidFru { board_area_offset: u8, data: Vec<u8> }
@@ -164,35 +162,34 @@ Any function that takes `&ValidFru` **knows** the data is well-formed. No re-che
 #     pub fn board_area(&self) -> Option<&[u8]> { None }
 # }
 
-/// This function does NOT need to validate the FRU data.
-/// The type signature guarantees it's already valid.
+/// この関数はFRUデータを検証する必要がありません。
+/// 型シグネチャがすでに有効であることを保証しています。
 fn extract_board_serial(fru: &ValidFru) -> Option<String> {
     let board = fru.board_area()?;
-    // ... parse serial from board area ...
-    // No bounds checks needed — ValidFru guarantees offsets are in range
-    Some("ABC123".to_string()) // stub
+    // ... ボード領域からシリアル番号をパース ...
+    // 境界チェックは不要 — ValidFruがオフセットが範囲内であることを保証
+    Some("ABC123".to_string()) // スタブ
 }
 
 fn extract_board_manufacturer(fru: &ValidFru) -> Option<String> {
     let board = fru.board_area()?;
-    // Still no validation needed — same guarantee
-    Some("Acme Corp".to_string()) // stub
+    // 同様にバリデーションは不要 — 同じ保証が適用される
+    Some("Acme Corp".to_string()) // スタブ
 }
 ```
 
-## Validated Redfish JSON
+## 検証済みの Redfish JSON
 
-The same pattern applies to Redfish API responses. Parse once, carry validity in
-the type:
+同じパターンは Redfish API のレスポンスにも適用できます。一度パースし、正当性を型で持ち運びます：
 
 ```rust,ignore
 use std::collections::HashMap;
 
-/// Raw JSON string from a Redfish endpoint.
+/// Redfishエンドポイントからの生のJSON文字列
 pub struct RawRedfishResponse(pub String);
 
-/// A validated Redfish Thermal response.
-/// All required fields are guaranteed present and within range.
+/// 検証済みのRedfish Thermal（温度・ファン）レスポンス。
+/// すべての必須フィールドが存在し、範囲内であることが保証される。
 #[derive(Debug)]
 pub struct ValidThermalResponse {
     pub temperatures: Vec<ValidTemperatureReading>,
@@ -202,7 +199,7 @@ pub struct ValidThermalResponse {
 #[derive(Debug)]
 pub struct ValidTemperatureReading {
     pub name: String,
-    pub reading_celsius: f64,     // guaranteed non-NaN, within sensor range
+    pub reading_celsius: f64,     // NaNでなく、センサーの有効範囲内であることが保証される
     pub upper_critical: f64,
     pub status: HealthStatus,
 }
@@ -210,7 +207,7 @@ pub struct ValidTemperatureReading {
 #[derive(Debug)]
 pub struct ValidFanReading {
     pub name: String,
-    pub reading_rpm: u32,        // guaranteed > 0 for present fans
+    pub reading_rpm: u32,        // 存在するファンについて > 0 であることが保証される
     pub status: HealthStatus,
 }
 
@@ -231,18 +228,18 @@ pub enum RedfishValidationError {
 impl std::fmt::Display for RedfishValidationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::MissingField(name) => write!(f, "missing required field: {name}"),
+            Self::MissingField(name) => write!(f, "必須フィールドが見つかりません: {name}"),
             Self::OutOfRange { field, value } =>
-                write!(f, "field {field} out of range: {value}"),
-            Self::InvalidStatus(s) => write!(f, "invalid health status: {s}"),
+                write!(f, "フィールド {field} が範囲外です: {value}"),
+            Self::InvalidStatus(s) => write!(f, "無効なヘルスステータス: {s}"),
         }
     }
 }
 
-// Once validated, downstream code never re-checks:
+// 一度検証されれば、下流のコードが再検査することはない:
 fn check_thermal_health(thermal: &ValidThermalResponse) -> bool {
-    // No need to check for missing fields or NaN values.
-    // ValidThermalResponse guarantees all readings are sensible.
+    // フィールドの欠落やNaN値をチェックする必要はない。
+    // ValidThermalResponse はすべての読み取り値が妥当であることを保証している。
     thermal.temperatures.iter().all(|t| {
         t.reading_celsius < t.upper_critical && t.status != HealthStatus::Critical
     }) && thermal.fans.iter().all(|f| {
@@ -251,72 +248,66 @@ fn check_thermal_health(thermal: &ValidThermalResponse) -> bool {
 }
 ```
 
-## Polymorphic Validation: IPMI SEL Records
+## 多相バリデーション: IPMI SEL レコード
 
-The first two case studies validated **flat** structures — a fixed byte layout (FRU)
-and a known JSON schema (Redfish). Real-world data is often **polymorphic**: the
-interpretation of later bytes depends on earlier bytes. IPMI System Event Log (SEL)
-records are the canonical example.
+最初の2つのケーススタディでは**フラット**な構造を検証しました — 固定バイトレイアウト（FRU）と既知のJSONスキーマ（Redfish）です。しかし現実世界のデータはしばしば**多相的（polymorphic）**です。つまり、後ろのバイトの意味解釈が、手前のバイトの値に依存します。IPMI システムイベントログ（SEL）レコードはその典型的な例です。
 
-### The Shape of the Problem
+### 課題の全体像
 
-Every SEL record is exactly 16 bytes. But what those bytes *mean* depends on a
-dispatch chain:
+すべてのSELレコードは厳密に16バイトです。しかし、それらのバイトが何を*意味*するかは、ディスパッチの連鎖に依存します：
 
 ```
-Byte 2: Record Type
-  ├─ 0x02 → System Event
-  │    Byte 10[6:4]: Event Type
-  │      ├─ 0x01       → Threshold event (reading + threshold in data bytes 2-3)
-  │      ├─ 0x02-0x0C  → Discrete event (bit in offset field)
-  │      └─ 0x6F       → Sensor-specific (meaning depends on Sensor Type in byte 7)
-  │           Byte 7: Sensor Type
-  │             ├─ 0x01 → Temperature events
-  │             ├─ 0x02 → Voltage events
-  │             ├─ 0x04 → Fan events
-  │             ├─ 0x07 → Processor events
-  │             ├─ 0x0C → Memory events
-  │             ├─ 0x08 → Power Supply events
-  │             └─ ...  → (42 sensor types in IPMI 2.0 Table 42-3)
-  ├─ 0xC0-0xDF → OEM Timestamped
-  └─ 0xE0-0xFF → OEM Non-Timestamped
+バイト 2: レコードタイプ
+  ├─ 0x02 → システムイベント
+  │    バイト 10[6:4]: イベントタイプ
+  │      ├─ 0x01       → 閾値イベント（データバイト 2-3 に読み取り値と閾値）
+  │      ├─ 0x02-0x0C  → ディスクリートイベント（オフセットフィールドのビット）
+  │      └─ 0x6F       → センサー固有（意味はバイト7のセンサータイプに依存）
+  │           バイト 7: センサータイプ
+  │             ├─ 0x01 → 温度イベント
+  │             ├─ 0x02 → 電圧イベント
+  │             ├─ 0x04 → ファンイベント
+  │             ├─ 0x07 → プロセッサイベント
+  │             ├─ 0x0C → メモリイベント
+  │             ├─ 0x08 → 電源イベント
+  │             └─ ...  → （IPMI 2.0 表42-3 にある42種類のセンサータイプ）
+  ├─ 0xC0-0xDF → OEM タイムスタンプ付き
+  └─ 0xE0-0xFF → OEM タイムスタンプなし
 ```
 
-In C, this is a `switch` inside a `switch` inside a `switch`, with each level sharing
-the same `uint8_t *data` pointer. Forget one level, misread the spec table, or index
-the wrong byte — the bug is silent.
+C言語では、これは「`switch` の中の `switch` の中の `switch`」となり、各レベルで同じ `uint8_t *data` ポインタを共有します。1つのレベルを忘れたり、仕様書の表を読み間違えたり、誤ったバイトをインデックス指定したりすると、バグは静かに潜み続けます。
 
 ```c
-// C — the polymorphic parsing problem
+// C — 多相パースの課題
 void process_sel_entry(uint8_t *data, int len) {
-    if (data[2] == 0x02) {  // system event
+    if (data[2] == 0x02) {  // システムイベント
         uint8_t event_type = (data[10] >> 4) & 0x07;
-        if (event_type == 0x01) {  // threshold
-            uint8_t reading = data[11];   // 🐛 or is it data[13]?
-            uint8_t threshold = data[12]; // 🐛 spec says byte 12 is trigger, not threshold
+        if (event_type == 0x01) {  // 閾値
+            uint8_t reading = data[11];   // 🐛 それとも data[13] か？
+            uint8_t threshold = data[12]; // 🐛 仕様書ではバイト12はトリガーであり閾値ではない
             printf("Temp: %d crossed %d\n", reading, threshold);
-        } else if (event_type == 0x6F) {  // sensor-specific
+        } else if (event_type == 0x6F) {  // センサー固有
             uint8_t sensor_type = data[7];
-            if (sensor_type == 0x0C) {  // memory
-                // 🐛 forgot to check event data 1 offset bits
+            if (sensor_type == 0x0C) {  // メモリ
+                // 🐛 イベントデータ1のオフセットビットのチェックを失念
                 printf("Memory ECC error\n");
             }
-            // 🐛 no else — silently drops 30+ other sensor types
+            // 🐛 else がない — 30種類以上の他のセンサータイプが暗黙のうちにドロップされる
         }
     }
-    // 🐛 OEM record types silently ignored
+    // 🐛 OEM レコードタイプが静かに無視される
 }
 ```
 
-### Step 1 — Parse the Outer Frame
+### ステップ1 — 外枠のパース
 
-The first `TryFrom` dispatches on record type — the outermost layer of the union:
+最初の `TryFrom` はレコードタイプ（共用体の最外層）に基づいてディスパッチします：
 
 ```rust,ignore
-/// Raw 16-byte SEL record, straight from `Get SEL Entry` (IPMI cmd 0x43).
+/// `Get SEL Entry`（IPMIコマンド 0x43）から得られる生の16バイトSELレコード
 pub struct RawSelRecord(pub [u8; 16]);
 
-/// Validated SEL record — record type dispatched, all fields checked.
+/// 検証済みSELレコード — レコードタイプでディスパッチされ、全フィールドチェック済み
 pub enum ValidSelRecord {
     SystemEvent(SystemEventRecord),
     OemTimestamped(OemTimestampedRecord),
@@ -348,10 +339,10 @@ pub enum SelParseError {
 impl std::fmt::Display for SelParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::UnknownRecordType(t) => write!(f, "unknown record type: 0x{t:02X}"),
-            Self::UnknownSensorType(t) => write!(f, "unknown sensor type: 0x{t:02X}"),
-            Self::UnknownEventType(t) => write!(f, "unknown event type: 0x{t:02X}"),
-            Self::InvalidEventData { reason } => write!(f, "invalid event data: {reason}"),
+            Self::UnknownRecordType(t) => write!(f, "未知のレコードタイプ: 0x{t:02X}"),
+            Self::UnknownSensorType(t) => write!(f, "未知のセンサータイプ: 0x{t:02X}"),
+            Self::UnknownEventType(t) => write!(f, "未知のイベントタイプ: 0x{t:02X}"),
+            Self::InvalidEventData { reason } => write!(f, "無効なイベントデータ: {reason}"),
         }
     }
 }
@@ -389,13 +380,11 @@ impl TryFrom<RawSelRecord> for ValidSelRecord {
 }
 ```
 
-After this boundary, every consumer matches on the enum. The compiler enforces
-handling all three record types — you can't "forget" OEM records.
+この境界を越えた後は、すべての消費側コードが列挙型に対してパターンマッチングを行います。コンパイラが3つのレコードタイプすべての処理を強制するため、OEMレコードを「忘れる」ことはあり得ません。
 
-### Step 2 — Parse the System Event: Sensor Type → Typed Event
+### ステップ2 — システムイベントのパース: センサータイプ → 型付きイベント
 
-The inner dispatch turns the event data bytes into a sum type indexed by sensor
-type. This is where the C `switch`-in-a-`switch` becomes a nested enum:
+内部ディスパッチは、イベントデータバイトをセンサータイプによって索引付けされた直和型（sum type）へと変換します。ここで、C言語の「`switch` 内の `switch`」がネストされた列挙型（enum）へと生まれ変わります：
 
 ```rust,ignore
 #[derive(Debug)]
@@ -406,7 +395,7 @@ pub struct SystemEventRecord {
     pub sensor_type: SensorType,
     pub sensor_number: u8,
     pub event_direction: EventDirection,
-    pub event: TypedEvent,      // ← the key: event data is TYPED
+    pub event: TypedEvent,      // ← 最も重要: イベントデータが「型付け」されている
 }
 
 #[derive(Debug)]
@@ -418,10 +407,10 @@ pub enum GeneratorId {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum EventDirection { Assertion, Deassertion }
 
-// ──── The Sensor/Event Type Hierarchy ────
+// ──── センサー/イベントタイプの階層 ────
 
-/// Sensor types from IPMI Table 42-3. Non-exhaustive because future
-/// IPMI revisions and OEM ranges will add variants (see ch11 trick 3).
+/// IPMI 表42-3 のセンサータイプ。将来のIPMIリビジョンやOEM範囲で
+/// バリアントが追加されるため non_exhaustive（第11章テクニック3を参照）。
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SensorType {
@@ -437,7 +426,7 @@ pub enum SensorType {
     Watchdog2,      // 0x23
 }
 
-/// The polymorphic payload — each variant carries its own typed data.
+/// 多相ペイロード — 各バリアントが専用の型付きデータを保持する
 #[derive(Debug)]
 pub enum TypedEvent {
     Threshold(ThresholdEvent),
@@ -445,9 +434,9 @@ pub enum TypedEvent {
     Discrete { offset: u8, event_data: [u8; 3] },
 }
 
-/// Threshold events carry the trigger reading and threshold value.
-/// Both are raw sensor values (pre-linearization), kept as u8.
-/// After SDR linearization, they become dimensional types (ch06).
+/// 閾値イベントはトリガー読み取り値と閾値を保持する。
+/// どちらも生のセンサー値（線形化前）であり、u8として保持される。
+/// SDR線形化の後、次元型になる（第6章）。
 #[derive(Debug)]
 pub struct ThresholdEvent {
     pub crossing: ThresholdCrossing,
@@ -471,8 +460,8 @@ pub enum ThresholdCrossing {
     UpperNonRecoverableHigh,
 }
 
-/// Sensor-specific events — each sensor type gets its own variant
-/// with an exhaustive enum of that sensor's defined events.
+/// センサー固有イベント — 各センサータイプが専用のバリアントを持ち、
+/// そのセンサーで定義されたイベントの網羅的列挙型を持つ
 #[derive(Debug)]
 pub enum SensorSpecificEvent {
     Temperature(TempEvent),
@@ -485,7 +474,7 @@ pub enum SensorSpecificEvent {
     Watchdog(WatchdogEvent),
 }
 
-// ──── Per-sensor-type event enums (from IPMI Table 42-3) ────
+// ──── センサータイプごとのイベント列挙型（IPMI 表42-3 より） ────
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum MemoryEvent {
@@ -582,7 +571,7 @@ pub enum WatchdogEvent {
 }
 ```
 
-### Step 3 — The Parser Wiring
+### ステップ3 — パーサーの実装
 
 ```rust,ignore
 fn parse_system_event(record_id: u16, d: &[u8]) -> Result<SystemEventRecord, SelParseError> {
@@ -611,7 +600,7 @@ fn parse_system_event(record_id: u16, d: &[u8]) -> Result<SystemEventRecord, Sel
 
     let event = match event_type_code {
         0x01 => {
-            // Threshold — event data byte 2 is trigger reading, byte 3 is threshold
+            // 閾値 — イベントデータバイト2がトリガー読み取り値、バイト3が閾値
             let offset = event_data[0] & 0x0F;
             TypedEvent::Threshold(ThresholdEvent {
                 crossing: parse_threshold_crossing(offset)?,
@@ -620,13 +609,13 @@ fn parse_system_event(record_id: u16, d: &[u8]) -> Result<SystemEventRecord, Sel
             })
         }
         0x6F => {
-            // Sensor-specific — dispatch on sensor type
+            // センサー固有 — センサータイプに基づいてディスパッチ
             let offset = event_data[0] & 0x0F;
             let specific = parse_sensor_specific(&sensor_type, offset)?;
             TypedEvent::SensorSpecific(specific)
         }
         0x02..=0x0C => {
-            // Generic discrete
+            // 汎用ディスクリート
             TypedEvent::Discrete { offset: event_data[0] & 0x0F, event_data }
         }
         other => return Err(SelParseError::UnknownEventType(other)),
@@ -738,8 +727,8 @@ fn parse_sensor_specific(
             };
             Ok(SensorSpecificEvent::Processor(ev))
         }
-        // Pattern repeats for Temperature, Voltage, Fan, etc.
-        // Each sensor type maps its offsets to a dedicated enum.
+        // Temperature、Voltage、Fan なども同様のパターンが繰り返される。
+        // 各センサータイプがそのオフセットを専用の列挙型にマップする。
         _ => Err(SelParseError::InvalidEventData {
             reason: "sensor-specific dispatch not implemented for this sensor type",
         }),
@@ -747,19 +736,18 @@ fn parse_sensor_specific(
 }
 ```
 
-### Step 4 — Consuming Typed SEL Records
+### ステップ4 — 型付きSELレコードの消費
 
-Once parsed, downstream code pattern-matches on the nested enums. The compiler
-enforces exhaustive handling — no silent fallthrough, no forgotten sensor type:
+一度パースされれば、下流のコードはネストされた列挙型に対してパターンマッチを行います。コンパイラが網羅的な処理を強制するため、暗黙のフォールスルーやセンサータイプの失念は起こり得ません：
 
 ```rust,ignore
-/// Determine whether a SEL event should trigger a hardware alert.
-/// The compiler ensures every variant is handled.
+/// SELイベントがハードウェアアラートを発生させるべきかを判定。
+/// コンパイラがすべてのバリアントの処理を保証する。
 fn should_alert(record: &ValidSelRecord) -> bool {
     match record {
         ValidSelRecord::SystemEvent(sys) => match &sys.event {
             TypedEvent::Threshold(t) => {
-                // Any critical or non-recoverable threshold crossing → alert
+                // 重大（Critical）または回復不能（Non-recoverable）の閾値超過 → アラート
                 matches!(t.crossing,
                     ThresholdCrossing::UpperCriticalLow
                     | ThresholdCrossing::UpperCriticalHigh
@@ -786,20 +774,20 @@ fn should_alert(record: &ValidSelRecord) -> bool {
                     | ProcessorEvent::ThermalTrip
                     | ProcessorEvent::UncorrectableMachineCheck
                 ),
-                // New sensor type variant added in a future version?
-                // ❌ Compile error: non-exhaustive patterns
+                // 将来のバージョンで新しいセンサータイプのバリアントが追加されたら？
+                // ❌ コンパイルエラー: 網羅的でないパターン
                 _ => false,
             },
             TypedEvent::Discrete { .. } => false,
         },
-        // OEM records are not alertable in this policy
+        // このポリシーではOEMレコードはアラート対象外
         ValidSelRecord::OemTimestamped(_) => false,
         ValidSelRecord::OemNonTimestamped(_) => false,
     }
 }
 
-/// Generate a human-readable description.
-/// Every branch produces a specific message — no "unknown event" fallback.
+/// 人間が読める説明文を生成。
+/// すべての分岐が固有のメッセージを生成 — 「不明なイベント」へのフォールバックは不要。
 fn describe(record: &ValidSelRecord) -> String {
     match record {
         ValidSelRecord::SystemEvent(sys) => {
@@ -831,18 +819,17 @@ fn describe(record: &ValidSelRecord) -> String {
 }
 ```
 
-### Walkthrough: End-to-End SEL Processing
+### ウォークスルー: エンドツーエンドのSEL処理
 
-Here's a complete flow — from raw bytes off the wire to an alert decision —
-showing every typed handoff:
+ワイヤからの生のバイト列からアラート判定に至るまでの完全なフローを以下に示します。型による受け渡しのすべてを確認できます：
 
 ```rust,ignore
-/// Process all SEL entries from a BMC, producing typed alerts.
+/// BMCからのすべてのSELエントリを処理し、型付きアラートを生成
 fn process_sel_log(raw_entries: &[[u8; 16]]) -> Vec<String> {
     let mut alerts = Vec::new();
 
     for (i, raw_bytes) in raw_entries.iter().enumerate() {
-        // ─── Boundary: raw bytes → validated record ───
+        // ─── 境界: 生のバイト列 → 検証済みレコード ───
         let raw = RawSelRecord(*raw_bytes);
         let record = match ValidSelRecord::try_from(raw) {
             Ok(r) => r,
@@ -852,24 +839,24 @@ fn process_sel_log(raw_entries: &[[u8; 16]]) -> Vec<String> {
             }
         };
 
-        // ─── From here, everything is typed ───
+        // ─── ここから先はすべて型付けされている ───
 
-        // 1. Describe the event (exhaustive match — every variant covered)
+        // 1. イベントを説明（網羅的マッチ — 全バリアントをカバー）
         let description = describe(&record);
         println!("SEL[{i}]: {description}");
 
-        // 2. Check alert policy (exhaustive match — compiler proves completeness)
+        // 2. アラートポリシーを検査（網羅的マッチ — コンパイラが完全性を証明）
         if should_alert(&record) {
             alerts.push(description);
         }
 
-        // 3. Extract dimensional readings from threshold events
+        // 3. 閾値イベントから次元付きの読み取り値を抽出
         if let ValidSelRecord::SystemEvent(sys) = &record {
             if let TypedEvent::Threshold(t) = &sys.event {
-                // The compiler knows t.trigger_reading is a threshold event reading,
-                // not an arbitrary byte. After SDR linearization (ch06), this becomes:
+                // コンパイラは t.trigger_reading が任意のバイトではなく閾値イベントの読み取り値であることを知っている。
+                // SDR線形化（第6章）の後、これは以下になる:
                 //   let temp: Celsius = linearize(t.trigger_reading, &sdr);
-                // And then Celsius can't be compared with Rpm.
+                // そして Celsius は Rpm と比較できなくなる。
                 println!(
                     "  → raw reading: 0x{:02X}, raw threshold: 0x{:02X}",
                     t.trigger_reading, t.threshold_value
@@ -882,38 +869,38 @@ fn process_sel_log(raw_entries: &[[u8; 16]]) -> Vec<String> {
 }
 
 fn main() {
-    // Example: two SEL entries (fabricated for illustration)
+    // 例: 2つのSELエントリ（説明用の架空データ）
     let sel_data: Vec<[u8; 16]> = vec![
-        // Entry 1: System event, Memory sensor #3, sensor-specific,
-        //          offset 0x00 = CorrectableEcc, assertion
+        // エントリ 1: システムイベント, メモリセンサー #3, センサー固有,
+        //            オフセット 0x00 = CorrectableEcc, アサーション
         [
-            0x01, 0x00,       // record ID: 1
-            0x02,             // record type: system event
-            0x00, 0x00, 0x00, 0x00, // timestamp (stub)
-            0x20,             // generator: IPMB slave addr 0x20
-            0x00,             // channel/lun
-            0x04,             // event message rev
-            0x0C,             // sensor type: Memory (0x0C)
-            0x03,             // sensor number: 3
-            0x6F,             // event dir: assertion, event type: sensor-specific
-            0x00,             // event data 1: offset 0x00 = CorrectableEcc
-            0x00, 0x00,       // event data 2-3
+            0x01, 0x00,       // レコードID: 1
+            0x02,             // レコードタイプ: システムイベント
+            0x00, 0x00, 0x00, 0x00, // タイムスタンプ（スタブ）
+            0x20,             // ジェネレータ: IPMBスレーブアドレス 0x20
+            0x00,             // チャネル/LUN
+            0x04,             // イベントメッセージリビジョン
+            0x0C,             // センサータイプ: メモリ (0x0C)
+            0x03,             // センサー番号: 3
+            0x6F,             // イベント方向: アサーション, イベントタイプ: センサー固有
+            0x00,             // イベントデータ 1: オフセット 0x00 = CorrectableEcc
+            0x00, 0x00,       // イベントデータ 2-3
         ],
-        // Entry 2: System event, Temperature sensor #1, threshold,
-        //          offset 0x09 = UpperCriticalHigh, reading=95, threshold=90
+        // エントリ 2: システムイベント, 温度センサー #1, 閾値,
+        //            オフセット 0x09 = UpperCriticalHigh, 読み取り値=95, 閾値=90
         [
-            0x02, 0x00,       // record ID: 2
-            0x02,             // record type: system event
-            0x00, 0x00, 0x00, 0x00, // timestamp (stub)
-            0x20,             // generator
-            0x00,             // channel/lun
-            0x04,             // event message rev
-            0x01,             // sensor type: Temperature (0x01)
-            0x01,             // sensor number: 1
-            0x01,             // event dir: assertion, event type: threshold (0x01)
-            0x09,             // event data 1: offset 0x09 = UpperCriticalHigh
-            0x5F,             // event data 2: trigger reading (95 raw)
-            0x5A,             // event data 3: threshold value (90 raw)
+            0x02, 0x00,       // レコードID: 2
+            0x02,             // レコードタイプ: システムイベント
+            0x00, 0x00, 0x00, 0x00, // タイムスタンプ（スタブ）
+            0x20,             // ジェネレータ
+            0x00,             // チャネル/LUN
+            0x04,             // イベントメッセージリビジョン
+            0x01,             // センサータイプ: 温度 (0x01)
+            0x01,             // センサー番号: 1
+            0x01,             // イベント方向: アサーション, イベントタイプ: 閾値 (0x01)
+            0x09,             // イベントデータ 1: オフセット 0x09 = UpperCriticalHigh
+            0x5F,             // イベントデータ 2: トリガー読み取り値 (生値 95)
+            0x5A,             // イベントデータ 3: 閾値 (生値 90)
         ],
     ];
 
@@ -925,7 +912,7 @@ fn main() {
 }
 ```
 
-**Expected output:**
+**期待される出力:**
 
 ```text
 SEL[0]: Memory sensor #3: Memory(CorrectableEcc) asserted
@@ -936,48 +923,39 @@ SEL[1]: Temperature sensor #1: UpperCriticalHigh asserted (reading: 0x5F, thresh
   🚨 Temperature sensor #1: UpperCriticalHigh asserted (reading: 0x5F, threshold: 0x5A)
 ```
 
-Entry 0 (correctable ECC) is logged but not alerted. Entry 1 (upper critical
-temperature) triggers an alert. Both decisions are enforced by exhaustive pattern
-matching — the compiler proves every sensor type and threshold crossing is handled.
+エントリ0（訂正可能ECC）はログ記録されますがアラートは発生しません。エントリ1（上限臨界温度超過）はアラートをトリガーします。どちらの判定も網羅的なパターンマッチングによって強制されており、すべてのセンサータイプと閾値超過が処理されていることがコンパイラによって証明されます。
 
-### From Parsed Events to Redfish Health: The Consumer Pipeline
+### パース済みイベントからRedfishヘルスへ: 消費側パイプライン
 
-The walkthrough above ends with alerts — but in a real BMC, parsed SEL records
-flow into the Redfish health rollup ([ch18](ch18-redfish-server-walkthrough.md)).
-The current handoff is a lossy `bool`:
+上のウォークスルーはアラートで終わっていますが、実際のBMCでは、パースされたSELレコードはRedfishのヘルス集約（[第18章](ch18-redfish-server-walkthrough.md)）へと送られます。現在の受け渡しは情報が失われる `bool` です：
 
 ```rust,ignore
-// ❌ Lossy — throws away per-subsystem detail
+// ❌ 不可逆（情報損失） — サブシステムごとの詳細が失われる
 pub struct SelSummary {
     pub has_critical_events: bool,
     pub total_entries: u32,
 }
 ```
 
-This loses everything the type system just gave us: which subsystem is affected,
-what severity level, and whether the reading carries dimensional data. Let's build
-the full pipeline.
+これでは、型システムがもたらしてくれた情報 — どのサブシステムが影響を受けているのか、どの重要度レベルか、読み取り値に次元データが付いているか — がすべて失われてしまいます。完全なパイプラインを構築しましょう。
 
-#### Step 1 — SDR Linearization: Raw Bytes → Dimensional Types (ch06)
+#### ステップ1 — SDR線形化: 生バイト → 次元型（第6章）
 
-Threshold SEL events carry raw sensor readings in event data bytes 2-3. The IPMI
-SDR (Sensor Data Record) provides the linearization formula. After linearization,
-the raw byte becomes a dimensional type:
+閾値SELイベントは、イベントデータバイト2-3に生のセンサー読み取り値を保持しています。IPMIのSDR（Sensor Data Record）が線形化の計算式を提供します。線形化の後、生のバイトは次元型になります：
 
 ```rust,ignore
-/// SDR linearization coefficients for a single sensor.
-/// See IPMI spec section 36.3 for the full formula.
+/// 単一センサーのSDR線形化係数。
+/// 完全な計算式はIPMI仕様書セクション36.3を参照。
 pub struct SdrLinearization {
     pub sensor_type: SensorType,
-    pub m: i16,        // multiplier
-    pub b: i16,        // offset
-    pub r_exp: i8,     // result exponent (power-of-10)
-    pub b_exp: i8,     // B exponent
+    pub m: i16,        // 乗数
+    pub b: i16,        // オフセット
+    pub r_exp: i8,     // 結果指数（10の累乗）
+    pub b_exp: i8,     // B指数
 }
 
-/// A linearized sensor reading with its unit attached.
-/// The return type depends on the sensor type — the compiler
-/// enforces that temperature sensors produce Celsius, not Rpm.
+/// 単位が付与された線形化済みのセンサー読み取り値。
+/// 戻り値の型はセンサータイプに依存する — 温度センサーがRpmではなくCelsiusを生成することをコンパイラが強制する。
 #[derive(Debug, Clone)]
 pub enum LinearizedReading {
     Temperature(Celsius),
@@ -991,9 +969,9 @@ pub enum LinearizedReading {
 pub struct Amps(pub f64);
 
 impl SdrLinearization {
-    /// Apply the IPMI linearization formula:
+    /// IPMI線形化の計算式を適用:
     ///   y = (M × raw + B × 10^B_exp) × 10^R_exp
-    /// Returns a dimensional type based on the sensor type.
+    /// センサータイプに基づく次元型を返す。
     pub fn linearize(&self, raw: u8) -> LinearizedReading {
         let y = (self.m as f64 * raw as f64
                 + self.b as f64 * 10_f64.powi(self.b_exp as i32))
@@ -1005,28 +983,26 @@ impl SdrLinearization {
             SensorType::Fan         => LinearizedReading::Fan(Rpm(y as u32)),
             SensorType::Current     => LinearizedReading::Current(Amps(y)),
             SensorType::PowerSupply => LinearizedReading::Power(Watts(y)),
-            // Other sensor types — extend as needed
+            // その他のセンサータイプ — 必要に応じて拡張
             _ => LinearizedReading::Temperature(Celsius(y)),
         }
     }
 }
 ```
 
-With this, the raw byte `0x5F` (95 decimal) from our SEL walkthrough becomes
-`Celsius(95.0)` — and the compiler prevents comparing it with `Rpm` or `Watts`.
+これによって、SELウォークスルーの生バイト `0x5F`（10進数で95）は `Celsius(95.0)` になり、コンパイラによって `Rpm` や `Watts` との比較が防止されます。
 
-#### Step 2 — Per-Subsystem Health Classification
+#### ステップ2 — サブシステムごとのヘルス分類
 
-Instead of collapsing everything into `has_critical_events: bool`, classify each
-parsed SEL event into a per-subsystem health bucket:
+すべてを `has_critical_events: bool` に集約するのではなく、パースされた各SELイベントをサブシステムごとのヘルス分類バケットに分類します：
 
 ```rust,ignore
-/// Worst-of health value — Ord gives us `.max()` for free.
-/// (Full definition in ch18; reproduced here for the SEL pipeline.)
+/// 最悪値のヘルス値 — Ord により `.max()` が自動で利用可能
+/// （完全な定義は第18章にあり、ここではSELパイプラインのために再現）
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum HealthValue { OK, Warning, Critical }
 
-/// Health contribution from a single SEL event, classified by subsystem.
+/// 単一のSELイベントによるヘルスの寄与度。サブシステムごとに分類。
 #[derive(Debug, Clone)]
 pub enum SubsystemHealth {
     Processor(HealthValue),
@@ -1038,20 +1014,20 @@ pub enum SubsystemHealth {
     Security(HealthValue),
 }
 
-/// Classify a typed SEL event into per-subsystem health.
-/// Exhaustive matching ensures every sensor type contributes.
+/// 型付きSELイベントをサブシステムごとのヘルスに分類。
+/// 網羅的マッチングにより、すべてのセンサータイプが確実に寄与する。
 fn classify_event_health(record: &SystemEventRecord) -> SubsystemHealth {
     match &record.event {
         TypedEvent::Threshold(t) => {
-            // Threshold severity depends on the crossing level
+            // 閾値の重要度は超過レベルに依存する
             let health = match t.crossing {
-                // Non-critical → Warning
+                // 非重大（Non-critical） → Warning
                 ThresholdCrossing::UpperNonCriticalLow
                 | ThresholdCrossing::UpperNonCriticalHigh
                 | ThresholdCrossing::LowerNonCriticalLow
                 | ThresholdCrossing::LowerNonCriticalHigh => HealthValue::Warning,
 
-                // Critical or Non-recoverable → Critical
+                // 重大（Critical）または回復不能（Non-recoverable） → Critical
                 ThresholdCrossing::UpperCriticalLow
                 | ThresholdCrossing::UpperCriticalHigh
                 | ThresholdCrossing::LowerCriticalLow
@@ -1062,7 +1038,7 @@ fn classify_event_health(record: &SystemEventRecord) -> SubsystemHealth {
                 | ThresholdCrossing::LowerNonRecoverableHigh => HealthValue::Critical,
             };
 
-            // Route to the correct subsystem based on sensor type
+            // センサータイプに基づいて適切なサブシステムに振り分ける
             match record.sensor_type {
                 SensorType::Temperature => SubsystemHealth::Thermal(health),
                 SensorType::Voltage     => SubsystemHealth::PowerSupply(health),
@@ -1136,7 +1112,7 @@ fn classify_event_health(record: &SystemEventRecord) -> SubsystemHealth {
             SensorSpecificEvent::Watchdog(_) =>
                 SubsystemHealth::Processor(HealthValue::Warning),
 
-            // Temperature, Voltage, Fan sensor-specific events
+            // 温度、電圧、ファンのセンサー固有イベント
             SensorSpecificEvent::Temperature(_) =>
                 SubsystemHealth::Thermal(HealthValue::Warning),
             SensorSpecificEvent::Voltage(_) =>
@@ -1146,7 +1122,7 @@ fn classify_event_health(record: &SystemEventRecord) -> SubsystemHealth {
         },
 
         TypedEvent::Discrete { .. } => {
-            // Generic discrete — classify by sensor type with Warning
+            // 汎用ディスクリート — センサータイプごとにWarningとして分類
             match record.sensor_type {
                 SensorType::Processor => SubsystemHealth::Processor(HealthValue::Warning),
                 SensorType::Memory    => SubsystemHealth::Memory(HealthValue::Warning),
@@ -1157,21 +1133,17 @@ fn classify_event_health(record: &SystemEventRecord) -> SubsystemHealth {
 }
 ```
 
-Every `match` arm is exhaustive — add a new `MemoryEvent` variant and the compiler
-forces you to decide its severity. Add a new `SensorSpecificEvent` variant and
-every consumer must classify it. This is the payoff of the enum tree from the
-parsing section.
+すべての `match` アームは網羅的です — 新しい `MemoryEvent` バリアントを追加すると、コンパイラはその重要度の決定を強制します。新しい `SensorSpecificEvent` バリアントを追加すると、すべての消費側がそれを分類しなければなりません。これがパースセクションで構築した列挙型ツリーの恩恵です。
 
-#### Step 3 — Aggregate into a Typed SEL Summary
+#### ステップ3 — 型付きSELサマリへの集約
 
-Replace the lossy `bool` with a structured summary that preserves per-subsystem
-health:
+情報が失われる `bool` を、サブシステムごとのヘルスを保持する構造化サマリに置き換えます：
 
 ```rust,ignore
 use std::collections::HashMap;
 
-/// Rich SEL summary — per-subsystem health derived from typed events.
-/// This is what gets handed to the Redfish server (ch18) for health rollup.
+/// リッチなSELサマリ — 型付きイベントから導出されたサブシステムごとのヘルス。
+/// これがヘルス集約のためにRedfishサーバー（第18章）に渡される。
 #[derive(Debug, Clone)]
 pub struct TypedSelSummary {
     pub total_entries: u32,
@@ -1182,11 +1154,11 @@ pub struct TypedSelSummary {
     pub fan_health: HealthValue,
     pub storage_health: HealthValue,
     pub security_health: HealthValue,
-    /// Dimensional readings from threshold events (post-linearization).
+    /// 閾値イベントからの次元付き読み取り値（線形化後）
     pub threshold_readings: Vec<LinearizedThresholdEvent>,
 }
 
-/// A threshold event with linearized readings attached.
+/// 線形化された読み取り値が付与された閾値イベント
 #[derive(Debug, Clone)]
 pub struct LinearizedThresholdEvent {
     pub sensor_type: SensorType,
@@ -1196,8 +1168,8 @@ pub struct LinearizedThresholdEvent {
     pub threshold_value: LinearizedReading,
 }
 
-/// Build a TypedSelSummary from parsed SEL records.
-/// This is the consumer pipeline: parse (Step 0 above) → classify → aggregate.
+/// パースされたSELレコードから TypedSelSummary を構築。
+/// これが消費側パイプライン: パース（上記ステップ0）→ 分類 → 集約。
 pub fn summarize_sel(
     records: &[ValidSelRecord],
     sdr_table: &HashMap<u8, SdrLinearization>,
@@ -1216,10 +1188,10 @@ pub fn summarize_sel(
         count += 1;
 
         let ValidSelRecord::SystemEvent(sys) = record else {
-            continue; // OEM records don't contribute to health
+            continue; // OEMレコードはヘルスに寄与しない
         };
 
-        // ── Classify event → per-subsystem health ──
+        // ── イベントの分類 → サブシステム別ヘルス ──
         let health = classify_event_health(sys);
         match &health {
             SubsystemHealth::Processor(h) => processor = processor.max(*h),
@@ -1231,7 +1203,7 @@ pub fn summarize_sel(
             SubsystemHealth::Security(h)  => security = security.max(*h),
         }
 
-        // ── Linearize threshold readings if SDR is available ──
+        // ── SDRが存在する場合は閾値読み取り値を線形化 ──
         if let TypedEvent::Threshold(t) = &sys.event {
             if let Some(sdr) = sdr_table.get(&sys.sensor_number) {
                 threshold_readings.push(LinearizedThresholdEvent {
@@ -1259,23 +1231,22 @@ pub fn summarize_sel(
 }
 ```
 
-#### Step 4 — The Full Pipeline: Raw Bytes → Redfish Health
+#### ステップ4 — 完全なパイプライン: 生バイト → Redfishヘルス
 
-Here's the complete consumer pipeline, showing every typed handoff from raw SEL
-bytes to Redfish-ready health values:
+生のSELバイト列からRedfish対応のヘルス値に至る、型による受け渡しの全貌を示す完全な消費側パイプラインです：
 
 ```mermaid
 flowchart LR
-    RAW["Raw [u8; 16]<br/>SEL entries"]
-    PARSE["TryFrom:<br/>ValidSelRecord<br/>(enum tree)"]
-    CLASSIFY["classify_event_health<br/>(exhaustive match)"]
-    LINEARIZE["SDR linearize<br/>raw → Celsius/Rpm/Watts"]
-    SUMMARY["TypedSelSummary<br/>(per-subsystem health<br/>+ dimensional readings)"]
-    REDFISH["ch18: health rollup<br/>→ Status.Health JSON"]
+    RAW["生の [u8; 16]<br/>SELエントリ"]
+    PARSE["TryFrom:<br/>ValidSelRecord<br/>(enumツリー)"]
+    CLASSIFY["classify_event_health<br/>(網羅的マッチ)"]
+    LINEARIZE["SDR線形化<br/>生値 → Celsius/Rpm/Watts"]
+    SUMMARY["TypedSelSummary<br/>(サブシステム別ヘルス<br/>+ 次元付き読み取り値)"]
+    REDFISH["第18章: ヘルス集約<br/>→ Status.Health JSON"]
 
-    RAW -->|"ch07 §Parse"| PARSE
-    PARSE -->|"typed events"| CLASSIFY
-    PARSE -->|"threshold bytes"| LINEARIZE
+    RAW -->|"第7章 §パース"| PARSE
+    PARSE -->|"型付きイベント"| CLASSIFY
+    PARSE -->|"閾値バイト"| LINEARIZE
     CLASSIFY -->|"SubsystemHealth"| SUMMARY
     LINEARIZE -->|"LinearizedReading"| SUMMARY
     SUMMARY -->|"TypedSelSummary"| REDFISH
@@ -1292,59 +1263,59 @@ flowchart LR
 use std::collections::HashMap;
 
 fn full_sel_pipeline() {
-    // ── Raw SEL data from BMC ──
+    // ── BMCからの生のSELデータ ──
     let raw_entries: Vec<[u8; 16]> = vec![
-        // Memory correctable ECC on sensor #3
+        // センサー #3 でのメモリ訂正可能ECC
         [0x01,0x00, 0x02, 0x00,0x00,0x00,0x00,
          0x20,0x00, 0x04, 0x0C, 0x03, 0x6F, 0x00, 0x00,0x00],
-        // Temperature upper critical on sensor #1, reading=95, threshold=90
+        // センサー #1 での温度上限臨界値超過、読み取り値=95, 閾値=90
         [0x02,0x00, 0x02, 0x00,0x00,0x00,0x00,
          0x20,0x00, 0x04, 0x01, 0x01, 0x01, 0x09, 0x5F,0x5A],
-        // PSU failure on sensor #5
+        // センサー #5 でのPSU障害
         [0x03,0x00, 0x02, 0x00,0x00,0x00,0x00,
          0x20,0x00, 0x04, 0x08, 0x05, 0x6F, 0x01, 0x00,0x00],
     ];
 
-    // ── Step 0: Parse at the boundary (ch07 TryFrom) ──
+    // ── ステップ 0: 境界でのパース（第7章 TryFrom） ──
     let records: Vec<ValidSelRecord> = raw_entries.iter()
         .filter_map(|raw| ValidSelRecord::try_from(RawSelRecord(*raw)).ok())
         .collect();
 
-    // ── Step 1-3: Classify + linearize + aggregate ──
+    // ── ステップ 1-3: 分類 + 線形化 + 集約 ──
     let mut sdr_table = HashMap::new();
     sdr_table.insert(1u8, SdrLinearization {
         sensor_type: SensorType::Temperature,
-        m: 1, b: 0, r_exp: 0, b_exp: 0,  // 1:1 mapping for this example
+        m: 1, b: 0, r_exp: 0, b_exp: 0,  // この例では1:1のマッピング
     });
 
     let summary = summarize_sel(&records, &sdr_table);
 
-    // ── Result: structured, typed, Redfish-ready ──
+    // ── 結果: 構造化され、型付けされた、Redfish対応のデータ ──
     println!("SEL Summary:");
     println!("  Total entries: {}", summary.total_entries);
     println!("  Processor:  {:?}", summary.processor_health);  // OK
-    println!("  Memory:     {:?}", summary.memory_health);      // OK (correctable → OK)
-    println!("  Power:      {:?}", summary.power_health);       // Critical (PSU failure)
-    println!("  Thermal:    {:?}", summary.thermal_health);     // Critical (upper critical)
+    println!("  Memory:     {:?}", summary.memory_health);      // OK (訂正可能 → OK)
+    println!("  Power:      {:?}", summary.power_health);       // Critical (PSU障害)
+    println!("  Thermal:    {:?}", summary.thermal_health);     // Critical (上限臨界超過)
     println!("  Fan:        {:?}", summary.fan_health);         // OK
     println!("  Security:   {:?}", summary.security_health);    // OK
 
-    // Dimensional readings preserved from threshold events:
+    // 閾値イベントから保持された次元付き読み取り値:
     for r in &summary.threshold_readings {
         println!("  Threshold: sensor {:?} #{} — {:?} crossed {:?}",
             r.sensor_type, r.sensor_number,
             r.trigger_reading, r.crossing);
-        // trigger_reading is LinearizedReading::Temperature(Celsius(95.0))
-        // — not a raw byte, not an untyped f64
+        // trigger_reading は LinearizedReading::Temperature(Celsius(95.0))
+        // — 生のバイトでも、型のない f64 でもない
     }
 
-    // ── This summary feeds directly into ch18's health rollup ──
-    // compute_system_health() can now use per-subsystem values
-    // instead of a single `has_critical_events: bool`
+    // ── このサマリは第18章のヘルス集約に直接送られる ──
+    // compute_system_health() は単一の `has_critical_events: bool` の代わりに
+    // サブシステムごとの値を使用できるようになる
 }
 ```
 
-**Expected output:**
+**期待される出力:**
 
 ```text
 SEL Summary:
@@ -1358,61 +1329,55 @@ SEL Summary:
   Threshold: sensor Temperature #1 — Temperature(Celsius(95.0)) crossed UpperCriticalHigh
 ```
 
-#### What the Consumer Pipeline Proves
+#### 消費側パイプラインが証明するもの
 
-| Stage | Pattern | What's Enforced |
+| ステージ | パターン | 強制される事項 |
 |-------|---------|-----------------|
-| Parse | Validated boundary (ch07) | Every consumer works with typed enums, never raw bytes |
-| Classify | Exhaustive matching | Every sensor type and event variant maps to a health value — can't forget one |
-| Linearize | Dimensional analysis (ch06) | Raw byte 0x5F becomes `Celsius(95.0)`, not `f64` — can't confuse with RPM |
-| Aggregate | Typed fold | Per-subsystem health uses `HealthValue::max()` — `Ord` guarantees correctness |
-| Handoff | Structured summary | ch18 receives `TypedSelSummary` with 7 subsystem health values, not a `bool` |
+| パース | 検証済み境界（第7章） | すべての消費側が生バイトではなく型付き列挙型を扱う |
+| 分類 | 網羅的パターンマッチング | すべてのセンサータイプとイベントバリアントがヘルス値にマップされる（忘れることができない） |
+| 線形化 | 次元解析（第6章） | 生バイト0x5Fが `f64` ではなく `Celsius(95.0)` になる（RPMと混同できない） |
+| 集約 | 型付き畳み込み（Fold） | サブシステム別ヘルスに `HealthValue::max()` を使用（`Ord` が正しさを保証） |
+| 引き渡し | 構造化サマリ | 第18章が単なる `bool` ではなく7つのサブシステムヘルス値を含む `TypedSelSummary` を受け取る |
 
-Compare with the untyped C pipeline:
+型付けされていないCのパイプラインとの比較：
 
-| Step | C | Rust |
+| ステップ | C言語 | Rust |
 |------|---|------|
-| Parse record type | `switch` with possible fallthrough | `match` on enum — exhaustive |
-| Classify severity | manual `if` chain, forgot PSU | exhaustive `match` — compiler error on missing variant |
-| Linearize reading | `double` — no unit | `Celsius` / `Rpm` / `Watts` — distinct types |
-| Aggregate health | `bool has_critical` | 7 typed subsystem fields |
-| Handoff to Redfish | untyped `json_object_set("Health", "OK")` | `TypedSelSummary` → typed health rollup (ch18) |
+| レコードタイプのパース | フォールスルーの可能性がある `switch` | 列挙型に対する `match` — 網羅的 |
+| 重要度の分類 | 手動の `if` 連鎖、PSUの処理忘れ | 網羅的な `match` — バリアント欠落時はコンパイルエラー |
+| 読み取り値の線形化 | `double` — 単位なし | `Celsius` / `Rpm` / `Watts` — 個別の型 |
+| ヘルスの集約 | `bool has_critical` | 7つの型付きサブシステムフィールド |
+| Redfishへの引き渡し | 型のない `json_object_set("Health", "OK")` | `TypedSelSummary` → 型付きヘルス集約（第18章） |
 
-The Rust pipeline doesn't just prevent more bugs — it **produces richer output**.
-The C pipeline loses information at every stage (polymorphic → flat, dimensional →
-untyped, per-subsystem → single bool). The Rust pipeline preserves it all, because
-the type system makes it **easier to keep the structure than to throw it away**.
+Rustパイプラインはバグを防ぐだけでなく、**よりリッチな出力を生み出します**。Cのパイプラインはすべての段階で情報を失いますが（多相→フラット、次元付き→型なし、サブシステム別→単一bool）、Rustのパイプラインはすべてを保持します。型システムによって**構造を捨てるよりも保持する方が簡単になる**からです。
 
-### What the Compiler Proves
+### コンパイラが証明するもの
 
-| Bug in C | How Rust prevents it |
+| C言語でのバグ | Rustでの防止策 |
 |----------|---------------------|
-| Forgot to check record type | `match` on `ValidSelRecord` — must handle all three variants |
-| Wrong byte index for trigger reading | Parsed once into `ThresholdEvent.trigger_reading` — consumers never touch raw bytes |
-| Missing `case` for a sensor type | `SensorSpecificEvent` match is exhaustive — compiler error on missing variant |
-| Silently dropped OEM records | Enum variant exists — must be handled or explicitly `_ =>` ignored |
-| Compared threshold reading (°C) with fan offset | After SDR linearization, `Celsius` ≠ `Rpm` (ch06) |
-| Added new sensor type, forgot alert logic | `#[non_exhaustive]` + exhaustive match → compiler error in downstream crates |
-| Event data parsed differently in two code paths | Single `parse_system_event()` boundary — one source of truth |
+| レコードタイプのチェック忘れ | `ValidSelRecord` に対する `match` — 3つのバリアントすべてを処理する必要がある |
+| トリガー読み取り値の誤ったバイト位置指定 | `ThresholdEvent.trigger_reading` に一度だけパース — 消費側が生バイトに触れることはない |
+| あるセンサータイプの `case` の書き忘れ | `SensorSpecificEvent` のマッチは網羅的 — バリアント欠落時はコンパイルエラー |
+| OEMレコードの暗黙のドロップ | 列挙型バリアントが存在 — 処理するか明示的に `_ =>` で無視する必要がある |
+| 閾値読み取り値（°C）とファンオフセットの比較 | SDR線形化後、`Celsius` ≠ `Rpm`（第6章） |
+| 新しいセンサータイプを追加したがアラートロジックを更新し忘れた | `#[non_exhaustive]` + 網羅的マッチ → 下流クレートでコンパイルエラー |
+| 2つのコードパスでイベントデータが異なってパースされた | 単一の `parse_system_event()` 境界 — 信頼できる唯一の情報源（Single Source of Truth） |
 
-### The Three-Beat Pattern
+### 3段階のビートパターン
 
-Looking back at this chapter's three case studies, notice the **graduated arc**:
+本章の3つのケーススタディを振り返ると、**段階的な発展の弧**が見て取れます：
 
-| Case Study | Input Shape | Parsing Complexity | Key Technique |
+| ケーススタディ | 入力形式 | パースの複雑さ | 主要テクニック |
 |---|---|---|---|
-| **FRU** (bytes) | Flat, fixed layout | One `TryFrom`, check fields | Validated boundary type |
-| **Redfish** (JSON) | Structured, known schema | One `TryFrom`, check fields + nesting | Same technique, different transport |
-| **SEL** (polymorphic bytes) | Nested discriminated union | Dispatch chain: record type → event type → sensor type | Enum tree + exhaustive matching |
+| **FRU**（バイト列） | フラット、固定レイアウト | 単一の `TryFrom`、各フィールドをチェック | 検証済み境界型 |
+| **Redfish**（JSON） | 構造化、既知のスキーマ | 単一の `TryFrom`、フィールドとネストをチェック | 同じテクニック、異なるトランスポート |
+| **SEL**（多相バイト列） | ネストされたタグ付き共用体 | ディスパッチの連鎖: レコードタイプ → イベントタイプ → センサータイプ | 列挙型ツリー + 網羅的マッチング |
 
-The principle is identical in all three: **validate once at the boundary, carry
-the proof in the type, never re-check.** The SEL case study shows this principle
-scales to arbitrarily complex polymorphic data — the type system handles nested
-dispatch just as naturally as flat field validation.
+3つすべてにおいて原則は同一です：**境界で一度だけ検証し、証明を型に持たせ、二度と再検査しない。** SELのケーススタディは、この原則が任意の複雑さを持つ多相データにもスケールすることを示しています — 型システムはフラットなフィールド検証と同様に、ネストされたディスパッチも自然に扱えるのです。
 
-## Composing Validated Types
+## 検証済み型の合成
 
-Validated types compose — a struct of validated fields is itself validated:
+検証済みの型は合成可能です — 検証済みのフィールドからなる構造体も、それ自体が検証済みとなります：
 
 ```rust,ignore
 # #[derive(Debug)]
@@ -1420,48 +1385,47 @@ Validated types compose — a struct of validated fields is itself validated:
 # #[derive(Debug)]
 # pub struct ValidThermalResponse { }
 
-/// A fully validated system snapshot.
-/// Each field was validated independently; the composite is also valid.
+/// 完全に検証されたシステムスナップショット。
+/// 各フィールドが独立して検証されており、その複合体もまた有効である。
 #[derive(Debug)]
 pub struct ValidSystemSnapshot {
     pub fru: ValidFru,
     pub thermal: ValidThermalResponse,
-    // Each field carries its own validity guarantee.
-    // No need for a "validate_snapshot()" function.
+    // 各フィールドが独自の妥当性保証を保持している。
+    // 「validate_snapshot()」関数を用意する必要はない。
 }
 
-/// Because ValidSystemSnapshot is composed of validated parts,
-/// any function that receives it can trust ALL the data.
+/// ValidSystemSnapshot は検証済みの部品で構成されているため、
+/// これを受け取る関数はすべてのデータを信頼できる。
 fn generate_health_report(snapshot: &ValidSystemSnapshot) {
     println!("FRU version: {}", snapshot.fru.format_version);
-    // No validation needed — the type guarantees everything
+    // バリデーション不要 — 型がすべてを保証している
 }
 ```
 
-### The Key Insight
+### 核心となる洞察
 
-> **Validate at the boundary. Carry the proof in the type. Never re-check.**
+> **境界で検証せよ。証明を型に持たせよ。二度と再検査するな。**
 
-This eliminates an entire class of bugs: "forgot to validate in this one function."
-If a function takes `&ValidFru`, the data IS valid. Period.
+これにより、「この関数でのバリデーションを忘れていた」という類のバグ全体が根絶されます。関数が `&ValidFru` を受け取るなら、そのデータは間違いなく有効です。例外はありません。
 
-### When to Use Validated Boundary Types
+### いつ検証済み境界型を使用すべきか
 
-| Data Source | Use validated boundary type? |
+| データソース | 検証済み境界型を使うべきか？ |
 |------------|:------:|
-| IPMI FRU data from BMC | ✅ Always — complex binary format |
-| Redfish JSON responses | ✅ Always — many required fields |
-| PCIe configuration space | ✅ Always — register layout is strict |
-| SMBIOS tables | ✅ Always — versioned format with checksums |
-| User-provided test parameters | ✅ Always — prevent injection |
-| Internal function calls | ❌ Usually not — types already constrain |
-| Log messages | ❌ No — best-effort, not safety-critical |
+| BMCからのIPMI FRUデータ | ✅ 常に使用 — 複雑なバイナリ形式 |
+| Redfish JSONレスポンス | ✅ 常に使用 — 多数の必須フィールド |
+| PCIeコンフィグレーション空間 | ✅ 常に使用 — レジスタレイアウトが厳格 |
+| SMBIOSテーブル | ✅ 常に使用 — チェックサム付きのバージョン管理されたフォーマット |
+| ユーザー指定のテストパラメータ | ✅ 常に使用 — インジェクションを防止 |
+| 内部関数呼び出し | ❌ 通常は不要 — すでに型によって制約されている |
+| ログメッセージ | ❌ 不要 — ベストエフォートであり安全上クリティカルではない |
 
-## Validation Boundary Flow
+## バリデーション境界のフロー
 
 ```mermaid
 flowchart LR
-    RAW["Raw bytes / JSON"] -->|"TryFrom / serde"| V{"Valid?"}
+    RAW["生のバイト列 / JSON"] -->|"TryFrom / serde"| V{"有効？"}
     V -->|Yes| VT["ValidFru / ValidRedfish"]
     V -->|No| E["Err(ParseError)"]
     VT -->|"&ValidFru"| F1["fn process()"] & F2["fn report()"] & F3["fn store()"]
@@ -1474,15 +1438,15 @@ flowchart LR
     style F3 fill:#e8f5e9,color:#000
 ```
 
-## Exercise: Validated SMBIOS Table
+## 演習問題: 検証済みSMBIOSテーブル
 
-Design a `ValidSmbiosType17` type for SMBIOS Type 17 (Memory Device) records:
-- Raw input is `&[u8]`; minimum length 21 bytes, byte 0 must be 0x11.
-- Fields: `handle: u16`, `size_mb: u16`, `speed_mhz: u16`.
-- Use `TryFrom<&[u8]>` so that all downstream functions take `&ValidSmbiosType17`.
+SMBIOS Type 17（Memory Device）レコード用の `ValidSmbiosType17` 型を設計してください：
+- 生の入力は `&[u8]`、最小長21バイト、バイト0は0x11である必要があります。
+- フィールド: `handle: u16`, `size_mb: u16`, `speed_mhz: u16`。
+- すべての下流関数が `&ValidSmbiosType17` を受け取れるように `TryFrom<&[u8]>` を実装してください。
 
 <details>
-<summary>Solution</summary>
+<summary>解答例</summary>
 
 ```rust,ignore
 #[derive(Debug)]
@@ -1496,10 +1460,10 @@ impl TryFrom<&[u8]> for ValidSmbiosType17 {
     type Error = String;
     fn try_from(raw: &[u8]) -> Result<Self, Self::Error> {
         if raw.len() < 21 {
-            return Err(format!("too short: {} < 21", raw.len()));
+            return Err(format!("データが短すぎます: {} < 21", raw.len()));
         }
         if raw[0] != 0x11 {
-            return Err(format!("wrong type: 0x{:02X} != 0x11", raw[0]));
+            return Err(format!("誤ったタイプ: 0x{:02X} != 0x11", raw[0]));
         }
         Ok(ValidSmbiosType17 {
             handle: u16::from_le_bytes([raw[1], raw[2]]),
@@ -1509,7 +1473,7 @@ impl TryFrom<&[u8]> for ValidSmbiosType17 {
     }
 }
 
-// Downstream functions take the validated type — no re-checking
+// 下流関数は検証済み型を受け取る — 再検査は不要
 pub fn report_dimm(dimm: &ValidSmbiosType17) -> String {
     format!("DIMM handle 0x{:04X}: {}MB @ {}MHz",
         dimm.handle, dimm.size_mb, dimm.speed_mhz)
@@ -1518,17 +1482,16 @@ pub fn report_dimm(dimm: &ValidSmbiosType17) -> String {
 
 </details>
 
-## Key Takeaways
+## 重要なポイント
 
-1. **Parse once at the boundary** — `TryFrom` validates raw data exactly once; all downstream code trusts the type.
-2. **Eliminate shotgun validation** — if a function takes `&ValidFru`, the data IS valid. Period.
-3. **The pattern scales from flat to polymorphic** — FRU (flat bytes), Redfish (structured JSON), and SEL (nested discriminated union) all use the same technique at increasing complexity.
-4. **Exhaustive matching is validation** — for polymorphic data like SEL, the compiler's enum exhaustiveness check prevents the "forgot a sensor type" class of bugs with zero runtime cost.
-5. **The consumer pipeline preserves structure** — parsing → classification → linearization → aggregation keeps per-subsystem health and dimensional readings intact, where C lossy-reduces to a single `bool`. The type system makes it easier to keep information than to throw it away.
-6. **`serde` is a natural boundary** — `#[derive(Deserialize)]` with `#[serde(try_from)]` validates JSON at parse time.
-7. **Compose validated types** — a `ValidServerHealth` can require `ValidFru` + `ValidThermal` + `ValidPower`.
-8. **Pair with proptest (ch14)** — fuzz the `TryFrom` boundary to ensure no valid input is rejected and no invalid input sneaks through.
-9. **These patterns compose into full Redfish workflows** — ch17 applies validated boundaries on the client side (parsing JSON responses into typed structs), while ch18 inverts the pattern on the server side (builder type-state ensures every required field is present before serialization). The SEL consumer pipeline built here feeds directly into ch18's `TypedSelSummary` health rollup.
+1. **境界で一度だけパースする** — `TryFrom` が生のデータを厳密に一度だけ検証し、すべての下流コードはその型を信頼します。
+2. **散弾銃バリデーションを根絶する** — 関数が `&ValidFru` を受け取るなら、そのデータは間違いなく有効です。例外はありません。
+3. **フラットから多相までスケールする** — FRU（フラットなバイト列）、Redfish（構造化JSON）、SEL（ネストされたタグ付き共用体）はすべて、複雑さを増しながらも同じテクニックを使用しています。
+4. **網羅的マッチングこそがバリデーション** — SELのような多相データに対して、コンパイラの列挙型網羅性チェックが「センサータイプの処理漏れ」というバグを実行時コストゼロで防ぎます。
+5. **消費側パイプラインが構造を保持する** — パース → 分類 → 線形化 → 集約により、C言語では単一の `bool` に情報縮約されてしまうサブシステム別ヘルスや次元付き読み取り値が完全に保持されます。型システムのおかげで、情報を捨てるよりも保持する方が簡単になります。
+6. **`serde` は自然な境界** — `#[serde(try_from)]` を付けた `#[derive(Deserialize)]` により、JSONをパース時に検証できます。
+7. **検証済み型を合成する** — `ValidServerHealth` は `ValidFru` + `ValidThermal` + `ValidPower` を要求するように合成できます。
+8. **proptestと組み合わせる（[第14章](ch14-testing-type-level-guarantees.md)）** — `TryFrom` 境界にファジングを行い、正当な入力が拒絶されず、不正な入力がすり抜けないことを保証します。
+9. **これらのパターンは完全なRedfishワークフローへと合成される** — 第17章ではクライアント側で検証済み境界を適用し（JSONレスポンスを型付き構造体にパース）、第18章ではサーバー側でパターンを反転させます（ビルダー型状態によりシリアライズ前にすべての必須フィールドが存在することを保証）。ここで構築したSEL消費側パイプラインは、第18章の `TypedSelSummary` ヘルス集約へと直結します。
 
 ---
-

@@ -1,58 +1,58 @@
-## Connecting enums to Option and Result
+## 列挙型と Option / Result の関係
 
-> **What you'll learn:** How Rust replaces null pointers with `Option<T>` and exceptions with `Result<T, E>`, and how the `?` operator makes error propagation concise. This is Rust's most distinctive pattern — errors are values, not hidden control flow.
+> **学習目標:** Rustがヌルポインタを `Option<T>` に、例外を `Result<T, E>` に置き換える仕組みと、`?` 演算子によってエラーの伝播がいかに簡潔になるかを学びます。これはRustの最も特徴的なパターンであり、エラーは隠れた制御フローではなく「値」として扱われます。
 
-- Remember the `enum` type we learned earlier? Rust's `Option` and `Result` are simply enums defined in the standard library:
+- 前節で学んだ `enum`（列挙型）を覚えているでしょうか？ Rustの `Option` と `Result` は、標準ライブラリで定義されている単純な列挙型にすぎません:
 ```rust
-// This is literally how Option is defined in std:
+// これは標準ライブラリにおける Option の文字通りの定義です:
 enum Option<T> {
-    Some(T),  // Contains a value
-    None,     // No value
+    Some(T),  // 値を含む
+    None,     // 値なし
 }
 
-// And Result:
+// そして Result:
 enum Result<T, E> {
-    Ok(T),    // Success with value
-    Err(E),   // Error with details
+    Ok(T),    // 成功（値を持つ）
+    Err(E),   // エラー（詳細情報を持つ）
 }
 ```
-- This means everything you learned about pattern matching with `match` works directly with `Option` and `Result`
-- There is **no null pointer** in Rust -- `Option<T>` is the replacement, and the compiler forces you to handle the `None` case
+- つまり、`match` によるパターンマッチングについて学んだ知識はすべて、`Option` や `Result` に対してそのまま利用できます
+- Rustには**ヌルポインタが存在しません** — `Option<T>` がその代替であり、コンパイラによって `None` の場合の処理が強制されます
 
-### C++ Comparison: Exceptions vs Result
-| **C++ Pattern** | **Rust Equivalent** | **Advantage** |
+### C++との比較: 例外 vs Result
+| **C++のパターン** | **Rustでの対応** | **利点** |
 |----------------|--------------------|--------------|
-| `throw std::runtime_error(msg)` | `Err(MyError::Runtime(msg))` | Error in return type — can't forget to handle |
-| `try { } catch (...) { }` | `match result { Ok(v) => ..., Err(e) => ... }` | No hidden control flow |
-| `std::optional<T>` | `Option<T>` | Exhaustive match required — can't forget None |
-| `noexcept` annotation | Default — all Rust functions are "noexcept" | Exceptions don't exist |
-| `errno` / return codes | `Result<T, E>` | Type-safe, can't ignore |
+| `throw std::runtime_error(msg)` | `Err(MyError::Runtime(msg))` | 戻り値の型にエラーが含まれる — 処理忘れが起きない |
+| `try { } catch (...) { }` | `match result { Ok(v) => ..., Err(e) => ... }` | 隠れた制御フローが存在しない |
+| `std::optional<T>` | `Option<T>` | 網羅的なマッチが必須 — None の見落としを防ぐ |
+| `noexcept` アノテーション | デフォルト — すべてのRust関数が「noexcept」 | 例外そのものが存在しない |
+| `errno` / 戻り値コード | `Result<T, E>` | 型安全で、無視することができない |
 
-# Rust Option type
-- The Rust ```Option``` type is an ```enum``` with only two variants: ```Some<T>``` and ```None```
-    - The idea is that this represents a ```nullable``` type, i.e., it either contains a valid value of that type (```Some<T>```), or has no valid value (```None```)
-    - The ```Option``` type is used in APIs where the result of an operation either succeeds and returns a valid value or it fails (but the specific error is irrelevant). For example, consider parsing a string for an integer value
+# Rustの Option 型
+- Rustの `Option` 型は、`Some<T>` と `None` の2つのバリアントのみを持つ `enum` です
+    - これは `nullable` な型を表現するものであり、その型の有効な値を含む（`Some<T>`）か、有効な値を持たない（`None`）かのいずれかです
+    - `Option` 型は、操作の結果が成功して有効な値を返すか、失敗するか（ただし特定のエラーの詳細は重要ではない）のいずれかとなるAPIで使用されます。例えば、文字列から整数値を検索する場合などを考えてみてください
 ```rust
 fn main() {
-    // Returns Option<usize>
+    // Option<usize> を返す
     let a = "1234".find("1");
     match a {
-        Some(a) => println!("Found 1 at index {a}"),
-        None => println!("Couldn't find 1")
+        Some(a) => println!("インデックス {a} で 1 が見つかりました"),
+        None => println!("1 が見つかりませんでした")
     }
 }
 ```
 
-# Rust Option type
-- Rust ```Option``` can be processed in various ways
-    - ```unwrap()``` panics if the ```Option<T>``` is ```None``` and returns ```T``` otherwise and it is the least preferred approach 
-    - ```or()``` can be used to return an alternative value 
-    - ```if let``` lets us test for ```Some<T>```
+# Rustの Option 型の操作
+- Rustの `Option` はさまざまな方法で処理できます
+    - `unwrap()` は `Option<T>` が `None` の場合にパニックし、それ以外の場合は `T` を返します。これは最も推奨されないアプローチです
+    - `or()` を使用して代替の値を返すことができます
+    - `if let` を使用して `Some<T>` であるかをテストできます
 
-> **Production patterns**: See [Safe value extraction with unwrap_or](ch17-2-avoiding-unchecked-indexing.md#safe-value-extraction-with-unwrap_or) and [Functional transforms: map, map_err, find_map](ch17-2-avoiding-unchecked-indexing.md#functional-transforms-map-map_err-find_map) for real-world examples from production Rust code.
+> **実践的なパターン**: 本番環境のRustコードにおける実際の例については、[unwrap_or による安全な値の抽出](ch17-2-avoiding-unchecked-indexing.md#safe-value-extraction-with-unwrap_or) および [関数型変換: map, map_err, find_map](ch17-2-avoiding-unchecked-indexing.md#functional-transforms-map-map_err-find_map) を参照してください。
 ```rust
 fn main() {
-  // This return an Option<usize>
+  // Option<usize> を返す
   let a = "1234".find("1");
   println!("{a:?} {}", a.unwrap());
   let a = "1234".find("5").or(Some(42));
@@ -60,44 +60,44 @@ fn main() {
   if let Some(a) = "1234".find("1") {
       println!("{a}");
   } else {
-    println!("Not found in string");
+    println!("文字列内に見つかりませんでした");
   }
-  // This will panic
+  // これはパニックする
   // "1234".find("5").unwrap();
 }
 ```
 
-# Rust Result type
-- Result is an ```enum``` type similar to ```Option``` with two variants: ```Ok<T>``` or ```Err<E>```
-    - ```Result``` is used extensively in Rust APIs that can fail. The idea is that on success, functions will return a ```Ok<T>```, or they will return a specific error ```Err<T>```
+# Rustの Result 型
+- Result は `Option` に似た `enum` 型であり、`Ok<T>` または `Err<E>` の2つのバリアントを持ちます
+    - `Result` は、失敗する可能性のあるRust APIで広く使用されています。成功時には `Ok<T>` を返し、エラー時には特定のエラー `Err<T>` を返します
 ```rust
   use std::num::ParseIntError;
   fn main() {
   let a : Result<i32, ParseIntError>  = "1234z".parse();
   match a {
-      Ok(n) => println!("Parsed {n}"),
-      Err(e) => println!("Parsing failed {e:?}"),
+      Ok(n) => println!("パース成功: {n}"),
+      Err(e) => println!("パース失敗: {e:?}"),
   }
   let a : Result<i32, ParseIntError>  = "1234z".parse().or(Ok(-1));
   println!("{a:?}");
   if let Ok(a) = "1234".parse::<i32>() {
     println!("Let OK {a}");  
   }
-  // This will panic
+  // これはパニックする
   //"1234z".parse().unwrap();
 }
 ```
 
-## Option and Result: Two Sides of the Same Coin
+## Option と Result: 表裏一体の関係
 
-`Option` and `Result` are deeply related — `Option<T>` is essentially `Result<T, ()>` (a result where the error carries no information):
+`Option` と `Result` は密接に関連しています — `Option<T>` は本質的に `Result<T, ()>`（エラー情報を持たない Result）と同じです:
 
-| `Option<T>` | `Result<T, E>` | Meaning |
+| `Option<T>` | `Result<T, E>` | 意味 |
 |-------------|---------------|---------|
-| `Some(value)` | `Ok(value)` | Success — value is present |
-| `None` | `Err(error)` | Failure — no value (Option) or error details (Result) |
+| `Some(value)` | `Ok(value)` | 成功 — 値が存在する |
+| `None` | `Err(error)` | 失敗 — 値が存在しない（Option）、またはエラー詳細あり（Result） |
 
-**Converting between them:**
+**相互変換:**
 
 ```rust
 fn main() {
@@ -105,23 +105,23 @@ fn main() {
     let res: Result<i32, &str> = opt.ok_or("value was None");  // Option → Result
     
     let res: Result<i32, &str> = Ok(42);
-    let opt: Option<i32> = res.ok();  // Result → Option (discards error)
+    let opt: Option<i32> = res.ok();  // Result → Option（エラーを破棄）
     
-    // They share many of the same methods:
+    // 多くの共通メソッドを共有:
     // .map(), .and_then(), .unwrap_or(), .unwrap_or_else(), .is_some()/is_ok()
 }
 ```
 
-> **Rule of thumb**: Use `Option` when absence is normal (e.g., looking up a key). Use `Result` when failure needs explanation (e.g., file I/O, parsing).
+> **判断基準の目安**: 値が存在しないことが通常の動作である場合（キーの検索など）は `Option` を使用します。失敗の理由を説明する必要がある場合（ファイルI/O、パースなど）は `Result` を使用します。
 
-# Exercise: log() function implementation with Option
+# 演習: Option を用いた log() 関数の実装
 
-🟢 **Starter**
+🟢 **初級**
 
-- Implement a ```log()``` function that accepts an ```Option<&str>``` parameter. If the parameter is ```None```, it should print a default string
-- The function should return a ```Result``` with ```()``` for both success and error (in this case we'll never have an error)
+- `Option<&str>` パラメータを受け取る `log()` 関数を実装します。パラメータが `None` の場合、デフォルトの文字列を出力します
+- 関数は成功とエラーの両方で `()` を持つ `Result` を返す必要があります（この場合、エラーが発生することはありません）
 
-<details><summary>Solution (click to expand)</summary>
+<details><summary>解答例（クリックして展開）</summary>
 
 ```rust
 fn log(message: Option<&str>) -> Result<(), ()> {
@@ -136,11 +136,11 @@ fn main() {
     let _ = log(Some("System initialized"));
     let _ = log(None);
     
-    // Alternative using unwrap_or:
+    // unwrap_or を使用した別の方法:
     let msg: Option<&str> = None;
     println!("LOG: {}", msg.unwrap_or("(default message)"));
 }
-// Output:
+// 出力:
 // LOG: System initialized
 // LOG: (no message provided)
 // LOG: (default message)
@@ -149,29 +149,29 @@ fn main() {
 </details>
 
 ----
-# Rust error handling
- - Rust errors can be irrecoverable (fatal) or recoverable. Fatal errors result in a ``panic```
-    - In general, situations that result in ```panics``` should be avoided. ```panics``` are caused by bugs in the program, including exceeding index bounds, calling ```unwrap()``` on an ```Option<None>```, etc.
-    - It is OK to have explicit ```panics``` for conditions that should be impossible. The ```panic!``` or ```assert!``` macros can be used for sanity checks
+# Rustのエラー処理
+ - Rustのエラーには、回復不能なエラー（致命的）と回復可能なエラーがあります。致命的なエラーは `panic` を引き起こします
+    - 一般に、`panic` を引き起こす状況は避けるべきです。`panic` は、配列の境界外アクセスや `Option<None>` に対する `unwrap()` の呼び出しなど、プログラムのバグによって引き起こされます
+    - 起こり得ないはずの条件に対して明示的な `panic` を発生させることは許容されます。健全性チェックには `panic!` や `assert!` マクロを使用できます
 ```rust
 fn main() {
    let x : Option<u32> = None;
-   // println!("{x}", x.unwrap()); // Will panic
-   println!("{}", x.unwrap_or(0));  // OK -- prints 0
+   // println!("{x}", x.unwrap()); // パニックする
+   println!("{}", x.unwrap_or(0));  // OK -- 0 を出力
    let x = 41;
-   //assert!(x == 42); // Will panic
-   //panic!("Something went wrong"); // Unconditional panic
+   //assert!(x == 42); // パニックする
+   //panic!("Something went wrong"); // 無条件のパニック
    let _a = vec![0, 1];
-   // println!("{}", a[2]); // Out of bounds panic; use a.get(2) which will return Option<T>
+   // println!("{}", a[2]); // 境界外パニック。Option<T> を返す a.get(2) を使用する
 }
 ```
 
-## Error Handling: C++ vs Rust
+## エラー処理: C++ vs Rust
 
-### C++ Exception-Based Error Handling Problems
+### C++の例外ベースのエラー処理における問題点
 
 ```cpp
-// C++ error handling - exceptions create hidden control flow
+// C++のエラー処理 - 例外が隠れた制御フローを生み出す
 #include <fstream>
 #include <stdexcept>
 
@@ -181,30 +181,30 @@ std::string read_config(const std::string& path) {
         throw std::runtime_error("Cannot open: " + path);
     }
     std::string content;
-    // What if getline throws? Is file properly closed?
-    // With RAII yes, but what about other resources?
+    // getline が例外を投げたらどうなるか？ファイルは適切に閉じられるか？
+    // RAIIがあれば閉じられるが、他のリソースはどうだろうか？
     std::getline(file, content);
-    return content;  // What if caller doesn't try/catch?
+    return content;  // 呼び出し元が try/catch していなかったらどうなるか？
 }
 
 int main() {
-    // ERROR: Forgot to wrap in try/catch!
+    // エラー: try/catch で囲むのを忘れている！
     auto config = read_config("nonexistent.txt");
-    // Exception propagates silently, program crashes
-    // Nothing in the function signature warned us
+    // 例外が暗黙のうちに伝播し、プログラムがクラッシュする
+    // 関数のシグネチャからは何一つ警告されない
     return 0;
 }
 ```
 
 ```mermaid
 graph TD
-    subgraph "C++ Error Handling Issues"
-        CF["Function Call"]
-        CR["throw exception<br/>or return code"]
-        CIGNORE["[ERROR] Exception not caught<br/>or return code ignored"]
-        CCHECK["try/catch or check"]
-        CERROR["Hidden control flow<br/>throws not in signature"]
-        CERRNO["No compile-time<br/>enforcement"]
+    subgraph "C++のエラー処理における課題"
+        CF["関数呼び出し"]
+        CR["例外のスロー<br/>またはリターンコード"]
+        CIGNORE["[エラー] 例外がキャッチされない<br/>またはリターンコードの無視"]
+        CCHECK["try/catch またはチェック"]
+        CERROR["隠れた制御フロー<br/>シグネチャに現れないスロー"]
+        CERRNO["コンパイル時の強制なし"]
         
         CF --> CR
         CR --> CIGNORE
@@ -212,16 +212,16 @@ graph TD
         CCHECK --> CERROR
         CERROR --> CERRNO
         
-        CPROBLEMS["[ERROR] Exceptions invisible in types<br/>[ERROR] Hidden control flow<br/>[ERROR] Easy to forget try/catch<br/>[ERROR] Exception safety is hard<br/>[ERROR] noexcept is opt-in"]
+        CPROBLEMS["[エラー] 型情報に例外が現れない<br/>[エラー] 隠れた制御フロー<br/>[エラー] try/catch を忘れやすい<br/>[エラー] 例外安全性の確保が困難<br/>[エラー] noexcept はオプトイン"]
     end
     
-    subgraph "Rust Result<T, E> System"
-        RF["Function Call"]
+    subgraph "Rustの Result<T, E> システム"
+        RF["関数呼び出し"]
         RR["Result<T, E><br/>Ok(value) | Err(error)"]
-        RMUST["[OK] Must handle<br/>Compile error if ignored"]
-        RMATCH["Pattern matching<br/>match, if let, ?"]
-        RDETAIL["Detailed error info<br/>Custom error types"]
-        RSAFE["Type-safe<br/>No global state"]
+        RMUST["[OK] 処理の強制<br/>無視するとコンパイルエラー"]
+        RMATCH["パターンマッチング<br/>match, if let, ?"]
+        RDETAIL["詳細なエラー情報<br/>カスタムエラー型"]
+        RSAFE["型安全<br/>グローバル状態なし"]
         
         RF --> RR
         RR --> RMUST
@@ -229,7 +229,7 @@ graph TD
         RMATCH --> RDETAIL
         RDETAIL --> RSAFE
         
-        RBENEFITS["[OK] Forced error handling<br/>[OK] Type-safe errors<br/>[OK] Detailed error info<br/>[OK] Composable with ?<br/>[OK] Zero runtime cost"]
+        RBENEFITS["[OK] 強制されるエラーハンドリング<br/>[OK] 型安全なエラー<br/>[OK] 詳細なエラー情報<br/>[OK] ? 演算子による合成<br/>[OK] 実行時コストゼロ"]
     end
     
     style CPROBLEMS fill:#ff6b6b,color:#000
@@ -238,37 +238,37 @@ graph TD
     style RMUST fill:#91e5a3,color:#000
 ```
 
-### `Result<T, E>` Visualization
+### `Result<T, E>` の可視化
 
 ```rust
-// Rust error handling - comprehensive and forced
+// Rustのエラー処理 - 包括的かつ強制
 use std::fs::File;
 use std::io::Read;
 
 fn read_file_content(filename: &str) -> Result<String, std::io::Error> {
-    let mut file = File::open(filename)?;  // ? automatically propagates errors
+    let mut file = File::open(filename)?;  // ? が自動的にエラーを伝播する
     let mut contents = String::new();
     file.read_to_string(&mut contents)?;
-    Ok(contents)  // Success case
+    Ok(contents)  // 成功時
 }
 
 fn main() {
     match read_file_content("example.txt") {
-        Ok(content) => println!("File content: {}", content),
-        Err(error) => println!("Failed to read file: {}", error),
-        // Compiler forces us to handle both cases!
+        Ok(content) => println!("ファイルの内容: {}", content),
+        Err(error) => println!("ファイルの読み込みに失敗: {}", error),
+        // コンパイラが両方のケースの処理を強制する！
     }
 }
 ```
 
 ```mermaid
 graph TD
-    subgraph "Result<T, E> Flow"
-        START["Function starts"]
+    subgraph "Result<T, E> のフロー"
+        START["関数の開始"]
         OP1["File::open()"]
-        CHECK1{{"Result check"}}
+        CHECK1{{"Resultのチェック"}}
         OP2["file.read_to_string()"]
-        CHECK2{{"Result check"}}
+        CHECK2{{"Resultのチェック"}}
         SUCCESS["Ok(contents)"]
         ERROR1["Err(io::Error)"]
         ERROR2["Err(io::Error)"]
@@ -281,25 +281,25 @@ graph TD
         CHECK2 -->|"Ok(())"| SUCCESS
         CHECK2 -->|"Err(e)"| ERROR2
         
-        ERROR1 --> PROPAGATE["? operator<br/>propagates error"]
+        ERROR1 --> PROPAGATE["? 演算子<br/>エラーを伝播"]
         ERROR2 --> PROPAGATE
-        PROPAGATE --> CALLER["Caller must<br/>handle error"]
+        PROPAGATE --> CALLER["呼び出し元が<br/>エラーを処理"]
     end
     
-    subgraph "Pattern Matching Options"
+    subgraph "パターンマッチングの選択肢"
         MATCH["match result"]
         IFLET["if let Ok(val) = result"]
-        UNWRAP["result.unwrap()<br/>[WARNING] Panics on error"]
-        EXPECT["result.expect(msg)<br/>[WARNING] Panics with message"]
-        UNWRAP_OR["result.unwrap_or(default)<br/>[OK] Safe fallback"]
-        QUESTION["result?<br/>[OK] Early return"]
+        UNWRAP["result.unwrap()<br/>[警告] エラー時にパニック"]
+        EXPECT["result.expect(msg)<br/>[警告] メッセージ付きでパニック"]
+        UNWRAP_OR["result.unwrap_or(default)<br/>[OK] 安全なフォールバック"]
+        QUESTION["result?<br/>[OK] 早期リターン"]
         
-        MATCH --> SAFE1["[OK] Handles both cases"]
-        IFLET --> SAFE2["[OK] Handles error case"]
-        UNWRAP_OR --> SAFE3["[OK] Always returns value"]
-        QUESTION --> SAFE4["[OK] Propagates to caller"]
-        UNWRAP --> UNSAFE1["[ERROR] Can panic"]
-        EXPECT --> UNSAFE2["[ERROR] Can panic"]
+        MATCH --> SAFE1["[OK] 両方のケースを処理"]
+        IFLET --> SAFE2["[OK] エラーケースを処理"]
+        UNWRAP_OR --> SAFE3["[OK] 常に値を返す"]
+        QUESTION --> SAFE4["[OK] 呼び出し元に伝播"]
+        UNWRAP --> UNSAFE1["[エラー] パニックの可能性"]
+        EXPECT --> UNSAFE2["[エラー] パニックの可能性"]
     end
     
     style SUCCESS fill:#91e5a3,color:#000
@@ -313,33 +313,33 @@ graph TD
     style UNSAFE2 fill:#ff6b6b,color:#000
 ```
 
-# Rust error handling
-- Rust uses the ```enum Result<T, E>``` enum for recoverable error handling
-    - The ```Ok<T>``` variant contains the result in case of success and ```Err<E>``` contains the error
+# Result による回復可能なエラー処理
+- Rustは回復可能なエラー処理に `enum Result<T, E>` を使用します
+    - `Ok<T>` バリアントは成功時の結果を保持し、`Err<E>` はエラーを保持します
 ```rust
 fn main() {
     let x = "1234x".parse::<u32>();
     match x {
-        Ok(x) => println!("Parsed number {x}"),
-        Err(e) => println!("Parsing error {e:?}"),
+        Ok(x) => println!("パースされた数値: {x}"),
+        Err(e) => println!("パースエラー: {e:?}"),
     }
     let x  = "1234".parse::<u32>();
-    // Same as above, but with valid number
+    // 上記と同じだが、有効な数値を指定した場合
     if let Ok(x) = &x {
-        println!("Parsed number {x}")
+        println!("パースされた数値: {x}")
     } else if let Err(e) = &x {
-        println!("Error: {e:?}");
+        println!("エラー: {e:?}");
     }
 }
 ```
 
-# Rust error handling
-- The try-operator ```?``` is a convenient short hand for the ```match``` ```Ok``` / ```Err``` pattern
-    - Note the method must return ```Result<T, E>``` to enable use of ```?```
-    - The type for ```Result<T, E>``` can be changed. In the example below, we return the same error type (```std::num::ParseIntError```) returned by ```str::parse()``` 
+# ? 演算子によるエラー伝播
+- try演算子 `?` は、`match` の `Ok` / `Err` パターンの便利な省略記法です
+    - `?` を使用できるようにするには、そのメソッドが `Result<T, E>` を返す必要があることに注意してください
+    - `Result<T, E>` の型は変更できます。以下の例では、`str::parse()` が返すのと同じエラー型（`std::num::ParseIntError`）を返しています
 ```rust
 fn double_string_number(s : &str) -> Result<u32, std::num::ParseIntError> {
-   let x = s.parse::<u32>()?; // Returns immediately in case of an error
+   let x = s.parse::<u32>()?; // エラー時には直ちにリターンする
    Ok(x*2)
 }
 fn main() {
@@ -350,33 +350,33 @@ fn main() {
 }
 ```
 
-# Rust error handling
-- Errors can be mapped to other types, or to default values (https://doc.rust-lang.org/std/result/enum.Result.html#method.unwrap_or_default)
+# エラーの変換とデフォルト値
+- エラーは他の型にマッピングしたり、デフォルト値に置き換えたりすることができます (https://doc.rust-lang.org/std/result/enum.Result.html#method.unwrap_or_default)
 ```rust
-// Changes the error type to () in case of error
+// エラー時のエラー型を () に変更
 fn double_string_number(s : &str) -> Result<u32, ()> {
-   let x = s.parse::<u32>().map_err(|_|())?; // Returns immediately in case of an error
+   let x = s.parse::<u32>().map_err(|_|())?; // エラー時には直ちにリターンする
    Ok(x*2)
 }
 ```
 ```rust
 fn double_string_number(s : &str) -> Result<u32, ()> {
-   let x = s.parse::<u32>().unwrap_or_default(); // Defaults to 0 in case of parse error
+   let x = s.parse::<u32>().unwrap_or_default(); // パースエラー時にはデフォルト値（0）になる
    Ok(x*2)
 }
 ```
 ```rust
 fn double_optional_number(x : Option<u32>) -> Result<u32, ()> {
-    // ok_or converts Option<None> to Result<u32, ()> in the below
-    x.ok_or(()).map(|x|x*2) // .map() is applied only on Ok(u32)
+    // 以下の ok_or は Option<None> を Result<u32, ()> に変換する
+    x.ok_or(()).map(|x|x*2) // .map() は Ok(u32) に対してのみ適用される
 }
 ```
 
-# Exercise: error handling
+# 演習: エラー処理
 
-🟡 **Intermediate**
-- Implement a ```log()``` function with a single u32 parameter. If the parameter is not 42, return an error. The ```Result<>``` for success and error type is ```()```
-- Invoke ```log()``` function that exits with the same ```Result<>``` type if ```log()``` return an error. Otherwise print a message saying that log was successfully called
+🟡 **中級**
+- 単一の `u32` パラメータを受け取る `log()` 関数を実装します。パラメータが 42 ではない場合はエラーを返します。成功とエラーの型の `Result<>` はともに `()` とします
+- `log()` 関数を呼び出し、`log()` がエラーを返した場合は同じ `Result<>` 型で直ちに終了する関数を作成します。それ以外の場合は、log が正常に呼び出されたことを示すメッセージを出力します
 
 ```rust
 fn log(x: u32) -> ?? {
@@ -384,7 +384,7 @@ fn log(x: u32) -> ?? {
 }
 
 fn call_log(x: u32) -> ?? {
-    // Call log(x), then exit immediately if it return an error
+    // log(x) を呼び出し、エラーが返された場合は直ちに終了する
     println!("log was successfully called");
 }
 
@@ -394,7 +394,7 @@ fn main() {
 }
 ``` 
 
-<details><summary>Solution (click to expand)</summary>
+<details><summary>解答例（クリックして展開）</summary>
 
 ```rust
 fn log(x: u32) -> Result<(), ()> {
@@ -406,19 +406,17 @@ fn log(x: u32) -> Result<(), ()> {
 }
 
 fn call_log(x: u32) -> Result<(), ()> {
-    log(x)?;  // Exit immediately if log() returns an error
-    println!("log was successfully called with {x}");
+    log(x)?;  // log() がエラーを返した場合は直ちに終了
+    println!("log が値 {x} で正常に呼び出されました");
     Ok(())
 }
 
 fn main() {
-    let _ = call_log(42);  // Prints: log was successfully called with 42
-    let _ = call_log(43);  // Returns Err(()), nothing printed
+    let _ = call_log(42);  // 出力: log が値 42 で正常に呼び出されました
+    let _ = call_log(43);  // Err(()) を返し、何も出力されない
 }
-// Output:
-// log was successfully called with 42
+// 出力:
+// log が値 42 で正常に呼び出されました
 ```
 
 </details>
-
-

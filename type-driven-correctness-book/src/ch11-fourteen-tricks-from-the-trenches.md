@@ -1,51 +1,39 @@
-# Fourteen Tricks from the Trenches 🟡
+# 実践から生まれた14のテクニック 🟡
 
-> **What you'll learn:** Fourteen smaller correct-by-construction techniques — from sentinel elimination and sealed traits to session types, `Pin`, RAII, and `#[must_use]` — each eliminating a specific bug class for near-zero effort.
+> **学べること:** 番兵値の排除やシールドトレイトから、セッション型、`Pin`、RAII、`#[must_use]` に至るまで、構造的に正しくする14の小さなテクニック。それぞれがほぼゼロの手間で特定のバグ分類を排除します。
 >
-> **Cross-references:** [ch02](ch02-typed-command-interfaces-request-determi.md) (sealed traits extend ch02), [ch05](ch05-protocol-state-machines-type-state-for-r.md) (typestate builder extends ch05), [ch07](ch07-validated-boundaries-parse-dont-validate.md) (FromStr extends ch07)
+> **相互参照:** [第2章](ch02-typed-command-interfaces-request-determi.md)（シールドトレイトは第2章を拡張）、[第5章](ch05-protocol-state-machines-type-state-for-r.md)（型状態ビルダーは第5章を拡張）、[第7章](ch07-validated-boundaries-parse-dont-validate.md)（FromStr は第7章を拡張）
 
-## Fourteen Tricks from the Trenches
+## 実践から生まれた14のテクニック
 
-The eight core patterns (ch02–ch09) cover the major correct-by-construction
-techniques. This chapter collects fourteen **smaller but high-value tricks** that
-show up repeatedly in production Rust code — each one eliminates a specific
-class of bug for zero or near-zero effort.
+第2章から第9章で扱った8つのコアパターンは、主要な「構造的に正しい（correct-by-construction）」設計手法を網羅しています。本章では、本番のRustコードで頻繁に登場する、**小規模ながら価値の高い14のテクニック**を集めました。これらはそれぞれ、ゼロまたはほぼゼロの手間で特定のバグの分類を排除します。
 
-### Trick 1 — Sentinel → `Option` at the Boundary
+### トリック1 — 境界で番兵値（センチネル）を `Option` に変換する
 
-Hardware protocols are full of sentinel values: IPMI uses `0xFF` for
-"sensor not present," PCI uses `0xFFFF` for "no device," and SMBIOS uses
-`0x00` for "unknown." If you carry these sentinels through your code as
-plain integers, every consumer must remember to check for the magic value.
-If even one comparison forgets, you get a phantom 255 °C reading or a
-spurious vendor-ID match.
+ハードウェアプロトコルには番兵値（sentinel values）が溢れています。IPMIでは「センサーが存在しない」ことを表すために `0xFF` を、PCIでは「デバイスが存在しない」ことを表すために `0xFFFF` を、SMBIOSでは「不明」を表すために `0x00` を使用します。これらの番兵値を通常の整数としてコード内で引き回すと、利用側のすべての箇所でマジックナンバーのチェックを忘れずに行う必要があります。もし1箇所でも比較を忘れると、幻の255 °Cという読み取り値が得られたり、誤ったベンダーIDの一致が発生したりします。
 
-**The rule:** Convert sentinels to `Option` at the very first parse boundary,
-and convert *back* to the sentinel only at the serialization boundary.
+**原則:** 最初のパース境界で直ちに番兵値を `Option` に変換し、番兵値への逆変換はシリアライズ境界でのみ行います。
 
-#### The anti-pattern (from `pcie_tree/src/lspci.rs`)
+#### アンチパターン（`pcie_tree/src/lspci.rs` より）
 
 ```rust,ignore
-// Sentinel carried internally — every comparison must remember
+// 番兵値が内部に持ち越されている — すべての比較でチェックを意識する必要がある
 let mut current_vendor_id: u16 = 0xFFFF;
 let mut current_device_id: u16 = 0xFFFF;
 
-// ... later, parsing fails silently ...
+// ... その後、パースがサイレントに失敗する ...
 current_vendor_id = u16::from_str_radix(hex, 16)
-    .unwrap_or(0xFFFF);  // sentinel hides the error
+    .unwrap_or(0xFFFF);  // 番兵値がエラーを隠蔽してしまう
 ```
 
-Every function that receives `current_vendor_id` must know that `0xFFFF` is
-special. If someone writes `if vendor_id == target_id` without checking
-for `0xFFFF` first, a missing device silently matches when the target also
-happens to be parsed from bad input as `0xFFFF`.
+`current_vendor_id` を受け取るすべての関数は、`0xFFFF` が特別であることを知っていなければなりません。もし誰かが `0xFFFF` を事前にチェックせずに `if vendor_id == target_id` と書いてしまうと、ターゲット側も不正な入力から `0xFFFF` としてパースされていた場合に、存在しないデバイスがサイレントに一致してしまいます。
 
-#### The correct pattern (from `nic_sel/src/events.rs`)
+#### 正しいパターン（`nic_sel/src/events.rs` より）
 
 ```rust,ignore
 pub struct ThermalEvent {
     pub record_id: u16,
-    pub temperature: Option<u8>,  // None if sensor reports 0xFF
+    pub temperature: Option<u8>,  // センサーが 0xFF を報告した場合は None
 }
 
 impl ThermalEvent {
@@ -62,23 +50,23 @@ impl ThermalEvent {
 }
 ```
 
-Now every consumer *must* handle the `None` case — the compiler forces it:
+これで、利用側は必ず `None` のケースを処理しなければならなくなります — コンパイラがそれを強制します：
 
 ```rust,ignore
-// Safe — compiler ensures we handle missing temps
+// 安全 — 欠損温度を処理することがコンパイラによって保証される
 fn is_overtemp(temp: Option<u8>, threshold: u8) -> bool {
     temp.map_or(false, |t| t > threshold)
 }
 
-// Forgetting to handle None is a compile error:
+// None の処理を忘れるとコンパイルエラーになる:
 // fn bad_check(temp: Option<u8>, threshold: u8) -> bool {
-//     temp > threshold  // ERROR: can't compare Option<u8> with u8
+//     temp > threshold  // エラー: Option<u8> と u8 は比較できない
 // }
 ```
 
-#### Real-world impact
+#### 実世界への影響
 
-`inventory/src/events.rs` uses the same pattern for GPU thermal alerts:
+`inventory/src/events.rs` でも、GPU温度アラートに同じパターンを使用しています：
 ```rust,ignore
 temperature: if data[1] != 0xFF {
     Some(data[1] as i8)
@@ -87,38 +75,30 @@ temperature: if data[1] != 0xFF {
 },
 ```
 
-The refactoring for `pcie_tree/src/lspci.rs` is straightforward: change
-`current_vendor_id: u16` to `current_vendor_id: Option<u16>`, replace
-`0xFFFF` with `None`, and let the compiler find every site that needs
-updating.
+`pcie_tree/src/lspci.rs` のリファクタリングは非常にシンプルです：`current_vendor_id: u16` を `current_vendor_id: Option<u16>` に変更し、`0xFFFF` を `None` に置き換え、更新が必要なすべての箇所をコンパイラに検出させます。
 
-| Before | After |
+| 変更前 | 変更後 |
 |--------|-------|
 | `let mut vendor_id: u16 = 0xFFFF` | `let mut vendor_id: Option<u16> = None` |
-| `.unwrap_or(0xFFFF)` | `.ok()` (already returns `Option`) |
+| `.unwrap_or(0xFFFF)` | `.ok()`（すでに `Option` を返す） |
 | `if vendor_id != 0xFFFF { ... }` | `if let Some(vid) = vendor_id { ... }` |
-| Serialization: `vendor_id` | `vendor_id.unwrap_or(0xFFFF)` |
+| シリアライズ: `vendor_id` | `vendor_id.unwrap_or(0xFFFF)` |
 
 ***
 
-### Trick 2 — Sealed Traits
+### トリック2 — シールドトレイト（Sealed Traits）
 
-Chapter 2 introduced `IpmiCmd` with an associated type that binds each command
-to its response. But there's a loophole: if *any* code can implement `IpmiCmd`,
-someone could write a `MaliciousCmd` whose `parse_response` returns the wrong
-type or panics. The type safety of the entire system rests on every
-implementation being correct.
+第2章では、各コマンドをレスポンスにバインドする関連型を持つ `IpmiCmd` を紹介しました。しかし、ここには抜け穴があります。もし*任意の*コードが `IpmiCmd` を実装できるとしたら、`parse_response` が誤った型を返したりパニックを起こしたりするような `MaliciousCmd` を誰かが書けてしまいます。システム全体の型安全性は、すべての実装が正しいことに依存しています。
 
-A **sealed trait** closes this loophole. The idea is simple: make the trait
-require a *private* supertrait that only your crate can implement.
+**シールドトレイト（Sealed Trait）** はこの抜け穴を塞ぎます。アイデアはシンプルです。自分たちのクレートだけが実装できる*プライベート*なスーパートレイトを、パブリックなトレイトの必須要件にするのです。
 
 ```rust,ignore
-// — Private module: not exported from the crate —
+// — プライベートモジュール: クレート外にはエクスポートされない —
 mod private {
     pub trait Sealed {}
 }
 
-// — Public trait: requires Sealed, which outsiders can't implement —
+// — パブリックトレイト: 外部からは実装できない Sealed を要求 —
 pub trait IpmiCmd: private::Sealed {
     type Response;
     fn net_fn(&self) -> u8;
@@ -128,7 +108,7 @@ pub trait IpmiCmd: private::Sealed {
 }
 ```
 
-Inside your crate, you implement `Sealed` for each approved command type:
+クレート内では、承認された各コマンド型に対して `Sealed` を実装します：
 
 ```rust,ignore
 pub struct ReadTemp { pub sensor_id: u8 }
@@ -146,34 +126,34 @@ impl IpmiCmd for ReadTemp {
 }
 ```
 
-External code sees `IpmiCmd` and can call `execute()`, but cannot implement it:
+外部コードからは `IpmiCmd` が見え、`execute()` を呼び出すことはできますが、それを実装することはできません：
 
 ```rust,ignore
-// In another crate:
+// 別のクレート内:
 struct EvilCmd;
-// impl private::Sealed for EvilCmd {}  // ERROR: module `private` is private
-// impl IpmiCmd for EvilCmd { ... }     // ERROR: `Sealed` is not satisfied
+// impl private::Sealed for EvilCmd {}  // エラー: モジュール `private` は非公開
+// impl IpmiCmd for EvilCmd { ... }     // エラー: `Sealed` が満たされていない
 ```
 
-#### When to seal
+#### シールドすべき場合とすべきでない場合
 
-| Seal when… | Don't seal when… |
+| シールドすべき場合… | シールドすべきでない場合… |
 |-----------|-----------------|
-| Safety depends on correct implementation (IpmiCmd, DiagModule) | Users should extend the system (custom report formatters) |
-| Associated types must satisfy invariants | The trait is a simple capability marker (HasIpmi) |
-| You own the canonical set of implementations | Third-party plugins are a design goal |
+| 安全性が正しい実装に依存している場合（`IpmiCmd`, `DiagModule`） | ユーザーによるシステムの拡張を許容する場合（カスタムレポートフォーマッタ） |
+| 関連型が不変条件を満たす必要がある場合 | 単純なケイパビリティマーカートレイトである場合（`HasIpmi`） |
+| 正統な実装の集合を自身が管理している場合 | サードパーティ製プラグインの提供が設計目標である場合 |
 
-#### Real-world candidates
+#### 実世界での適用候補
 
-- `IpmiCmd` — incorrect parse could corrupt typed responses
-- `DiagModule` — framework assumes `run()` returns valid DER records
-- `SelEventFilter` — broken filter could swallow critical SEL events
+- `IpmiCmd` — 不正なパースにより型付きレスポンスが破損する可能性がある
+- `DiagModule` — フレームワークが `run()` の返す有効なDERレコードを前提としている
+- `SelEventFilter` — 壊れたフィルタが重要なSELイベントを握りつぶす可能性がある
 
 ***
 
-### Trick 3 — `#[non_exhaustive]` for Evolving Enums
+### トリック3 — 将来拡張される列挙型のための `#[non_exhaustive]`
 
-`SkuVariant` in `inventory/src/types.rs` today has five variants:
+現在、`inventory/src/types.rs` の `SkuVariant` には5つのバリアントがあります：
 
 ```rust,ignore
 pub enum SkuVariant {
@@ -181,23 +161,14 @@ pub enum SkuVariant {
 }
 ```
 
-When the next generation ships and you add `S4001`, any external code that
-matches on `SkuVariant` and doesn't have a wildcard arm will **silently fail
-to compile** — which is the whole point. But what about internal code? Without
-`#[non_exhaustive]`, your `match` in the *same crate* compiles without a
-wildcard, and adding the new variant breaks your own build.
+次世代製品が出荷され、`S4001` を追加したとします。このとき、`SkuVariant` を `match` しておりワイルドカード（`_`）アームを持たない外部コードは、**警告なしにコンパイルエラー**になります — これは意図通りの動作です。しかし、内部コードはどうでしょうか？`#[non_exhaustive]` がなければ、*同一クレート*内の `match` もワイルドカードなしでコンパイルでき、新しいバリアントを追加した際に自分自身のビルドが壊れてしまいます。
 
-Marking the enum `#[non_exhaustive]` forces **external crates** that match on
-it to include a wildcard arm. Within the defining crate, `#[non_exhaustive]`
-has no effect — you can still write exhaustive matches.
+列挙型に `#[non_exhaustive]` を付けると、その列挙型を `match` する**外部クレート**に対してワイルドカードアームの記述を強制できます。定義元のクレート内では、`#[non_exhaustive]` は影響を持たず、これまで通り網羅的な（exhaustive）パターンマッチを書くことができます。
 
-**Why this is useful:** When you publish `SkuVariant` from a library crate
-(or a shared sub-crate in a workspace), downstream code is forced to handle
-unknown future variants. When you add `S4001` next generation, downstream
-code already compiles — they have a wildcard arm.
+**なぜこれが役立つのか:** ライブラリクレート（またはワークスペース内の共有サブクレート）から `SkuVariant` を公開する場合、ダウンストリームのコードに未知の将来のバリアントを処理させることができます。次の世代で `S4001` を追加した際も、ダウンストリームのコードには既にワイルドカードアームがあるため、そのままコンパイルが通ります。
 
 ```rust,ignore
-// In gpu_sel crate (the defining crate):
+// gpu_sel クレート内（定義元クレート）:
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SkuVariant {
@@ -206,11 +177,11 @@ pub enum SkuVariant {
     S2002,
     S2003,
     S3001,
-    // When the next SKU ships, add it here.
-    // External consumers already have a wildcard — zero breakage for them.
+    // 次のSKUが出荷されたらここに追加する。
+    // 外部の利用側にはすでにワイルドカードがあるため、そちらのコードが壊れることはない。
 }
 
-// Within gpu_sel itself — exhaustive match is allowed (no wildcard needed):
+// gpu_sel 内部 — 網羅的マッチが許可される（ワイルドカードは不要）:
 fn diag_path_internal(sku: SkuVariant) -> &'static str {
     match sku {
         SkuVariant::S1001 => "legacy_gen1",
@@ -218,15 +189,15 @@ fn diag_path_internal(sku: SkuVariant) -> &'static str {
         SkuVariant::S2002 => "gen2_alt_diag",
         SkuVariant::S2003 => "gen2_alt_hf_diag",
         SkuVariant::S3001 => "gen3_accel_diag",
-        // No wildcard needed inside the defining crate.
-        // Adding S4001 here will cause a compile error at this match,
-        // which is exactly what you want — it forces you to update it.
+        // 定義元クレート内部ではワイルドカードは不要。
+        // ここに S4001 を追加するとこの match でコンパイルエラーが発生するが、
+        // それは更新漏れを防ぐためのまさに望ましい挙動である。
     }
 }
 ```
 
 ```rust,ignore
-// In the binary crate (a downstream crate that depends on inventory):
+// バイナリクレート内（inventory に依存するダウンストリームクレート）:
 fn diag_path_external(sku: inventory::SkuVariant) -> &'static str {
     match sku {
         inventory::SkuVariant::S1001 => "legacy_gen1",
@@ -234,39 +205,34 @@ fn diag_path_external(sku: inventory::SkuVariant) -> &'static str {
         inventory::SkuVariant::S2002 => "gen2_alt_diag",
         inventory::SkuVariant::S2003 => "gen2_alt_hf_diag",
         inventory::SkuVariant::S3001 => "gen3_accel_diag",
-        _ => "generic_diag",  // REQUIRED by #[non_exhaustive] for external crates
+        _ => "generic_diag",  // 外部クレートでは #[non_exhaustive] により必須
     }
 }
 ```
 
-> **Workspace tip:** If all your code is in a single crate, `#[non_exhaustive]`
-> won't help — it only affects cross-crate boundaries. For the project's
-> large workspace, place evolving enums in a shared crate (`core_lib` or
-> `inventory`) so the attribute protects consumers in other workspace crates.
+> **ワークスペースでのヒント:** すべてのコードが単一のクレート内にある場合、`#[non_exhaustive]` は効果を発揮しません — クレート境界を越える場合にのみ作用します。プロジェクトの大規模なワークスペースでは、将来変化する列挙型を共有クレート（`core_lib` や `inventory` など）に配置することで、他のワークスペースクレートの利用側を保護できます。
 
-#### Candidates
+#### 適用候補
 
-| Enum | Module | Why |
+| 列挙型 | モジュール | 理由 |
 |------|--------|-----|
-| `SkuVariant` | `inventory`, `net_inventory` | New SKUs every generation |
-| `SensorType` | `protocol_lib` | IPMI spec reserves 0xC0–0xFF for OEM |
-| `CompletionCode` | `protocol_lib` | Custom BMC vendors add codes |
-| `Component` | `event_handler` | New hardware categories (NewSoC was recently added) |
+| `SkuVariant` | `inventory`, `net_inventory` | 世代ごとに新しいSKUが追加される |
+| `SensorType` | `protocol_lib` | IPMI仕様で 0xC0〜0xFF がOEM用に予約されている |
+| `CompletionCode` | `protocol_lib` | カスタムBMCベンダーがコードを追加する |
+| `Component` | `event_handler` | 新しいハードウェアカテゴリ（最近 NewSoC が追加された） |
 
 ***
 
-### Trick 4 — Typestate Builder
+### トリック4 — 型状態ビルダー（Typestate Builder）
 
-Chapter 5 showed type-state for *protocols* (session lifecycles, link training).
-The same idea applies to *builders* — structs whose `build()` / `finish()`
-can only be called when all required fields have been set.
+第5章では、*プロトコル*（セッションのライフサイクル、リンクトレーニング）に対する型状態を示しました。同じ考え方は*ビルダー*にも適用できます — 必須フィールドがすべて設定されたときのみ `build()` / `finish()` を呼び出せるようにする構造体です。
 
-#### The problem with fluent builders
+#### 流れるようなビルダー（Fluent Builder）の問題点
 
-`DerBuilder` in `diag_framework/src/der.rs` today looks like this (simplified):
+現在、`diag_framework/src/der.rs` の `DerBuilder` は以下のようになっています（簡略版）：
 
 ```rust,ignore
-// Current fluent builder — finish() always available
+// 現在の流れるようなビルダー — finish() が常に呼び出し可能
 pub struct DerBuilder {
     der: Der,
 }
@@ -275,18 +241,18 @@ impl DerBuilder {
     pub fn new(marker: &str, fault_code: u32) -> Self { ... }
     pub fn mnemonic(mut self, m: &str) -> Self { ... }
     pub fn fault_class(mut self, fc: &str) -> Self { ... }
-    pub fn finish(self) -> Der { self.der }  // ← always callable!
+    pub fn finish(self) -> Der { self.der }  // ← 常に呼び出し可能！
 }
 ```
 
-This compiles without error, but produces an incomplete DER record:
+これはエラーなくコンパイルされますが、不完全なDERレコードを生成してしまいます：
 
 ```rust,ignore
 let bad = DerBuilder::new("CSI_ERR", 62691)
-    .finish();  // oops — no mnemonic, no fault_class
+    .finish();  // 不正 — mnemonic も fault_class も設定されていない
 ```
 
-#### Typestate builder: `finish()` requires both fields
+#### 型状態ビルダー: `finish()` は両方のフィールドを要求する
 
 ```rust,ignore
 pub struct Missing;
@@ -300,7 +266,7 @@ pub struct DerBuilder<Mnemonic, FaultClass> {
     description: Option<String>,
 }
 
-// Constructor: starts with both required fields Missing
+// コンストラクタ: 両方の必須フィールドが Missing の状態で開始
 impl DerBuilder<Missing, Missing> {
     pub fn new(marker: &str, fault_code: u32) -> Self {
         DerBuilder {
@@ -313,7 +279,7 @@ impl DerBuilder<Missing, Missing> {
     }
 }
 
-// Set mnemonic (works regardless of fault_class's state)
+// mnemonic の設定（fault_class の状態に関係なく動作）
 impl<FC> DerBuilder<Missing, FC> {
     pub fn mnemonic(self, m: &str) -> DerBuilder<Set<String>, FC> {
         DerBuilder {
@@ -325,7 +291,7 @@ impl<FC> DerBuilder<Missing, FC> {
     }
 }
 
-// Set fault_class (works regardless of mnemonic's state)
+// fault_class の設定（mnemonic の状態に関係なく動作）
 impl<MN> DerBuilder<MN, Missing> {
     pub fn fault_class(self, fc: &str) -> DerBuilder<MN, Set<String>> {
         DerBuilder {
@@ -337,7 +303,7 @@ impl<MN> DerBuilder<MN, Missing> {
     }
 }
 
-// Optional fields — available in ANY state
+// オプショナルフィールド — どの状態でも利用可能
 impl<MN, FC> DerBuilder<MN, FC> {
     pub fn description(mut self, desc: &str) -> Self {
         self.description = Some(desc.to_string());
@@ -345,7 +311,7 @@ impl<MN, FC> DerBuilder<MN, FC> {
     }
 }
 
-/// The fully-built DER record.
+/// 完全に構築された DER レコード。
 pub struct Der {
     pub marker: String,
     pub fault_code: u32,
@@ -354,7 +320,7 @@ pub struct Der {
     pub description: Option<String>,
 }
 
-// finish() ONLY available when both required fields are Set
+// finish() は両方の必須フィールドが Set のときのみ利用可能
 impl DerBuilder<Set<String>, Set<String>> {
     pub fn finish(self) -> Der {
         Der {
@@ -368,52 +334,50 @@ impl DerBuilder<Set<String>, Set<String>> {
 }
 ```
 
-Now the buggy call is a compile error:
+これで、バグのある呼び出しはコンパイルエラーになります：
 
 ```rust,ignore
-// ✅ Compiles — both required fields set (in any order)
+// ✅ コンパイル成功 — 両方の必須フィールドが設定されている（順序は任意）
 let der = DerBuilder::new("CSI_ERR", 62691)
-    .fault_class("GPU Module")   // order doesn't matter
+    .fault_class("GPU Module")   // 呼び出し順序は問わない
     .mnemonic("ACCEL_CARD_ER691")
     .description("Thermal throttle")
     .finish();
 
-// ❌ Compile error — finish() doesn't exist on DerBuilder<Set<String>, Missing>
+// ❌ コンパイルエラー — DerBuilder<Set<String>, Missing> に finish() は存在しない
 let bad = DerBuilder::new("CSI_ERR", 62691)
     .mnemonic("ACCEL_CARD_ER691")
-    .finish();  // ERROR: method `finish` not found
+    .finish();  // エラー: メソッド `finish` が見つからない
 ```
 
-#### When to use typestate builders
+#### 型状態ビルダーを使用すべき場合
 
-| Use when… | Don't bother when… |
+| 使用すべき場合… | 使用しなくてよい場合… |
 |-----------|-------------------|
-| Omitting a field causes silent bugs (DER missing mnemonic) | All fields have sensible defaults |
-| The builder is part of a public API | The builder is test-only scaffolding |
-| More than 2–3 required fields | Single required field (just take it in `new()`) |
+| フィールドの欠落がサイレントなバグになる場合（DERの mnemonic 欠落など） | すべてのフィールドに適切なデフォルト値がある場合 |
+| ビルダーがパブリックAPIの一部である場合 | ビルダーがテスト専用の足場である場合 |
+| 必須フィールドが2〜3個以上ある場合 | 必須フィールドが1つだけの場合（`new()` で受け取ればよい） |
 
 ***
 
-### Trick 5 — `FromStr` as a Validation Boundary
+### トリック5 — バリデーション境界としての `FromStr`
 
-Chapter 7 showed `TryFrom<&[u8]>` for binary data (FRU records, SEL entries).
-For **string** inputs — config files, CLI arguments, JSON fields — the
-analogous boundary is `FromStr`.
+第7章ではバイナリデータ（FRUレコード、SELエントリ）に対する `TryFrom<&[u8]>` を扱いました。**文字列**入力（設定ファイル、CLI引数、JSONフィールド）に対して、これに相当する境界が `FromStr` です。
 
-#### The problem
+#### 問題点
 
 ```rust,ignore
-// C++ / unvalidated Rust: silently falls through to a default
+// C++ / 検証されていないRust: サイレントにデフォルト値へフォールスルーする
 fn route_diag(level: &str) -> DiagMode {
     if level == "quick" { ... }
     else if level == "standard" { ... }
-    else { QuickMode }  // typo in config?  ¯\_(ツ)_/¯
+    else { QuickMode }  // 設定ファイルにタイポがあっても気づかない
 }
 ```
 
-A config file with `"diag_level": "extendedd"` (typo) silently gets `QuickMode`.
+設定ファイルに `"diag_level": "extendedd"`（タイポ）とあっても、サイレントに `QuickMode` が選択されてしまいます。
 
-#### The pattern (from `config_loader/src/diag.rs`)
+#### パターン（`config_loader/src/diag.rs` より）
 
 ```rust,ignore
 use std::str::FromStr;
@@ -440,76 +404,72 @@ impl FromStr for DiagLevel {
 }
 ```
 
-Now a typo is caught immediately:
+これで、タイポは即座に検出されます：
 
 ```rust,ignore
 let level: DiagLevel = "extendedd".parse()?;
 // Err("unknown diag level: 'extendedd'")
 ```
 
-#### The three benefits
+#### 3つのメリット
 
-1. **Fail-fast:** Bad input is caught at the parsing boundary, not three
-   layers deep in diagnostic logic.
-2. **Aliases are explicit:** `"MEM"`, `"DIMM"`, and `"MEMORY"` all map to
-   `Component::Memory` — the match arms document the mapping.
-3. **`.parse()` is ergonomic:** Because `FromStr` integrates with `str::parse()`,
-   you get clean one-liners: `let level: DiagLevel = config["level"].parse()?;`
+1. **フェイルファスト（早期失敗）:** 不正な入力は、診断ロジックの3層奥深くではなく、パース境界で即座に捕捉されます。
+2. **エイリアスが明示的:** `"MEM"`、`"DIMM"`、`"MEMORY"` はすべて `Component::Memory` にマップされ、match アームがそのマッピング仕様として機能します。
+3. **`.parse()` が人間工学的:** `FromStr` は `str::parse()` と統合されているため、`let level: DiagLevel = config["level"].parse()?;` のように簡潔な1行で書けます。
 
-#### Real codebase usage
+#### 実コードベースでの使用例
 
-The project already has 8 `FromStr` implementations:
+プロジェクトにはすでに8つの `FromStr` 実装があります：
 
-| Type | Module | Notable aliases |
+| 型 | モジュール | 主なエイリアス |
 |------|--------|----------------|
 | `DiagLevel` | `config_loader` | `"1"` = Quick, `"4"` = Stress |
 | `Component` | `event_handler` | `"MEM"` / `"DIMM"` = Memory, `"SSD"` / `"NVME"` = Disk |
 | `SkuVariant` | `net_inventory` | `"Accel-X1"` = S2001, `"Accel-M1"` = S2002, `"Accel-Z1"` = S3001 |
-| `SkuVariant` | `inventory` | Same aliases (separate module, same pattern) |
-| `FaultStatus` | `config_loader` | Fault lifecycle states |
-| `DiagAction` | `config_loader` | Remediation action types |
-| `ActionType` | `config_loader` | Action categories |
-| `DiagMode` | `cluster_diag` | Multi-node test modes |
+| `SkuVariant` | `inventory` | 同様のエイリアス（別モジュール、同一パターン） |
+| `FaultStatus` | `config_loader` | 障害のライフサイクル状態 |
+| `DiagAction` | `config_loader` | 復旧アクションの型 |
+| `ActionType` | `config_loader` | アクションのカテゴリ |
+| `DiagMode` | `cluster_diag` | マルチノードテストモード |
 
-The contrast with `TryFrom`:
+`TryFrom` との対比：
 
 | | `TryFrom<&[u8]>` | `FromStr` |
 |---|---|---|
-| Input | Raw bytes (binary protocols) | Strings (configs, CLI, JSON) |
-| Typical source | IPMI, PCIe config space, FRU | JSON fields, env vars, user input |
-| Chapter | ch07 | ch11 |
-| Both use | `Result` — forcing the caller to handle invalid input |
+| 入力 | 生バイト列（バイナリプロトコル） | 文字列（設定、CLI、JSON） |
+| 典型的なソース | IPMI、PCIeコンフィグ空間、FRU | JSONフィールド、環境変数、ユーザー入力 |
+| 該当章 | 第7章 | 第11章 |
+| 共通点 | 呼び出し元に不正な入力の処理を強制する `Result` を使用 |
 
 ***
 
-### Trick 6 — Const Generics for Compile-Time Size Validation
+### トリック6 — コンパイル時のサイズ検証のための const ジェネリクス
 
-When hardware buffers, register banks, or protocol frames have fixed sizes,
-const generics let the compiler enforce them:
+ハードウェアバッファ、レジスタバンク、プロトコルフレームが固定サイズを持つ場合、const ジェネリクスを使用することでコンパイラにそのサイズを強制させることができます：
 
 ```rust,ignore
-/// A fixed-size register bank. The size is part of the type.
-/// `RegisterBank<256>` and `RegisterBank<4096>` are different types.
+/// 固定サイズのレジスタバンク。サイズは型の一部となる。
+/// `RegisterBank<256>` と `RegisterBank<4096>` は異なる型である。
 pub struct RegisterBank<const N: usize> {
     data: [u8; N],
 }
 
 impl<const N: usize> RegisterBank<N> {
-    /// Read a register at the given offset.
-    /// Compile-time: N is known, so the array size is fixed.
-    /// Runtime: only the offset is checked.
+    /// 指定されたオフセットのレジスタを読み出す。
+    /// コンパイル時: N が既知であるため配列サイズは固定。
+    /// ランタイム時: オフセットのみがチェックされる。
     pub fn read(&self, offset: usize) -> Option<u8> {
         self.data.get(offset).copied()
     }
 }
 
-// PCIe conventional config space: 256 bytes
+// PCIe 従来型コンフィグ空間: 256 バイト
 type PciConfigSpace = RegisterBank<256>;
 
-// PCIe extended config space: 4096 bytes
+// PCIe 拡張コンフィグ空間: 4096 バイト
 type PcieExtConfigSpace = RegisterBank<4096>;
 
-// These are different types — can't accidentally pass one for the other:
+// これらは異なる型であるため、誤って一方を他方に渡すことはできない:
 fn read_extended_cap(config: &PcieExtConfigSpace, offset: usize) -> Option<u8> {
     config.read(offset)
 }
@@ -517,41 +477,36 @@ fn read_extended_cap(config: &PcieExtConfigSpace, offset: usize) -> Option<u8> {
 //                   ^^^^^^^^^^^ expected RegisterBank<4096>, found RegisterBank<256> ❌
 ```
 
-**Compile-time assertions with const generics:**
+**const ジェネリクスによるコンパイル時アサーション:**
 
 ```rust,ignore
-/// NVMe admin commands use 4096-byte buffers. Enforce at compile time.
+/// NVMe 管理コマンドは 4096 バイトのバッファを使用する。コンパイル時に強制する。
 pub struct NvmeBuffer<const N: usize> {
     data: Box<[u8; N]>,
 }
 
 impl<const N: usize> NvmeBuffer<N> {
     pub fn new() -> Self {
-        // Runtime assertion: only 512 or 4096 allowed
+        // ランタイムアサーション: 512 または 4096 のみ許可
         assert!(N == 4096 || N == 512, "NVMe buffers must be 512 or 4096 bytes");
         NvmeBuffer { data: Box::new([0u8; N]) }
     }
 }
-// NvmeBuffer::<1024>::new();  // panics at runtime with this form
-// For true compile-time enforcement, see Trick 9 (const assertions).
+// NvmeBuffer::<1024>::new();  // この形式では実行時にパニック
+// 真のコンパイル時強制については、トリック9（const アサーション）を参照。
 ```
 
-> **When to use:** Fixed-size protocol buffers (NVMe, PCIe config space),
-> DMA descriptors, hardware FIFO depths. Anywhere the size is a hardware
-> constant that should never vary at runtime.
+> **使い所:** 固定サイズのプロトコルバッファ（NVMe、PCIeコンフィグ空間）、DMAディスクリプタ、ハードウェアFIFOの深さなど。サイズがハードウェア定数であり、実行時に決して変動すべきでないすべての場所。
 
 ***
 
-### Trick 7 — Safe Wrappers Around `unsafe`
+### トリック7 — `unsafe` に対する安全なラッパー
 
-The project currently has zero `unsafe` blocks. But when you
-add MMIO register access, DMA, or FFI to accel-mgmt/accel-query, you'll need
-`unsafe`. The correct-by-construction approach: **wrap every `unsafe` block
-in a safe abstraction** so the unsafety is contained and auditable.
+プロジェクトには現在 `unsafe` ブロックがまったく存在しません。しかし、MMIOレジスタアクセス、DMA、または accel-mgmt/accel-query へのFFIを追加する際には、`unsafe` が必要になります。構造的に正しいアプローチとは、**すべての `unsafe` ブロックを安全な抽象化の中にカプセル化する**ことで、危険性を閉じ込め、監査可能に保つことです。
 
 ```rust,ignore
-/// MMIO-mapped register. The pointer is valid for the lifetime of the mapping.
-/// All unsafe is contained in this module — callers use safe methods.
+/// MMIOマップされたレジスタ。ポインタはこのマッピングのライフタイムの間有効である。
+/// すべての unsafe はこのモジュール内に封入されており、呼び出し元は安全なメソッドを使用する。
 pub struct MmioRegion {
     base: *mut u8,
     len: usize,
@@ -559,26 +514,26 @@ pub struct MmioRegion {
 
 impl MmioRegion {
     /// # Safety
-    /// - `base` must be a valid pointer to an MMIO-mapped region
-    /// - The region must remain mapped for the lifetime of this struct
-    /// - No other code may alias this region
+    /// - `base` は MMIO マップされた領域への有効なポインタでなければならない
+    /// - この領域は、この構造体のライフタイムの間マップされたままでなければならない
+    /// - 他のコードがこの領域にエイリアスしてはならない
     pub unsafe fn new(base: *mut u8, len: usize) -> Self {
         MmioRegion { base, len }
     }
 
-    /// Safe read — bounds checking prevents out-of-bounds MMIO access.
+    /// 安全な読み出し — 境界チェックにより範囲外 MMIO アクセスを防止。
     pub fn read_u32(&self, offset: usize) -> Option<u32> {
         if offset + 4 > self.len { return None; }
-        // SAFETY: offset is bounds-checked above, base is valid per new() contract
+        // SAFETY: offset は上記で境界チェックされており、base は new() の契約により有効
         Some(unsafe {
             core::ptr::read_volatile(self.base.add(offset) as *const u32)
         })
     }
 
-    /// Safe write — bounds checking prevents out-of-bounds MMIO access.
+    /// 安全な書き込み — 境界チェックにより範囲外 MMIO アクセスを防止。
     pub fn write_u32(&self, offset: usize, value: u32) -> bool {
         if offset + 4 > self.len { return false; }
-        // SAFETY: offset is bounds-checked above, base is valid per new() contract
+        // SAFETY: offset は上記で境界チェックされており、base は new() の契約により有効
         unsafe {
             core::ptr::write_volatile(self.base.add(offset) as *mut u32, value);
         }
@@ -587,7 +542,7 @@ impl MmioRegion {
 }
 ```
 
-**Combine with phantom types (ch09) for typed MMIO:**
+**型付きMMIOのための幽霊型（第9章）との組み合わせ:**
 
 ```rust,ignore
 use std::marker::PhantomData;
@@ -604,7 +559,7 @@ impl TypedMmio<ReadOnly> {
     pub fn read_u32(&self, offset: usize) -> Option<u32> {
         self.region.read_u32(offset)
     }
-    // No write method — compile error if you try to write to a ReadOnly region
+    // write メソッドは存在しない — ReadOnly な領域に書き込もうとするとコンパイルエラー
 }
 
 impl TypedMmio<ReadWrite> {
@@ -617,42 +572,39 @@ impl TypedMmio<ReadWrite> {
 }
 ```
 
-> **Guidelines for `unsafe` wrappers:**
+> **`unsafe` ラッパーのガイドライン:**
 >
-> | Rule | Why |
+> | ルール | 理由 |
 > |------|-----|
-> | One `unsafe fn new()` with documented `# Safety` invariants | Caller takes responsibility once |
-> | All other methods are safe | Callers can't trigger UB |
-> | `# SAFETY:` comment on every `unsafe` block | Auditors can verify locally |
-> | Wrap in a module with `#[deny(unsafe_op_in_unsafe_fn)]` | Even inside `unsafe fn`, individual ops need `unsafe` |
-> | Run `cargo +nightly miri test` on the wrapper | Verify memory model compliance |
+> | ドキュメント化された `# Safety` 不変条件を持つ単一の `unsafe fn new()` | 呼び出し元が一度だけ責任を負う |
+> | 他のすべてのメソッドは safe にする | 呼び出し元が未定義動作（UB）を引き起こせないようにする |
+> | すべての `unsafe` ブロックに `# SAFETY:` コメントを記載 | 監査者が局所的に検証できるようにする |
+> | `#[deny(unsafe_op_in_unsafe_fn)]` を持つモジュールで包む | `unsafe fn` の内部であっても、個々の操作に `unsafe` ブロックを明示させる |
+> | ラッパーに対して `cargo +nightly miri test` を実行する | メモリモデルへの準拠を検証する |
 
 ---
 
-### ✅ Checkpoint: Tricks 1–7
+### ✅ チェックポイント: トリック1〜7
 
-You now have seven everyday tricks. Here's a quick scorecard:
+日常的に使える7つのテクニックが揃いました。簡単なスコアカードです：
 
-| Trick | Bug class eliminated | Effort to adopt |
+| トリック | 排除されるバグの分類 | 導入コスト |
 |:-----:|----------------------|:---------------:|
-| 1 | Sentinel confusion (0xFF) | Low — one `match` at the boundary |
-| 2 | Unauthorized trait impls | Low — add `Sealed` supertrait |
-| 3 | Broken consumers after enum growth | Low — one-line attribute |
-| 4 | Missing builder fields | Medium — extra type parameters |
-| 5 | Typos in string-typed config | Low — `impl FromStr` |
-| 6 | Wrong buffer sizes | Low — const generic parameter |
-| 7 | Unsafe scattered across codebase | Medium — wrapper module |
+| 1 | 番兵値の混同（0xFF） | 低 — 境界での単一の `match` |
+| 2 | 不正なトレイト実装 | 低 — `Sealed` スーパートレイトを追加 |
+| 3 | enum の拡張による利用側の破損 | 低 — 1行のアトリビュート |
+| 4 | ビルダーのフィールド設定漏れ | 中 — 型パラメータの追加 |
+| 5 | 文字列設定のタイポ | 低 — `impl FromStr` |
+| 6 | バッファサイズの誤り | 低 — const ジェネリクスパラメータ |
+| 7 | コードベース全体への unsafe の散乱 | 中 — ラッパーモジュール |
 
-Tricks 8–14 are **more advanced** — they touch async, const evaluation, session
-types, `Pin`, and `Drop`. Take a break here if you need one; the techniques
-above are already high-value, low-effort wins you can adopt tomorrow.
+トリック8〜14は**より高度な内容**です — 非同期（async）、const 評価、セッション型、`Pin`、そして `Drop` を扱います。必要に応じてここで一息入れてください。上記のテクニックだけでも、明日からすぐに導入できる価値の高い成果が得られます。
 
 ***
 
-### Trick 8 — Async Type-State Machines
+### トリック8 — 非同期の型状態機械（Async Type-State Machines）
 
-When hardware drivers use `async` (e.g., async BMC communication, async NVMe
-I/O), type-state still works — but ownership across `.await` points needs care:
+ハードウェアドライバが `async` を使用する場合（例: 非同期BMC通信、非同期NVMe I/O）、型状態パターンは引き続き機能します — ただし、`.await` ポイントをまたぐ所有権の扱いに注意が必要です：
 
 ```rust,ignore
 use std::marker::PhantomData;
@@ -671,21 +623,21 @@ impl AsyncSession<Idle> {
         AsyncSession { host: host.to_string(), _state: PhantomData }
     }
 
-    /// Transition Idle → Authenticating → Active.
-    /// The Session is consumed (moved into the future) across the .await.
+    /// Idle → Authenticating → Active の遷移。
+    /// Session は .await をまたいで消費（Future にムーブ）される。
     pub async fn authenticate(self, user: &str, pass: &str)
         -> Result<AsyncSession<Active>, String>
     {
-        // Phase 1: send credentials (consumes Idle session)
+        // フェーズ1: 認証情報を送信（Idle セッションを消費）
         let pending: AsyncSession<Authenticating> = AsyncSession {
             host: self.host,
             _state: PhantomData,
         };
 
-        // Simulate async BMC authentication
+        // 非同期 BMC 認証をシミュレート
         // tokio::time::sleep(Duration::from_secs(1)).await;
 
-        // Phase 2: return Active session
+        // フェーズ2: Active セッションを返却
         Ok(AsyncSession {
             host: pending.host,
             _state: PhantomData,
@@ -695,47 +647,41 @@ impl AsyncSession<Idle> {
 
 impl AsyncSession<Active> {
     pub async fn send_command(&mut self, cmd: &[u8]) -> Vec<u8> {
-        // async I/O here...
+        // 非同期 I/O を実行...
         vec![0x00]
     }
 }
 
-// Usage:
+// 使い方:
 // let session = AsyncSession::new("192.168.1.100");
 // let mut session = session.authenticate("admin", "pass").await?;
 // let resp = session.send_command(&[0x04, 0x2D]).await;
 ```
 
-**Key rules for async type-state:**
+**非同期型状態の重要ルール:**
 
-| Rule | Why |
+| ルール | 理由 |
 |------|-----|
-| Transition methods take `self` (by value), not `&mut self` | Ownership transfer works across `.await` |
-| Return `Result<NextState, (Error, PrevState)>` for recoverable errors | Caller can retry from the previous state |
-| Don't split state across multiple futures | One future owns one session |
-| Use `Send + 'static` bounds if using tokio::spawn | The session must be movable across threads |
+| 状態遷移メソッドは `&mut self` ではなく `self`（値渡し）を受け取る | `.await` をまたいで所有権の移転が機能するようにする |
+| 回復可能なエラーには `Result<NextState, (Error, PrevState)>` を返す | 呼び出し元が以前の状態からリトライできるようにする |
+| 状態を複数の Future に分割しない | 1つの Future が1つのセッションを所有する |
+| `tokio::spawn` を使用する場合は `Send + 'static` 境界を設ける | セッションがスレッド間を移動できるようにする |
 
-> **Caveat:** If you need the *previous* state back on error (to retry),
-> return `Result<AsyncSession<Active>, (Error, AsyncSession<Idle>)>` so
-> the caller gets ownership back. Without this, a failed `.await` drops the
-> session permanently.
+> **注意点:** エラー時にリトライするために*前の*状態を取り戻す必要がある場合は、呼び出し元が所有権を取り戻せるように `Result<AsyncSession<Active>, (Error, AsyncSession<Idle>)>` を返してください。これを行わないと、失敗した `.await` によってセッションが完全に破棄されてしまいます。
 
 ***
 
-### Trick 9 — Refinement Types via Const Assertions
+### トリック9 — const アサーションによる篩（リファインメント）型
 
-When a numeric constraint is a compile-time invariant (not runtime data),
-use `const` evaluation to enforce it. This differs from Trick 6 (which
-provides type-level size distinctions) — here we *reject invalid values*
-at compile time:
+数値の制約がランタイムデータではなくコンパイル時の不変条件である場合、それを強制するために `const` 評価を使用します。これはトリック6（型レベルのサイズ区別を提供）とは異なり、ここではコンパイル時に*無効な値を拒絶*します：
 
 ```rust,ignore
-/// A sensor ID that must be in the IPMI SDR range (0x01..=0xFE).
-/// The constraint is checked at compile time when `N` is const.
+/// IPMI SDR の範囲（0x01..=0xFE）内でなければならないセンサー ID。
+/// `N` が const である場合、制約はコンパイル時にチェックされる。
 pub struct SdrSensorId<const N: u8>;
 
 impl<const N: u8> SdrSensorId<N> {
-    /// Compile-time validation: panics during compilation if N is out of range.
+    /// コンパイル時バリデーション: N が範囲外の場合、コンパイル中にパニックする。
     pub const fn validate() {
         assert!(N >= 0x01, "Sensor ID must be >= 0x01");
         assert!(N <= 0xFE, "Sensor ID must be <= 0xFE (0xFF is reserved)");
@@ -746,19 +692,19 @@ impl<const N: u8> SdrSensorId<N> {
     pub const fn value() -> u8 { N }
 }
 
-// Usage:
+// 使い方:
 fn read_sensor_const<const N: u8>() -> f64 {
-    let _ = SdrSensorId::<N>::VALIDATED;  // compile-time check
-    // read sensor N...
+    let _ = SdrSensorId::<N>::VALIDATED;  // コンパイル時チェック
+    // センサー N を読み出す...
     42.0
 }
 
-// read_sensor_const::<0x20>();   // ✅ compiles — 0x20 is valid
-// read_sensor_const::<0x00>();   // ❌ compile error — "Sensor ID must be >= 0x01"
-// read_sensor_const::<0xFF>();   // ❌ compile error — 0xFF is reserved
+// read_sensor_const::<0x20>();   // ✅ コンパイル成功 — 0x20 は有効
+// read_sensor_const::<0x00>();   // ❌ コンパイルエラー — "Sensor ID must be >= 0x01"
+// read_sensor_const::<0xFF>();   // ❌ コンパイルエラー — 0xFF は予約済み
 ```
 
-**Simpler form — bounded fan IDs:**
+**よりシンプルな形式 — 範囲制限付きファンID:**
 
 ```rust,ignore
 pub struct BoundedFanId<const N: u8>;
@@ -773,59 +719,56 @@ impl<const N: u8> BoundedFanId<N> {
 }
 
 // BoundedFanId::<3>::id();   // ✅
-// BoundedFanId::<10>::id();  // ❌ compile error
+// BoundedFanId::<10>::id();  // ❌ コンパイルエラー
 ```
 
-> **When to use:** Hardware-defined fixed IDs (sensor IDs, fan slots, PCIe
-> slot numbers) known at compile time. When the value comes from runtime data
-> (config file, user input), use `TryFrom` / `FromStr` (ch07, Trick 5) instead.
+> **使い所:** コンパイル時に判明しているハードウェア定義の固定ID（センサーID、ファンスロット、PCIeスロット番号など）。値がランタイムデータ（設定ファイル、ユーザー入力）から来る場合は、代わりに `TryFrom` / `FromStr`（第7章、トリック5）を使用してください。
 
 ***
 
-### Trick 10 — Session Types for Channel Communication
+### トリック10 — チャネル通信のためのセッション型（Session Types）
 
-When two components communicate over a channel (e.g., diagnostic orchestrator ↔
-worker thread), **session types** encode the protocol in the type system:
+2つのコンポーネントがチャネルを介して通信する場合（例: 診断オーケストレータ ↔ ワーカースレッド）、**セッション型（Session Types）** はプロトコルを型システムにエンコードします：
 
 ```rust,ignore
 use std::marker::PhantomData;
 
-// Protocol: Client sends Request, Server sends Response, then done.
+// プロトコル: クライアントが Request を送信し、サーバーが Response を返し、完了する。
 pub struct SendRequest;
 pub struct RecvResponse;
 pub struct Done;
 
-/// A typed channel endpoint. `S` is the current protocol state.
+/// 型付きチャネルエンドポイント。`S` は現在のプロトコル状態。
 pub struct Chan<S> {
-    // In real code: wraps a mpsc::Sender/Receiver pair
+    // 実際のコード: mpsc::Sender/Receiver ペアをラップ
     _state: PhantomData<S>,
 }
 
 impl Chan<SendRequest> {
-    /// Send a request — transitions to RecvResponse state.
+    /// リクエストを送信 — RecvResponse 状態に遷移。
     pub fn send(self, request: DiagRequest) -> Chan<RecvResponse> {
-        // ... send on channel ...
+        // ... チャネルに送信 ...
         Chan { _state: PhantomData }
     }
 }
 
 impl Chan<RecvResponse> {
-    /// Receive a response — transitions to Done state.
+    /// レスポンスを受信 — Done 状態に遷移。
     pub fn recv(self) -> (DiagResponse, Chan<Done>) {
-        // ... recv from channel ...
+        // ... チャネルから受信 ...
         (DiagResponse { passed: true }, Chan { _state: PhantomData })
     }
 }
 
 impl Chan<Done> {
-    /// Closing the channel — only possible when the protocol is complete.
-    pub fn close(self) { /* drop */ }
+    /// チャネルを閉じる — プロトコルが完了したときにのみ可能。
+    pub fn close(self) { /* ドロップ */ }
 }
 
 pub struct DiagRequest { pub test_name: String }
 pub struct DiagResponse { pub passed: bool }
 
-// The protocol MUST be followed in order:
+// プロトコルは必ず順番通りに従わなければならない:
 fn orchestrator(chan: Chan<SendRequest>) {
     let chan = chan.send(DiagRequest { test_name: "gpu_stress".into() });
     let (response, chan) = chan.recv();
@@ -833,37 +776,31 @@ fn orchestrator(chan: Chan<SendRequest>) {
     println!("Result: {}", if response.passed { "PASS" } else { "FAIL" });
 }
 
-// Can't recv before send:
+// send の前に recv することはできない:
 // fn wrong_order(chan: Chan<SendRequest>) {
-//     chan.recv();  // ❌ no method `recv` on Chan<SendRequest>
+//     chan.recv();  // ❌ Chan<SendRequest> に `recv` メソッドは存在しない
 // }
 ```
 
-> **When to use:** Inter-thread diagnostic protocols, BMC command sequences,
-> any request-response pattern where order matters. For complex multi-message
-> protocols, consider the [`session-types`](https://crates.io/crates/session-types)
-> or [`rumpsteak`](https://crates.io/crates/rumpsteak) crates.
+> **使い所:** スレッド間の診断プロトコル、BMCコマンドシーケンス、順序が重要となるあらゆるリクエスト・レスポンスパターン。複雑なマルチメッセージプロトコルには、[`session-types`](https://crates.io/crates/session-types) や [`rumpsteak`](https://crates.io/crates/rumpsteak) クレートの利用も検討してください。
 
 ***
 
-### Trick 11 — `Pin` for Self-Referential State Machines
+### トリック11 — 自己参照状態機械のための `Pin`
 
-Some type-state machines need to hold references into their own data (e.g., a
-parser that tracks a position within its owned buffer). Rust normally forbids
-this because moving the struct would invalidate the internal pointer. `Pin<T>`
-solves this by guaranteeing the value **will not be moved**:
+一部の型状態機械は、自身のデータへの参照を保持する必要があります（例: 所有するバッファ内の位置を追跡するパーサー）。構造体をムーブすると内部ポインタが無効化されるため、Rustは通常これを禁止します。`Pin<T>` は、値が**ムーブされない**ことを保証することでこれを解決します：
 
 ```rust,ignore
 use std::pin::Pin;
 use std::marker::PhantomPinned;
 
-/// A streaming parser that holds a reference into its own buffer.
-/// Once pinned, it cannot be moved — the internal reference stays valid.
+/// 自身のバッファへの参照を保持するストリーミングパーサー。
+/// 一度ピン留めされるとムーブできなくなり、内部参照の有効性が保たれる。
 pub struct StreamParser {
     buffer: Vec<u8>,
-    /// Points into `buffer`. Only valid while pinned.
+    /// `buffer` の内部を指す。ピン留めされている間のみ有効。
     cursor: *const u8,
-    _pin: PhantomPinned,  // opts out of Unpin — prevents accidental unpinning
+    _pin: PhantomPinned,  // Unpin をオプトアウト — 意図しないピン留め解除を防ぐ
 }
 
 impl StreamParser {
@@ -875,9 +812,9 @@ impl StreamParser {
         };
         let mut boxed = Box::pin(parser);
 
-        // Set cursor to point into the pinned buffer
+        // cursor がピン留めされたバッファを指すように設定
         let cursor = boxed.buffer.as_ptr();
-        // SAFETY: we have exclusive access and the parser is pinned
+        // SAFETY: 排他的アクセス権があり、パーサーはピン留めされている
         unsafe {
             let mut_ref = Pin::as_mut(&mut boxed);
             Pin::get_unchecked_mut(mut_ref).cursor = cursor;
@@ -886,52 +823,47 @@ impl StreamParser {
         boxed
     }
 
-    /// Read the next byte — only callable through Pin<&mut Self>.
+    /// 次のバイトを読み出す — Pin<&mut Self> 経由でのみ呼び出し可能。
     pub fn next_byte(self: Pin<&mut Self>) -> Option<u8> {
-        // The parser can't be moved, so cursor remains valid
+        // パーサーはムーブできないため、cursor は有効なまま
         if self.cursor.is_null() { return None; }
-        // ... advance cursor through buffer ...
-        Some(42) // stub
+        // ... バッファ内でカーソルを進める ...
+        Some(42) // スタブ
     }
 }
 
-// Usage:
+// 使い方:
 // let mut parser = StreamParser::new(vec![0x01, 0x02, 0x03]);
 // let byte = parser.as_mut().next_byte();
 ```
 
-**Key insight:** `Pin` is the correct-by-construction solution to the
-self-referential struct problem. Without it, you'd need `unsafe` and manual
-lifetime tracking. With it, the compiler prevents moves and the internal
-pointer invariant is maintained.
+**重要な洞察:** `Pin` は、自己参照構造体の問題に対する構造的に正しい解決策です。これがない場合、`unsafe` と手動のライフタイム追跡が必要になります。これがあれば、コンパイラがムーブを防止し、内部ポインタの不変条件が維持されます。
 
-| Use `Pin` when… | Don't use `Pin` when… |
+| `Pin` を使うべき場合… | `Pin` を使わない場合… |
 |-----------------|----------------------|
-| State machine holds intra-struct references | All fields are independently owned |
-| Async futures that borrow across `.await` | No self-referencing needed |
-| DMA descriptors that must not relocate in memory | Data can be freely moved |
-| Hardware ring buffers with internal cursor | Simple index-based iteration works |
+| 状態機械が構造体内部への参照を保持する場合 | すべてのフィールドが独立して所有されている場合 |
+| `.await` をまたいで借用する非同期 Future | 自己参照が不要な場合 |
+| メモリ上で再配置されてはならない DMA ディスクリプタ | データを自由にムーブできる場合 |
+| 内部カーソルを持つハードウェアリングバッファ | 単純なインデックスベースの反復で十分な場合 |
 
 ***
 
-### Trick 12 — RAII / `Drop` as a Correctness Guarantee
+### トリック12 — 正しさの保証としての RAII / `Drop`
 
-Rust's `Drop` trait is a correct-by-construction mechanism: cleanup code **cannot
-be forgotten** because the compiler inserts it automatically. This is especially
-valuable for hardware resources that must be released exactly once.
+Rustの `Drop` トレイトは構造的に正しいメカニズムです。コンパイラがクリーンアップコードを自動的に挿入するため、クリーンアップが**忘れられることはありません**。これは、厳密に1回だけ解放しなければならないハードウェアリソースにとって特に価値があります。
 
 ```rust,ignore
 use std::io;
 
-/// An IPMI session that MUST be closed when done.
-/// The `Drop` impl guarantees cleanup even on panic or early `?` return.
+/// 終了時に必ず閉じなければならない IPMI セッション。
+/// `Drop` 実装により、パニック時や `?` による早期リターン時でもクリーンアップが保証される。
 pub struct IpmiSession {
     handle: u32,
 }
 
 impl IpmiSession {
     pub fn open(host: &str) -> io::Result<Self> {
-        // ... negotiate IPMI session ...
+        // ... IPMI セッションをネゴシエート ...
         Ok(IpmiSession { handle: 42 })
     }
 
@@ -942,39 +874,38 @@ impl IpmiSession {
 
 impl Drop for IpmiSession {
     fn drop(&mut self) {
-        // Close Session command: always runs, even on panic/early-return.
-        // In C, forgetting CloseSession() leaks a BMC session slot.
+        // Close Session コマンド: パニックや早期リターン時でも常に実行される。
+        // C言語では、CloseSession() を忘れると BMC のセッションスロットがリークする。
         let _ = self.send_raw(&[0x06, 0x3C]);
         eprintln!("[RAII] session {} closed", self.handle);
     }
 }
-// Usage:
+// 使い方:
 fn diagnose(host: &str) -> io::Result<()> {
     let session = IpmiSession::open(host)?;
     session.send_raw(&[0x04, 0x2D, 0x20])?;
-    // No explicit close needed — Drop runs here automatically
+    // 明示的な close は不要 — ここで自動的に Drop が実行される
     Ok(())
-    // Even if send_raw returns Err(...), the session is still closed.
+    // send_raw が Err(...) を返した場合でも、セッションは確実に閉じられる。
 }
 ```
 
-**The C/C++ failure mode that RAII eliminates:**
+**RAII が排除する C/C++ の失敗パターン:**
 
 ```text
 C:     session = ipmi_open(host);
        ipmi_send(session, data);
-       if (error) return -1;        // 🐛 leaked session — forgot close()
+       if (error) return -1;        // 🐛 セッションのリーク — close() を忘れた
        ipmi_close(session);
 
 Rust:  let session = IpmiSession::open(host)?;
-       session.send_raw(data)?;     // ✅ Drop runs on ? return
-       // Drop always runs — leak is impossible
+       session.send_raw(data)?;     // ✅ ? によるリターン時に Drop が実行される
+       // Drop は常に実行される — リークは起こり得ない
 ```
 
-**Combine RAII with type-state (ch05) for ordered cleanup:**
+**順序付けられたクリーンアップのための RAII と型状態（第5章）の組み合わせ:**
 
-You cannot specialize `Drop` on a generic parameter (Rust error E0366).
-Instead, use **separate wrapper types** per state:
+ジェネリックパラメータに対して `Drop` を特殊化することはできません（Rust エラー E0366）。代わりに、状態ごとに**個別のラッパー型**を使用します：
 
 ```rust,ignore
 use std::marker::PhantomData;
@@ -989,64 +920,57 @@ pub struct GpuContext<S> {
 
 impl GpuContext<Open> {
     pub fn lock_clocks(self) -> LockedGpu {
-        // ... lock GPU clocks for stable benchmarking ...
+        // ... 安定したベンチマークのために GPU クロックをロック ...
         LockedGpu { device_id: self.device_id }
     }
 }
 
-/// Separate type for the locked state — has its own Drop.
-/// We can't do `impl Drop for GpuContext<Locked>` (E0366),
-/// so we use a distinct wrapper that owns the locked resource.
+/// ロック状態専用の個別の型 — 独自の Drop を持つ。
+/// `impl Drop for GpuContext<Locked>` は記述できないため（E0366）、
+/// ロックされたリソースを所有する個別のラッパーを使用する。
 pub struct LockedGpu {
     device_id: u32,
 }
 
 impl LockedGpu {
     pub fn run_benchmark(&self) -> f64 {
-        // ... benchmark with locked clocks ...
+        // ... ロックされたクロックでベンチマークを実行 ...
         42.0
     }
 }
 
 impl Drop for LockedGpu {
     fn drop(&mut self) {
-        // Unlock clocks on drop — only fires for the locked wrapper.
+        // ドロップ時にクロックのロックを解除 — ロック状態のラッパーに対してのみ発火する。
         eprintln!("[RAII] GPU {} clocks unlocked", self.device_id);
     }
 }
 
-// GpuContext<Open> has no special Drop — no clocks to unlock.
-// LockedGpu always unlocks on drop, even on panic or early return.
+// GpuContext<Open> には特別な Drop はない — 解除すべきクロックがないため。
+// LockedGpu は、パニックや早期リターン時であっても、ドロップ時に必ずロックを解除する。
 ```
 
-> **Why not `impl Drop for GpuContext<Locked>`?** Rust requires `Drop` impls
-> to apply to *all* instantiations of a generic type. To get state-specific
-> cleanup, use one of:
+> **なぜ `impl Drop for GpuContext<Locked>` ができないのか？** Rust では、`Drop` 実装がジェネリック型の*すべての*インスタンス化に適用される必要があります。状態に応じたクリーンアップを実現するには、以下のいずれかのアプローチを使用します：
 >
-> | Approach | Pros | Cons |
+> | アプローチ | メリット | デメリット |
 > |----------|------|------|
-> | Separate wrapper type (above) | Clean, zero-cost | Extra type name |
-> | Generic `Drop` + runtime `TypeId` check | Single type | Requires `'static`, runtime cost |
-> | `enum` state with exhaustive match in `Drop` | Single generic type | Runtime dispatch, less type safety |
+> | 個別のラッパー型（上記） | 明快、ゼロコスト | 型名が増える |
+> | ジェネリックな `Drop` + 実行時の `TypeId` チェック | 単一の型 | `'static` が必要、ランタイムコスト |
+> | `enum` 状態と `Drop` 内での網羅的マッチ | 単一のジェネリック型 | ランタイムディスパッチ、型安全性が低下 |
 
-> **When to use:** BMC sessions, GPU clock locks, DMA buffer mappings, file
-> handles, mutex guards, any resource with a mandatory release step. If you
-> find yourself writing `fn close(&mut self)` or `fn cleanup()`, it should
-> almost certainly be `Drop` instead.
+> **使い所:** BMCセッション、GPUクロックロック、DMAバッファマッピング、ファイルハンドル、ミューテックスガードなど、解放ステップが必須であるあらゆるリソース。もし `fn close(&mut self)` や `fn cleanup()` といったメソッドを書いている自分に気づいたら、ほぼ間違いなく代わりに `Drop` を使うべきです。
 
 ***
 
-### Trick 13 — Error Type Hierarchies as Correctness
+### トリック13 — 正しさを担保するエラー型の階層構造
 
-Well-designed error types prevent silent error swallowing and ensure callers
-handle each failure mode appropriately. Using `thiserror` for structured errors
-is a correct-by-construction pattern: the compiler forces exhaustive matching.
+適切に設計されたエラー型は、エラーのサイレントな握りつぶしを防ぎ、呼び出し元がそれぞれの失敗モードを適切に処理できるようにします。構造化されたエラーに `thiserror` を使用することは、構造的に正しいパターンです。コンパイラが網羅的なパターンマッチを強制するためです。
 
 ```toml
 # Cargo.toml
 [dependencies]
 thiserror = "1"
-# For application-level error handling (optional):
+# アプリケーションレベルのエラー処理用（任意）:
 # anyhow = "1"
 ```
 
@@ -1080,10 +1004,10 @@ pub enum IpmiError {
     CompletionCode(u8),
 }
 
-// Callers MUST handle each variant — no silent swallowing:
+// 呼び出し元は各バリアントを必ず処理しなければならない — サイレントな握りつぶしは不可:
 fn run_thermal_check() -> Result<(), DiagError> {
-    // If this returns IpmiError, it's automatically converted to DiagError::Ipmi
-    // via the #[from] attribute.
+    // これが IpmiError を返した場合、#[from] アトリビュートにより
+    // 自動的に DiagError::Ipmi に変換される。
     let temp = read_cpu_temp()?;
     if temp > 105.0 {
         return Err(DiagError::SensorRange {
@@ -1097,53 +1021,48 @@ fn run_thermal_check() -> Result<(), DiagError> {
 # fn read_cpu_temp() -> Result<f64, DiagError> { Ok(42.0) }
 ```
 
-**Why this is correct-by-construction:**
+**なぜこれが構造的に正しいのか:**
 
-| Without structured errors | With `thiserror` enums |
+| 構造化されていないエラー | `thiserror` の列挙型 |
 |--------------------------|----------------------|
 | `fn op() -> Result<T, String>` | `fn op() -> Result<T, DiagError>` |
-| Caller gets opaque string | Caller matches on specific variants |
-| Can't distinguish auth failure from timeout | `DiagError::Ipmi(IpmiError::AuthFailed)` vs `Timeout` |
-| Logging swallows the error | `match` forces handling each case |
-| New error variant → nobody notices | New variant → compiler warns unmatched arms |
+| 呼び出し元は不透明な文字列を受け取る | 呼び出し元は特定のバリアントでマッチできる |
+| 認証失敗とタイムアウトを区別できない | `DiagError::Ipmi(IpmiError::AuthFailed)` vs `Timeout` |
+| ログ出力でエラーが握りつぶされる | `match` により各ケースの処理が強制される |
+| 新しいエラーバリアントの追加に誰も気づかない | 新しいバリアントの追加時に未処理のアームをコンパイラが警告する |
 
-**The `anyhow` vs `thiserror` decision:**
+**`anyhow` と `thiserror` の使い分けの判断:**
 
-| Use `thiserror` when… | Use `anyhow` when… |
+| `thiserror` を使う場合… | `anyhow` を使う場合… |
 |-----------------------|-------------------|
-| Writing a library/crate | Writing a binary/CLI |
-| Callers need to match on error variants | Callers just log and exit |
-| Error types are part of the public API | Internal error plumbing |
-| `protocol_lib`, `accel_diag`, `thermal_diag` | `diag_tool` main binary |
+| ライブラリ / クレートの開発 | バイナリ / CLI の開発 |
+| 呼び出し元がエラーバリアントで分岐する必要がある場合 | 呼び出し元が単にログを出力して終了する場合 |
+| エラー型がパブリックAPIの一部である場合 | 内部的なエラーの配管処理 |
+| `protocol_lib`, `accel_diag`, `thermal_diag` | `diag_tool` の main バイナリ |
 
-> **When to use:** Every crate in the workspace should define its own error
-> enum with `thiserror`. The top-level binary crate can use `anyhow` to
-> aggregate them. This gives library callers compile-time error handling
-> guarantees while keeping the binary ergonomic.
+> **使い所:** ワークスペース内のすべてのクレートは、`thiserror` を使用して独自のエラー列挙型を定義すべきです。最上位のバイナリクレートは、それらを統合するために `anyhow` を使用できます。これにより、ライブラリの呼び出し元にはコンパイル時のエラー処理の保証が与えられ、バイナリ側は簡潔に保たれます。
 
 ***
 
-### Trick 14 — `#[must_use]` for Enforcing Consumption
+### トリック14 — 消費を強制する `#[must_use]`
 
-The `#[must_use]` attribute turns ignored return values into compiler warnings.
-This is a lightweight correct-by-construction tool that pairs with every pattern
-in this guide:
+`#[must_use]` アトリビュートは、戻り値の無視をコンパイラの警告に変えます。これは、本ガイドのすべてのパターンと組み合わせることができる、軽量で構造的に正しいツールです：
 
 ```rust,ignore
-/// A calibration token that MUST be used — dropping it silently is a bug.
+/// 必ず使用しなければならないキャリブレーション（校正）トークン — サイレントにドロップするのはバグ。
 #[must_use = "calibration token must be passed to calibrate(), not dropped"]
 pub struct CalibrationToken {
     _private: (),
 }
 
-/// A diagnostic result that MUST be checked — ignoring failures is a bug.
+/// 必ずチェックしなければならない診断結果 — 失敗の無視はバグ。
 #[must_use = "diagnostic result must be inspected for failures"]
 pub struct DiagResult {
     pub passed: bool,
     pub details: String,
 }
 
-/// Functions that return important values should be marked too:
+/// 重要な値を返す関数にもアノテーションを付けるべきである:
 #[must_use = "the authenticated session must be used or explicitly closed"]
 pub fn authenticate(user: &str, pass: &str) -> Result<Session, AuthError> {
     // ...
@@ -1154,7 +1073,7 @@ pub fn authenticate(user: &str, pass: &str) -> Result<Session, AuthError> {
 # pub struct AuthError;
 ```
 
-**What the compiler tells you:**
+**コンパイラが伝える警告:**
 
 ```text
 warning: unused `CalibrationToken` that must be used
@@ -1166,28 +1085,24 @@ warning: unused `CalibrationToken` that must be used
    = note: calibration token must be passed to calibrate(), not dropped
 ```
 
-**Apply `#[must_use]` to these patterns:**
+**以下のパターンに `#[must_use]` を適用する:**
 
-| Pattern | What to annotate | Why |
+| パターン | アノテーションを付与する対象 | 理由 |
 |---------|-----------------|-----|
-| Single-Use Tokens (ch03) | `CalibrationToken`, `FusePayload` | Dropping without use = logic bug |
-| Capability Tokens (ch04) | `AdminToken` | Authenticating but ignoring the token |
-| Type-State transitions | Return type of `authenticate()`, `activate()` | Session created but never used |
-| Results | `DiagResult`, `SensorReading` | Silent failure swallowing |
-| RAII handles (Trick 12) | `IpmiSession`, `LockedGpu` | Opening but not using a resource |
+| 単一使用トークン（第3章） | `CalibrationToken`, `FusePayload` | 使用せずにドロップするのはロジックバグ |
+| ケイパビリティトークン（第4章） | `AdminToken` | 認証したのにトークンを無視している |
+| 型状態の遷移 | `authenticate()`, `activate()` の戻り値の型 | セッションを作成したのに使用していない |
+| 実行結果 | `DiagResult`, `SensorReading` | サイレントな障害の見落とし |
+| RAII ハンドル（トリック12） | `IpmiSession`, `LockedGpu` | リソースを開いたのに使用していない |
 
-> **Rule of thumb:** If dropping a value without using it is always a bug,
-> add `#[must_use]`. If it's sometimes intentional (e.g., a `Vec`), don't.
-> The `_` prefix (`let _ = foo()`) explicitly acknowledges and silences the
-> warning — this is fine when the drop is intentional.
+> **経験則:** 値を使用せずにドロップすることが常にバグである場合は、`#[must_use]` を追加してください。時として意図的なドロップがあり得る場合（例: `Vec`）は追加しないでください。`_` プレフィックス（`let _ = foo()`）は警告を明示的に認識して抑制します — これは意図的なドロップである場合には問題ありません。
 
-## Key Takeaways
+## 重要ポイント
 
-1. **Sentinel → Option at the boundary** — convert magic values to `Option` on parse; the compiler forces callers to handle `None`.
-2. **Sealed traits close the implementation loophole** — private supertrait means only your crate can implement the trait.
-3. **`#[non_exhaustive]` + `#[must_use]` are one-line, high-value annotations** — add them to evolving enums and consumed tokens.
-4. **Typestate builders enforce required fields** — `finish()` only exists when all required type parameters are `Set`.
-5. **Each trick targets a specific bug class** — adopt them incrementally; no trick requires rewriting your architecture.
+1. **境界で番兵値を Option に変換する** — パース時にマジックナンバーを `Option` に変換することで、コンパイラが呼び出し元に `None` の処理を強制します。
+2. **シールドトレイトで実装の抜け穴を塞ぐ** — プライベートなスーパートレイトにより、自分たちのクレートだけがトレイトを実装できるようになります。
+3. **`#[non_exhaustive]` と `#[must_use]` は1行で高価値なアトリビュート** — 将来拡張される列挙型や消費されるべきトークンに追加してください。
+4. **型状態ビルダーで必須フィールドを強制する** — 必須の型パラメータがすべて `Set` されたときにのみ `finish()` が存在するようにします。
+5. **各トリックが特定のバグ分類を狙い撃ちする** — アーキテクチャを書き直す必要はなく、段階的に導入できます。
 
 ---
-

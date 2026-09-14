@@ -1,12 +1,12 @@
-## Collapsing assignment pyramids with closures
+## クロージャによる代入ピラミッドの解消
 
-> **What you'll learn:** How Rust's expression-based syntax and closures flatten deeply-nested C++ `if/else` validation chains into clean, linear code.
+> **学習目標:** Rustの式指向構文とクロージャを活用して、深くネストされたC++の `if/else` バリデーションチェーンを、クリーンで線形なコードへとフラット化する方法を学びます。
 
-- C++ often requires multi-block `if/else` chains to assign variables, especially when validation or fallback logic is involved. Rust's expression-based syntax and closures collapse these into flat, linear code.
+- C++では、特にバリデーションやフォールバック処理を伴う場合、変数を代入するために複数の `if/else` ブロックチェーンが必要になることがよくあります。Rustの式指向（expression-based）構文とクロージャを使用すると、これらをフラットで線形なコードに集約できます。
 
-### Pattern 1: Tuple assignment with `if` expression
+### パターン 1: if 式を用いたタプル代入
 ```cpp
-// C++ — three variables set across a multi-block if/else chain
+// C++ — 複数の if/else ブロックチェーンにまたがって3つの変数を設定
 uint32_t fault_code;
 const char* der_marker;
 const char* action;
@@ -20,8 +20,8 @@ if (is_c44ad) {
 ```
 
 ```rust
-// Rust equivalent:accel_fieldiag.rs
-// Single expression assigns all three at once:
+// Rustでの同等コード: accel_fieldiag.rs
+// 単一の式で3つの変数すべてを一度に代入:
 let (fault_code, der_marker, recommended_action) = if is_c44ad {
     (32709u32, "CSI_WARN", "No action")
 } else if error.is_hardware_error() {
@@ -31,9 +31,9 @@ let (fault_code, der_marker, recommended_action) = if is_c44ad {
 };
 ```
 
-### Pattern 2: IIFE (Immediately Invoked Function Expression) for fallible chains
+### パターン 2: 失敗する可能性のある処理チェーンのための IIFE（即時実行関数式）
 ```cpp
-// C++ — pyramid of doom for JSON navigation
+// C++ — JSONナビゲーションにおける「破滅のピラミッド（Pyramid of Doom）」
 std::string get_part_number(const nlohmann::json& root) {
     if (root.contains("SystemInfo")) {
         auto& sys = root["SystemInfo"];
@@ -49,8 +49,8 @@ std::string get_part_number(const nlohmann::json& root) {
 ```
 
 ```rust
-// Rust equivalent:framework.rs
-// Closure + ? operator collapses the pyramid into linear code:
+// Rustでの同等コード: framework.rs
+// クロージャと ? 演算子によってピラミッドを線形なコードへと解消:
 let part_number = (|| -> Option<String> {
     let path = self.args.sysinfo.as_ref()?;
     let content = std::fs::read_to_string(path).ok()?;
@@ -64,15 +64,15 @@ let part_number = (|| -> Option<String> {
 })()
 .unwrap_or_else(|| "UNKNOWN".to_string());
 ```
-The closure creates an `Option<String>` scope where `?` bails early at any step. The `.unwrap_or_else()` provides the fallback once, at the end.
+クロージャによって `Option<String>` のスコープが作成され、どのステップでも `?` によって早期リターンできます。末尾の `.unwrap_or_else()` で一度だけフォールバックを提供します。
 
-### Pattern 3: Iterator chain replacing manual loop + push_back
+### パターン 3: 手動ループ + push_back を置き換えるイテレータチェーン
 ```cpp
-// C++ — manual loop with intermediate variables
+// C++ — 中間変数を用いた手動ループ
 std::vector<std::tuple<std::vector<std::string>, std::string, std::string>> gpu_info;
 for (const auto& [key, info] : gpu_pcie_map) {
     std::vector<std::string> bdfs;
-    // ... parse bdf_path into bdfs
+    // ... bdf_path をパースして bdfs に格納
     std::string serial = info.serial_number.value_or("UNKNOWN");
     std::string model = info.model_number.value_or(model_name);
     gpu_info.push_back({bdfs, serial, model});
@@ -80,8 +80,8 @@ for (const auto& [key, info] : gpu_pcie_map) {
 ```
 
 ```rust
-// Rust equivalent:peripherals.rs
-// Single chain: values() → map → collect
+// Rustでの同等コード: peripherals.rs
+// 単一のチェーン: values() → map → collect
 let gpu_info: Vec<(Vec<String>, String, String, String)> = self
     .gpu_pcie_map
     .values()
@@ -102,7 +102,7 @@ let gpu_info: Vec<(Vec<String>, String, String, String)> = self
     .collect();
 ```
 
-### Pattern 4: `.filter().collect()` replacing loop + `if (condition) continue`
+### パターン 4: ループ + if (condition) continue を置き換える `.filter().collect()`
 ```cpp
 // C++
 std::vector<TestResult*> failures;
@@ -114,37 +114,37 @@ for (auto& t : test_results) {
 ```
 
 ```rust
-// Rust — from accel_diag/src/healthcheck.rs
+// Rust — accel_diag/src/healthcheck.rs より
 pub fn failed_tests(&self) -> Vec<&TestResult> {
     self.test_results.iter().filter(|t| !t.is_pass()).collect()
 }
 ```
 
-### Summary: When to use each pattern
-| **C++ Pattern** | **Rust Replacement** | **Key Benefit** |
+### まとめ: 各パターンを使用する場面
+| **C++ のパターン** | **Rust での代替** | **主なメリット** |
 |----------------|---------------------|-----------------|
-| Multi-block variable assignment | `let (a, b) = if ... { } else { };` | All variables bound atomically |
-| Nested `if (contains)` pyramid | IIFE closure with `?` operator | Linear, flat, early-exit |
-| `for` loop + `push_back` | `.iter().map(\|\|).collect()` | No intermediate mut Vec |
-| `for` + `if (cond) continue` | `.iter().filter(\|\|).collect()` | Declarative intent |
-| `for` + `if + break` (find first) | `.iter().find_map(\|\|)` | Search + transform in one pass |
+| 複数ブロックでの変数代入 | `let (a, b) = if ... { } else { };` | すべての変数がアトミックに束縛される |
+| ネストした `if (contains)` のピラミッド | `?` 演算子を用いた IIFE クロージャ | 線形でフラット、早期リターンが可能 |
+| `for` ループ + `push_back` | `.iter().map(\|\|).collect()` | 中間の一時的な mut Vec が不要 |
+| `for` + `if (cond) continue` | `.iter().filter(\|\|).collect()` | 宣言的な意図の表現 |
+| `for` + `if + break`（最初の要素を検索） | `.iter().find_map(\|\|)` | 1回のパスで検索と変換を実行 |
 
 ----
 
-# Capstone Exercise: Diagnostic Event Pipeline
+# 総合演習: 診断イベントパイプライン
 
-🔴 **Challenge** — integrative exercise combining enums, traits, iterators, error handling, and generics
+🔴 **チャレンジ課題** — 列挙型、トレイト、イテレータ、エラー処理、ジェネリクスを組み合わせた総合演習
 
-This integrative exercise brings together enums, traits, iterators, error handling, and generics. You'll build a simplified diagnostic event processing pipeline similar to patterns used in production Rust code.
+この総合演習では、列挙型、トレイト、イテレータ、エラー処理、ジェネリクスを組み合わせます。本番のRustコードで使用されているパターンと同様の、簡略化された診断イベント処理パイプラインを構築します。
 
-**Requirements:**
-1. Define an `enum Severity { Info, Warning, Critical }` with `Display`, and a `struct DiagEvent` containing `source: String`, `severity: Severity`, `message: String`, and `fault_code: u32`
-2. Define a `trait EventFilter` with a method `fn should_include(&self, event: &DiagEvent) -> bool`
-3. Implement two filters: `SeverityFilter` (only events >= a given severity) and `SourceFilter` (only events from a specific source string)
-4. Write a function `fn process_events(events: &[DiagEvent], filters: &[&dyn EventFilter]) -> Vec<String>` that returns formatted report lines for events that pass **all** filters
-5. Write a `fn parse_event(line: &str) -> Result<DiagEvent, String>` that parses lines of the form `"source:severity:fault_code:message"` (return `Err` for bad input)
+**要件:**
+1. `Display` を実装した `enum Severity { Info, Warning, Critical }` と、`source: String`, `severity: Severity`, `message: String`, `fault_code: u32` を持つ `struct DiagEvent` を定義する
+2. メソッド `fn should_include(&self, event: &DiagEvent) -> bool` を持つ `trait EventFilter` を定義する
+3. 2つのフィルタを実装する: `SeverityFilter`（指定した重大度以上のイベントのみ）と `SourceFilter`（特定のソース文字列からのイベントのみ）
+4. **すべての** フィルタを通過したイベントに対してフォーマット済みのレポート行を返す関数 `fn process_events(events: &[DiagEvent], filters: &[&dyn EventFilter]) -> Vec<String>` を作成する
+5. `"source:severity:fault_code:message"` 形式の行をパースする `fn parse_event(line: &str) -> Result<DiagEvent, String>` を作成する（不正な入力に対しては `Err` を返す）
 
-**Starter code:**
+**スターターコード:**
 ```rust
 use std::fmt;
 
@@ -176,22 +176,22 @@ trait EventFilter {
 struct SeverityFilter {
     min_severity: Severity,
 }
-// TODO: impl EventFilter for SeverityFilter
+// TODO: SeverityFilter に EventFilter を実装する
 
 struct SourceFilter {
     source: String,
 }
-// TODO: impl EventFilter for SourceFilter
+// TODO: SourceFilter に EventFilter を実装する
 
 fn process_events(events: &[DiagEvent], filters: &[&dyn EventFilter]) -> Vec<String> {
-    // TODO: Filter events that pass ALL filters, format as
-    // "[SEVERITY] source (FC:fault_code): message"
+    // TODO: すべてのフィルタを通過したイベントを抽出し、
+    // "[SEVERITY] source (FC:fault_code): message" の形式にフォーマットする
     todo!()
 }
 
 fn parse_event(line: &str) -> Result<DiagEvent, String> {
-    // Parse "source:severity:fault_code:message"
-    // Return Err for invalid input
+    // "source:severity:fault_code:message" をパースする
+    // 不正な入力に対しては Err を返す
     todo!()
 }
 
@@ -204,7 +204,7 @@ fn main() {
         "accel_diag:Warning:32710:PCIe link width reduced",
     ];
 
-    // Parse all lines, collect successes and report errors
+    // すべての行をパースし、成功したものを収集してエラーを報告する
     let events: Vec<DiagEvent> = raw_lines.iter()
         .filter_map(|line| match parse_event(line) {
             Ok(e) => Some(e),
@@ -212,7 +212,7 @@ fn main() {
         })
         .collect();
 
-    // Apply filters: only Critical+Warning events from accel_diag
+    // フィルタを適用: accel_diag からの Critical および Warning イベントのみ
     let sev_filter = SeverityFilter { min_severity: Severity::Warning };
     let src_filter = SourceFilter { source: "accel_diag".to_string() };
     let filters: Vec<&dyn EventFilter> = vec![&sev_filter, &src_filter];
@@ -225,7 +225,7 @@ fn main() {
 }
 ```
 
-<details><summary>Solution (click to expand)</summary>
+<details><summary>解答例（クリックして展開）</summary>
 
 ```rust
 use std::fmt;
@@ -338,7 +338,7 @@ fn main() {
     }
     println!("--- {} event(s) matched ---", report.len());
 }
-// Output:
+// 出力結果:
 // [CRITICAL] accel_diag (FC:67956): ECC uncorrectable error detected
 // [WARNING] accel_diag (FC:32710): PCIe link width reduced
 // --- 2 event(s) matched ---
@@ -347,4 +347,3 @@ fn main() {
 </details>
 
 ----
-

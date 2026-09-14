@@ -1,24 +1,18 @@
-# Testing Type-Level Guarantees 🟡
+# 型レベル保証のテスト 🟡
 
-> **What you'll learn:** How to test that invalid code *fails to compile* (trybuild), fuzz validated boundaries (proptest), verify RAII invariants, and prove zero-cost abstraction via `cargo-show-asm`.
+> **学習内容:** 不正なコードが*コンパイルに失敗する*ことをテストする方法（trybuild）、検証済み境界のファジング（proptest）、RAII 不変条件の検証、および `cargo-show-asm` によるゼロコスト抽象化の証明。
 >
-> **Cross-references:** [ch03](ch03-single-use-types-cryptographic-guarantee.md) (compile-fail for nonces), [ch07](ch07-validated-boundaries-parse-dont-validate.md) (proptest for boundaries), [ch05](ch05-protocol-state-machines-type-state-for-r.md) (RAII for sessions)
+> **関連章:** [第3章](ch03-single-use-types-cryptographic-guarantee.md)（ノンスのコンパイル失敗テスト）、[第7章](ch07-validated-boundaries-parse-dont-validate.md)（境界の proptest）、[第5章](ch05-protocol-state-machines-type-state-for-r.md)（セッションの RAII）
 
-## Testing Type-Level Guarantees
+## 型レベル保証のテスト
 
-Correct-by-construction patterns shift bugs from runtime to compile time. But
-how do you **test** that invalid code actually fails to compile? And how do you
-ensure validated boundaries hold under fuzzing? This chapter covers the testing
-tools that complement type-level correctness.
+「正しさを構造的に保証する（Correct-by-construction）」パターンは、バグを実行時からコンパイル時にシフトさせます。しかし、不正なコードが実際にコンパイルに失敗することをどのように**テスト**すればよいのでしょうか？また、検証済み境界がファジングの下でも維持されることをどうやって保証するのでしょうか？本章では、型レベルの正しさを補完するテストツールについて解説します。
 
-### Compile-Fail Tests with `trybuild`
+### `trybuild` によるコンパイル失敗テスト
 
-The [`trybuild`](https://crates.io/crates/trybuild) crate lets you assert that
-certain code **should not compile**. This is essential for maintaining type-level
-invariants across refactors — if someone accidentally adds `Clone` to your
-single-use `Nonce`, the compile-fail test catches it.
+[`trybuild`](https://crates.io/crates/trybuild) クレートを使用すると、特定のコードが**コンパイルできないこと**をアサートできます。これは、リファクタリング全体を通じて型レベルの不変条件を維持するために不可欠です。たとえば、誰かが誤って使い捨ての `Nonce` に `Clone` を追加してしまった場合でも、コンパイル失敗テストがそれを捕捉します。
 
-**Setup:**
+**セットアップ:**
 
 ```toml
 # Cargo.toml
@@ -26,7 +20,7 @@ single-use `Nonce`, the compile-fail test catches it.
 trybuild = "1"
 ```
 
-**Test file (`tests/compile_fail.rs`):**
+**テストファイル (`tests/compile_fail.rs`):**
 
 ```rust,ignore
 #[test]
@@ -36,7 +30,7 @@ fn type_safety_tests() {
 }
 ```
 
-**Test case: Nonce reuse must not compile (`tests/ui/nonce_reuse.rs`):**
+**テストケース: Nonce の再利用はコンパイルされてはならない (`tests/ui/nonce_reuse.rs`):**
 
 ```rust,ignore
 // tests/ui/nonce_reuse.rs
@@ -45,13 +39,13 @@ use my_crate::Nonce;
 fn main() {
     let nonce = Nonce::new();
     encrypt(nonce);
-    encrypt(nonce); // should fail: use of moved value
+    encrypt(nonce); // 失敗すべき: ムーブされた値の使用
 }
 
 fn encrypt(_n: Nonce) {}
 ```
 
-**Expected error (`tests/ui/nonce_reuse.stderr`):**
+**期待されるエラー (`tests/ui/nonce_reuse.stderr`):**
 
 ```text
 error[E0382]: use of moved value: `nonce`
@@ -65,31 +59,28 @@ error[E0382]: use of moved value: `nonce`
   |             ^^^^^ value used here after move
 ```
 
-**More compile-fail test cases per chapter:**
+**各章に応じたさらなるコンパイル失敗テストケース:**
 
-| Pattern (Chapter) | Test assertion | File |
+| パターン（章） | テストのアサーション | ファイル |
 |-------------------|---------------|------|
-| Single-Use Nonce (ch03) | Can't use nonce twice | `nonce_reuse.rs` |
-| Capability Token (ch04) | Can't call `admin_op()` without token | `missing_token.rs` |
-| Type-State (ch05) | Can't `send_command()` on `Session<Idle>` | `wrong_state.rs` |
-| Dimensional (ch06) | Can't add `Celsius + Rpm` | `unit_mismatch.rs` |
-| Sealed Trait (Trick 2) | External crate can't impl sealed trait | `unseal_attempt.rs` |
-| Non-Exhaustive (Trick 3) | External match without wildcard fails | `missing_wildcard.rs` |
+| 使い捨て Nonce（第3章） | Nonce を2回使用できない | `nonce_reuse.rs` |
+| ケーパビリティトークン（第4章） | トークンなしで `admin_op()` を呼び出せない | `missing_token.rs` |
+| 型状態（第5章） | `Session<Idle>` で `send_command()` を呼び出せない | `wrong_state.rs` |
+| 次元（第6章） | `Celsius + Rpm` を加算できない | `unit_mismatch.rs` |
+| シールドトレイト（裏技2） | 外部クレートはシールドトレイトを実装できない | `unseal_attempt.rs` |
+| Non-Exhaustive（裏技3） | ワイルドカードなしの外部 match は失敗する | `missing_wildcard.rs` |
 
-**CI integration:**
+**CI への統合:**
 
 ```yaml
 # .github/workflows/ci.yml
-- name: Run compile-fail tests
+- name: コンパイル失敗テストの実行
   run: cargo test --test compile_fail
 ```
 
-### Property-Based Testing of Validated Boundaries
+### 検証済み境界のプロパティベーステスト
 
-Validated boundaries (ch07) parse data once and reject invalid input. But
-how do you know your validation catches **all** invalid inputs? Property-based
-testing with [`proptest`](https://crates.io/crates/proptest) generates
-thousands of random inputs to stress the boundary:
+検証済み境界（第7章）はデータを一度パースし、不正な入力を拒否します。しかし、自分の実装した検証が**すべて**の不正な入力を確実に捕捉しているとどうしてわかるでしょうか？[`proptest`](https://crates.io/crates/proptest) を用いたプロパティベーステストは、何千ものランダムな入力を生成して境界に負荷をかけます：
 
 ```toml
 # Cargo.toml
@@ -100,42 +91,42 @@ proptest = "1"
 ```rust,ignore
 use proptest::prelude::*;
 
-/// From ch07: ValidFru wraps a spec-compliant FRU payload.
-/// These tests use the full ch07 ValidFru with board_area(),
-/// product_area(), and format_version() methods.
-/// Note: ch07 defines TryFrom<RawFruData>, so we wrap raw bytes first.
+/// 第7章より: ValidFru は仕様に準拠した FRU ペイロードをラップします。
+/// これらのテストでは、board_area()、product_area()、format_version() メソッドを持つ
+/// 第7章の完全な ValidFru を使用します。
+/// 注: 第7章では TryFrom<RawFruData> を定義しているため、まず生バイトをラップします。
 
 proptest! {
-    /// Any byte sequence that passes validation must be usable without panic.
+    /// 検証を通過した任意のバイト列は、パニックすることなく使用できなければならない。
     #[test]
     fn valid_fru_never_panics(data in proptest::collection::vec(any::<u8>(), 0..1024)) {
         if let Ok(fru) = ValidFru::try_from(RawFruData(data)) {
-            // These must never panic on a validated FRU
-            // (methods from ch07's ValidFru impl):
+            // これらは検証済み FRU において決してパニックしてはならない
+            // （第7章の ValidFru 実装のメソッド）:
             let _ = fru.format_version();
             let _ = fru.board_area();
             let _ = fru.product_area();
         }
     }
 
-    /// Round-trip: format_version is preserved through reparsing.
+    /// ラウンドトリップ: format_version は再パースしても保持される。
     #[test]
     fn fru_round_trip(data in valid_fru_strategy()) {
         let raw = RawFruData(data.clone());
         let fru = ValidFru::try_from(raw).unwrap();
         let version = fru.format_version();
-        // Re-parse the same bytes — version must be identical
+        // 同じバイト列を再パースする — バージョンは同一でなければならない
         let reparsed = ValidFru::try_from(RawFruData(data)).unwrap();
         prop_assert_eq!(version, reparsed.format_version());
     }
 }
 
-/// Custom strategy: generates byte vectors that satisfy the FRU spec header.
-/// The header format matches ch07's `TryFrom<RawFruData>` validation:
-///   - Byte 0: version = 0x01
-///   - Bytes 1-6: area offsets (×8 = actual byte offset)
-///   - Byte 7: checksum (sum of bytes 0-7 = 0 mod 256)
-/// The body is random but large enough for the offsets to be in-bounds.
+/// カスタムストラテジ: FRU 仕様のヘッダーを満たすバイトベクタを生成する。
+/// ヘッダーフォーマットは第7章の `TryFrom<RawFruData>` 検証に準拠:
+///   - バイト 0: version = 0x01
+///   - バイト 1-6: エリアオフセット（×8 = 実際のバイトオフセット）
+///   - バイト 7: チェックサム（バイト 0〜7 の合計 = 0 mod 256）
+/// ボディはランダムだが、オフセットが範囲内に収まる十分な大きさを持つ。
 fn valid_fru_strategy() -> impl Strategy<Value = Vec<u8>> {
     let header = vec![0x01, 0x00, 0x01, 0x02, 0x00, 0x00, 0x00];
     proptest::collection::vec(any::<u8>(), 64..256)
@@ -149,32 +140,31 @@ fn valid_fru_strategy() -> impl Strategy<Value = Vec<u8>> {
 }
 ```
 
-**The testing pyramid for correct-by-construction code:**
+**正しさを構造的に保証するコードのためのテストピラミッド:**
 
 ```text
 ┌───────────────────────────────────┐
-│    Compile-Fail Tests (trybuild)  │ ← "Invalid code must not compile"
+│  コンパイル失敗テスト (trybuild)   │ ← 「不正なコードはコンパイルされてはならない」
 ├───────────────────────────────────┤
-│  Property Tests (proptest/quickcheck) │ ← "Valid inputs never panic"
+│ プロパティテスト (proptest/quickcheck) │ ← 「有効な入力が決してパニックしない」
 ├───────────────────────────────────┤
-│    Unit Tests (#[test])           │ ← "Specific inputs produce expected outputs"
+│    ユニットテスト (#[test])       │ ← 「特定の入力が期待される出力を生成する」
 ├───────────────────────────────────┤
-│    Type System (patterns ch02–13) │ ← "Entire classes of bugs can't exist"
+│    型システム (第2〜13章のパターン) │ ← 「バグのクラス全体が存在し得ない」
 └───────────────────────────────────┘
 ```
 
-### RAII Verification
+### RAII の検証
 
-RAII (Trick 12) guarantees cleanup. To test this, verify that the `Drop` impl
-actually fires:
+RAII（裏技12）はクリーンアップを保証します。これをテストするには、`Drop` の実装が実際に実行されることを検証します：
 
 ```rust,ignore
 use std::sync::atomic::{AtomicBool, Ordering};
 
-// NOTE: These tests use a global AtomicBool, so they must not run in
-// parallel with each other. Use `#[serial_test::serial]` or run with
-// `cargo test -- --test-threads=1`. Alternatively, use a per-test
-// `Arc<AtomicBool>` passed via closure to avoid the global entirely.
+// 注: これらのテストはグローバルの AtomicBool を使用するため、互いに並列実行
+// してはなりません。`#[serial_test::serial]` を使用するか、`cargo test -- --test-threads=1`
+// で実行してください。あるいは、グローバルを完全に回避するためにクロージャ経由で
+// テストごとの `Arc<AtomicBool>` を渡してください。
 static DROPPED: AtomicBool = AtomicBool::new(false);
 
 struct TestSession;
@@ -208,35 +198,34 @@ fn session_drops_on_panic() {
 }
 ```
 
-### Applying to Your Codebase
+### 実際のコードベースへの適用
 
-Here's a prioritized plan for adding type-level tests to the
-workspace:
+ワークスペースに型レベルテストを追加するための優先順位付けされた計画は以下のとおりです：
 
-| Crate | Test type | What to test |
+| クレート | テスト種別 | テスト対象 |
 |-------|-----------|-------------|
-| `protocol_lib` | Compile-fail | `Session<Idle>` can't `send_command()` |
-| `protocol_lib` | Property | Any byte seq → `TryFrom` either succeeds or returns Err (no panic) |
-| `thermal_diag` | Compile-fail | Can't construct `FanReading` without `HasSpi` mixin |
-| `accel_diag` | Property | GPU sensor parsing: random bytes → validated-or-rejected |
-| `config_loader` | Property | Random strings → `FromStr` for `DiagLevel` never panics |
-| `pci_topology` | Compile-fail | `Register<Width16>` can't be passed where `Width32` expected |
-| `event_handler` | Compile-fail | Audit token can't be cloned |
-| `diag_framework` | Compile-fail | `DerBuilder<Missing, _>` can't call `finish()` |
+| `protocol_lib` | コンパイル失敗 | `Session<Idle>` は `send_command()` を呼び出せない |
+| `protocol_lib` | プロパティ | 任意のバイト列 → `TryFrom` が成功するか Err を返す（パニックなし） |
+| `thermal_diag` | コンパイル失敗 | `HasSpi` ミックスインなしでは `FanReading` を構築できない |
+| `accel_diag` | プロパティ | GPU センサーのパース: ランダムバイト → 検証成功または拒否 |
+| `config_loader` | プロパティ | ランダム文字列 → `DiagLevel` の `FromStr` が決してパニックしない |
+| `pci_topology` | コンパイル失敗 | `Width32` が期待される場所に `Register<Width16>` を渡せない |
+| `event_handler` | コンパイル失敗 | 監査トークンはクローンできない |
+| `diag_framework` | コンパイル失敗 | `DerBuilder<Missing, _>` は `finish()` を呼び出せない |
 
-### Zero-Cost Abstraction: Proof by Assembly
+### ゼロコスト抽象化: アセンブリによる証明
 
-A common concern: "Do newtypes and phantom types add runtime overhead?"
-The answer is **no** — they compile to identical assembly as raw primitives.
-Here's how to verify:
+よくある懸念事項として、「ニュータイプや幽霊型（ファントム型）は実行時のオーバーヘッドを追加するのではないか？」というものがあります。
+答えは **No** です — これらはプリミティブそのままの場合と完全に同一のアセンブリにコンパイルされます。
+検証方法は以下のとおりです：
 
-**Setup:**
+**セットアップ:**
 
 ```bash
 cargo install cargo-show-asm
 ```
 
-**Example: Newtype vs raw u32:**
+**例: ニュータイプ vs 生の u32:**
 
 ```rust,ignore
 // src/lib.rs
@@ -246,62 +235,59 @@ pub struct Rpm(pub u32);
 #[derive(Clone, Copy)]
 pub struct Celsius(pub f64);
 
-// Newtype arithmetic
+// ニュータイプの算術
 #[inline(never)]
 pub fn add_rpm(a: Rpm, b: Rpm) -> Rpm {
     Rpm(a.0 + b.0)
 }
 
-// Raw arithmetic (for comparison)
+// 生の算術（比較用）
 #[inline(never)]
 pub fn add_raw(a: u32, b: u32) -> u32 {
     a + b
 }
 ```
 
-**Run:**
+**実行:**
 
 ```bash
 cargo asm my_crate::add_rpm
 cargo asm my_crate::add_raw
 ```
 
-**Result — identical assembly:**
+**結果 — 同一のアセンブリ:**
 
 ```asm
-; add_rpm (newtype)           ; add_raw (raw u32)
+; add_rpm (ニュータイプ)      ; add_raw (生の u32)
 my_crate::add_rpm:            my_crate::add_raw:
   lea eax, [rdi + rsi]         lea eax, [rdi + rsi]
   ret                          ret
 ```
 
-The `Rpm` wrapper is completely erased at compile time. The same holds for
-`PhantomData<S>` (zero bytes), `ZST` tokens (zero bytes), and all other
-type-level markers used throughout this guide.
+`Rpm` ラッパーはコンパイル時に完全に消去されます。同じことが `PhantomData<S>`（0バイト）、`ZST`（ゼロサイズ型）トークン（0バイト）、および本ガイド全体で使用されているその他すべての型レベルマーカーにも当てはまります。
 
-**Verify for your own types:**
+**独自の型について検証する:**
 
 ```bash
-# Show assembly for a specific function
+# 特定の関数のアセンブリを表示
 cargo asm --lib ipmi_lib::session::execute
 
-# Show that PhantomData adds zero bytes
+# PhantomData が 0 バイトを追加することを示す
 cargo asm --lib --rust ipmi_lib::session::IpmiSession
 ```
 
-> **Key takeaway:** Every pattern in this guide has **zero runtime cost**.
-> The type system does all the work and is erased completely during compilation.
-> You get the safety of Haskell with the performance of C.
+> **重要なポイント:** 本ガイドで紹介したすべてのパターンは**実行時コストがゼロ**です。
+> 型システムがすべての作業を行い、コンパイル中に完全に消去されます。
+> Haskell の安全性と C のパフォーマンスを同時に手に入れることができます。
 
-## Key Takeaways
+## 主なポイント
 
-1. **trybuild tests that invalid code won't compile** — essential for maintaining type-level invariants across refactors.
-2. **proptest fuzzes validation boundaries** — generates thousands of random inputs to stress `TryFrom` implementations.
-3. **RAII verification tests that Drop runs** — Arc counters or mock flags prove cleanup happened.
-4. **cargo-show-asm proves zero-cost** — phantom types, ZSTs, and newtypes produce the same assembly as raw C.
-5. **Add compile-fail tests for every "impossible" state** — if someone accidentally derives `Clone` on a single-use type, the test catches it.
+1. **trybuild は不正なコードがコンパイルできないことをテストする** — リファクタリング全体を通じて型レベルの不変条件を維持するために不可欠。
+2. **proptest は検証境界をファジングする** — 何千ものランダム入力を生成して `TryFrom` 実装に負荷をかける。
+3. **RAII 検証は Drop が実行されることをテストする** — Arc カウンタやモックフラグによってクリーンアップが行われたことを証明する。
+4. **cargo-show-asm はゼロコストを証明する** — 幽霊型、ZST、ニュータイプは生の C と同じアセンブリを生成する。
+5. **すべての「あり得ない」状態に対してコンパイル失敗テストを追加する** — 使い捨て型に対して誤って `Clone` を導出してしまった場合でも、テストがそれを捕捉する。
 
 ---
 
-*End of Type-Driven Correctness in Rust*
-
+*『Rust における型駆動の正しさ（Type-Driven Correctness in Rust）』 完*

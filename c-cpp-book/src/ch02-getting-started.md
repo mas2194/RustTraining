@@ -1,62 +1,62 @@
-# Enough talk already: Show me some code
+# 講釈は十分: コードを見てみよう
 
-> **What you'll learn:** Your first Rust program — `fn main()`, `println!()`, and how Rust macros differ fundamentally from C/C++ preprocessor macros. By the end you'll be able to write, compile, and run simple Rust programs.
+> **ここで学ぶこと:** 初めての Rust プログラム — `fn main()`、`println!()`、そして Rust のマクロが C/C++ のプリプロセッサマクロと根本的にどのように異なるかについて学びます。本章を終えると、シンプルな Rust プログラムを作成、コンパイル、実行できるようになります。
 
 ```rust
 fn main() {
     println!("Hello world from Rust");
 }
 ```
-- The above syntax should be similar to anyone familiar with C-style languages
-    - All functions in Rust begin with the ```fn``` keyword
-    - The default entry point for executables is ```main()```
-    - The ```println!``` looks like a function, but is actually a **macro**. Macros in Rust are very different from C/C++ preprocessor macros — they are hygienic, type-safe, and operate on the syntax tree rather than text substitution
-- Two great ways to quickly try out Rust snippets:
-    - **Online**: [Rust Playground](https://play.rust-lang.org/) — paste code, hit Run, share results. No install needed
-    - **Local REPL**: Install [`evcxr_repl`](https://github.com/evcxr/evcxr) for an interactive Rust REPL (like Python's REPL, but for Rust):
+- 上記の構文は、C系の言語に親しみのある方なら馴染み深いものに見えるはずです
+    - Rust のすべての関数は ```fn``` キーワードで始まります
+    - 実行可能バイナリのデフォルトのエントリポイントは ```main()``` です
+    - ```println!``` は一見関数のように見えますが、実際には**マクロ**です。Rust のマクロは C/C++ のプリプロセッサマクロとは全く異なります — 衛生的（hygienic）で型安全であり、単純なテキスト置換ではなく構文木（AST）に対して動作します
+- Rust のコードスニペットを手軽に試す2つの優れた方法:
+    - **オンライン**: [Rust Playground](https://play.rust-lang.org/) — コードを貼り付けて「Run」を押すだけで結果が得られ、共有も可能。インストール不要です
+    - **ローカル REPL**: 対話的な Rust REPL 環境である [`evcxr_repl`](https://github.com/evcxr/evcxr) をインストールします（Python の REPL のようなものを Rust で実現します）:
 ```bash
 cargo install --locked evcxr_repl
-evcxr   # Start the REPL, type Rust expressions interactively
+evcxr   # REPL を起動し、対話的に Rust の式を入力できます
 ```
 
-### Rust Local installation
-- Rust can be locally installed using the following methods
+### Rust のローカル環境インストール
+- Rust は以下の方法でローカルにインストールできます
     - Windows: https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe
     - Linux / WSL: ```curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh```
-- The Rust ecosystem is composed of the following components
-    - ```rustc``` is the standalone compiler, but it's seldom used directly
-    - The preferred tool, ```cargo``` is the Swiss Army knife and is used for dependency management, building, testing, formatting, linting, etc.
-    - The Rust toolchain comes in the ```stable```, ```beta``` and ```nightly``` (experimental) channels, but we'll stick with ```stable```. Use the ```rustup update``` command to upgrade the ```stable``` installation that's released every six weeks
-- We'll also install the ```rust-analyzer``` plug-in for VSCode
+- Rust エコシステムは以下のコンポーネントで構成されています
+    - ```rustc``` は単体コンパイラですが、直接呼び出すことはほとんどありません
+    - 推奨されるツールである ```cargo``` はスイスアーミーナイフ（万能ツール）であり、依存関係の管理、ビルド、テスト、フォーマット、リントなどに使用されます
+    - Rust ツールチェーンには ```stable```、```beta```、```nightly```（実験用）の各チャネルがありますが、基本的には ```stable``` を使用します。6週間ごとにリリースされる最新の ```stable``` にアップグレードするには ```rustup update``` コマンドを実行します
+- VSCode 向けの ```rust-analyzer``` 拡張機能もインストールします
 
-# Rust packages (crates)
-- Rust binaries are created using packages (hereby called crates)
-    - A crate may either be standalone, or may have dependency on other crates. The crates for the dependencies can be local or remote. Third-party crates are typically downloaded from a centralized repository called ```crates.io```. 
-    - The ```cargo``` tool automatically handles the downloading of crates and their dependencies. This is conceptually equivalent to linking to C-libraries
-    - Crate dependencies are expressed in a file called ```Cargo.toml```. It also defines the target type for the crate: standalone executable, static library, dynamic library (uncommon)
-    - Reference: https://doc.rust-lang.org/cargo/reference/cargo-targets.html
+# Rust パッケージ（クレート）
+- Rust のバイナリはパッケージ（以降「クレート（crate）」と呼びます）を使用して作成されます
+    - クレートは単独で完結する場合もあれば、他のクレートに依存する場合もあります。依存先のクレートはローカルでもリモートでも構いません。サードパーティ製クレートは通常、```crates.io``` と呼ばれる中央リポジトリからダウンロードされます
+    - ```cargo``` ツールは、クレートとその依存関係のダウンロードを自動的に処理します。これは概念的には C ライブラリのリンクに相当します
+    - クレートの依存関係は ```Cargo.toml``` という名前のファイルに記述します。また、クレートのターゲット種別（スタンドアロンの実行ファイル、静的ライブラリ、動的ライブラリ（一般的ではない））も定義します
+    - リファレンス: https://doc.rust-lang.org/cargo/reference/cargo-targets.html
 
-## Cargo vs Traditional C Build Systems
+## Cargo と従来の C ビルドシステムの比較
 
-### Dependency Management Comparison
+### 依存関係管理の比較
 
 ```mermaid
 graph TD
-    subgraph "Traditional C Build Process"
-        CC["C Source Files<br/>(.c, .h)"]
-        CM["Manual Makefile<br/>or CMake"]
-        CL["Linker"]
-        CB["Final Binary"]
+    subgraph "従来の C ビルドプロセス"
+        CC["C ソースファイル<br/>(.c, .h)"]
+        CM["手動の Makefile<br/>または CMake"]
+        CL["リンカー"]
+        CB["最終バイナリ"]
         
         CC --> CM
         CM --> CL
         CL --> CB
         
-        CDep["Manual dependency<br/>management"]
+        CDep["手動の依存関係管理"]
         CLib1["libcurl-dev<br/>(apt install)"]
         CLib2["libjson-dev<br/>(apt install)"]
-        CInc["Manual include paths<br/>-I/usr/include/curl"]
-        CLink["Manual linking<br/>-lcurl -ljson"]
+        CInc["手動のインクルードパス指定<br/>-I/usr/include/curl"]
+        CLink["手動のリンク指定<br/>-lcurl -ljson"]
         
         CDep --> CLib1
         CDep --> CLib2
@@ -65,28 +65,28 @@ graph TD
         CInc --> CM
         CLink --> CL
         
-        C_ISSUES["[ERROR] Version conflicts<br/>[ERROR] Platform differences<br/>[ERROR] Missing dependencies<br/>[ERROR] Linking order matters<br/>[ERROR] No automated updates"]
+        C_ISSUES["[エラー] バージョン競合<br/>[エラー] プラットフォーム差異<br/>[エラー] 依存関係の不足<br/>[エラー] リンク順序への依存<br/>[エラー] 自動アップデートなし"]
     end
     
-    subgraph "Rust Cargo Build Process"
-        RS["Rust Source Files<br/>(.rs)"]
+    subgraph "Rust Cargo ビルドプロセス"
+        RS["Rust ソースファイル<br/>(.rs)"]
         CT["Cargo.toml<br/>[dependencies]<br/>reqwest = '0.11'<br/>serde_json = '1.0'"]
-        CRG["Cargo Build System"]
-        RB["Final Binary"]
+        CRG["Cargo ビルドシステム"]
+        RB["最終バイナリ"]
         
         RS --> CRG
         CT --> CRG
         CRG --> RB
         
-        CRATES["crates.io<br/>(Package registry)"]
-        DEPS["Automatic dependency<br/>resolution"]
-        LOCK["Cargo.lock<br/>(Version pinning)"]
+        CRATES["crates.io<br/>(パッケージリポジトリ)"]
+        DEPS["自動的な依存関係の解決"]
+        LOCK["Cargo.lock<br/>(バージョン固定)"]
         
         CRATES --> DEPS
         DEPS --> CRG
         CRG --> LOCK
         
-        R_BENEFITS["[OK] Semantic versioning<br/>[OK] Automatic downloads<br/>[OK] Cross-platform<br/>[OK] Transitive dependencies<br/>[OK] Reproducible builds"]
+        R_BENEFITS["[利点] セマンティックバージョニング<br/>[利点] 自動ダウンロード<br/>[利点] クロスプラットフォーム<br/>[利点] 推移的依存関係の解決<br/>[利点] 再現可能なビルド"]
     end
     
     style C_ISSUES fill:#ff6b6b,color:#000
@@ -99,34 +99,34 @@ graph TD
     style CRATES fill:#91e5a3,color:#000
 ```
 
-### Cargo Project Structure
+### Cargo プロジェクト構造
 
 ```text
 my_project/
-|-- Cargo.toml          # Project configuration (like package.json)
-|-- Cargo.lock          # Exact dependency versions (auto-generated)
+|-- Cargo.toml          # プロジェクト設定（package.json のようなもの）
+|-- Cargo.lock          # 依存関係の正確なバージョン（自動生成）
 |-- src/
-|   |-- main.rs         # Main entry point for binary
-|   |-- lib.rs          # Library root (if creating a library)
-|   `-- bin/            # Additional binary targets
-|-- tests/              # Integration tests
-|-- examples/           # Example code
-|-- benches/            # Benchmarks
-`-- target/             # Build artifacts (like C's build/ or obj/)
-    |-- debug/          # Debug builds (fast compile, slow runtime)
-    `-- release/        # Release builds (slow compile, fast runtime)
+|   |-- main.rs         # バイナリのメインエントリポイント
+|   |-- lib.rs          # ライブラリのルート（ライブラリを作成する場合）
+|   `-- bin/            # 追加のバイナリターゲット
+|-- tests/              # 統合テスト
+|-- examples/           # サンプルコード
+|-- benches/            # ベンチマーク
+`-- target/             # ビルド成果物（C の build/ や obj/ に相当）
+    |-- debug/          # デバッグビルド（コンパイルが速く、実行速度は遅い）
+    `-- release/        # リリースビルド（コンパイルが遅く、実行速度が速い）
 ```
 
-### Common Cargo Commands
+### よく使う Cargo コマンド
 
 ```mermaid
 graph LR
-    subgraph "Project Lifecycle"
-        NEW["cargo new my_project<br/>[FOLDER] Create new project"]
-        CHECK["cargo check<br/>[SEARCH] Fast syntax check"]
-        BUILD["cargo build<br/>[BUILD] Compile project"]
-        RUN["cargo run<br/>[PLAY] Build and execute"]
-        TEST["cargo test<br/>[TEST] Run all tests"]
+    subgraph "プロジェクトのライフサイクル"
+        NEW["cargo new my_project<br/>新規プロジェクトの作成"]
+        CHECK["cargo check<br/>高速な構文・型チェック"]
+        BUILD["cargo build<br/>プロジェクトのコンパイル"]
+        RUN["cargo run<br/>ビルドして実行"]
+        TEST["cargo test<br/>すべてのテストを実行"]
         
         NEW --> CHECK
         CHECK --> BUILD
@@ -134,17 +134,17 @@ graph LR
         BUILD --> TEST
     end
     
-    subgraph "Advanced Commands"
-        UPDATE["cargo update<br/>[CHART] Update dependencies"]
-        FORMAT["cargo fmt<br/>[SPARKLES] Format code"]
-        LINT["cargo clippy<br/>[WRENCH] Lint and suggestions"]
-        DOC["cargo doc<br/>[BOOKS] Generate documentation"]
-        PUBLISH["cargo publish<br/>[PACKAGE] Publish to crates.io"]
+    subgraph "高度なコマンド"
+        UPDATE["cargo update<br/>依存関係の更新"]
+        FORMAT["cargo fmt<br/>コードの自動整形"]
+        LINT["cargo clippy<br/>リントと改善提案"]
+        DOC["cargo doc<br/>ドキュメントの生成"]
+        PUBLISH["cargo publish<br/>crates.io への公開"]
     end
     
-    subgraph "Build Profiles"
-        DEBUG["cargo build<br/>(debug profile)<br/>Fast compile<br/>Slow runtime<br/>Debug symbols"]
-        RELEASE["cargo build --release<br/>(release profile)<br/>Slow compile<br/>Fast runtime<br/>Optimized"]
+    subgraph "ビルドプロファイル"
+        DEBUG["cargo build<br/>(debug プロファイル)<br/>コンパイル速/実行遅<br/>デバッグシンボル付き"]
+        RELEASE["cargo build --release<br/>(release プロファイル)<br/>コンパイル遅/実行速<br/>高度に最適化"]
     end
     
     style NEW fill:#a3d5ff,color:#000
@@ -156,17 +156,15 @@ graph LR
     style RELEASE fill:#ef4444,color:#000
 ```
 
-# Example: cargo and crates
-- In this example, we have a standalone executable crate with no other dependencies
-- Use the following commands to create a new crate called ```helloworld``` 
+# 例: cargo とクレート
+- この例では、他の依存関係を持たないスタンドアロンの実行可能クレートを作成します
+- 以下のコマンドを使用して、```helloworld``` という新しいクレートを作成します
 ```bash
 cargo new helloworld
 cd helloworld
 cat Cargo.toml
 ```
-- By default, ```cargo run``` will compile and run the ```debug``` (unoptimized) version of the crate. To execute the ```release``` version, use ```cargo run --release```
-- Note that actual binary file resides under the ```target``` folder under the ```debug``` or ```release``` folder 
-- We might have also noticed a file called ```Cargo.lock``` in the same folder as the source. It is automatically generated and should not be modified by hand
-    - We will revisit the specific purpose of ```Cargo.lock``` later
-
-
+- デフォルトでは、```cargo run``` はクレートの ```debug```（未最適化）バージョンをコンパイルして実行します。```release``` バージョンを実行するには、```cargo run --release``` を使用します
+- 実際のバイナリファイルは、```target``` ディレクトリ配下の ```debug``` または ```release``` ディレクトリ内に配置されます
+- ソースと同じディレクトリに ```Cargo.lock``` というファイルが生成されていることにも気づくかもしれません。これは自動生成されるファイルであり、手動で変更してはいけません
+    - ```Cargo.lock``` の具体的な目的については、後ほど改めて詳しく説明します

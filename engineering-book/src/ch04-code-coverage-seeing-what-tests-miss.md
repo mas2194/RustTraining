@@ -1,95 +1,89 @@
-# Code Coverage — Seeing What Tests Miss 🟢
+# コードカバレッジ — テストが見逃した箇所の可視化 🟢
 
-> **What you'll learn:**
-> - Source-based coverage with `cargo-llvm-cov` (the most accurate Rust coverage tool)
-> - Quick coverage checks with `cargo-tarpaulin` and Mozilla's `grcov`
-> - Setting up coverage gates in CI with Codecov and Coveralls
-> - A coverage-guided testing strategy that prioritizes high-risk blind spots
->
-> **Cross-references:** [Miri and Sanitizers](ch05-miri-valgrind-and-sanitizers-verifying-u.md) — coverage finds untested code, Miri finds UB in tested code · [Benchmarking](ch03-benchmarking-measuring-what-matters.md) — coverage shows *what's tested*, benchmarks show *what's fast* · [CI/CD Pipeline](ch11-putting-it-all-together-a-production-cic.md) — coverage gate in the pipeline
+> **学ぶこと:**
+> - `cargo-llvm-cov`（最も精度の高い Rust カバレッジツール）によるソースベースカバレッジ
+> - `cargo-tarpaulin` および Mozilla の `grcov` による手軽なカバレッジ計測
+> - Codecov や Coveralls を用いた CI でのカバレッジゲートの設定
+> - 高リスクなテスト盲点（ブラインドスポット）を優先するカバレッジ主導のテスト戦略
 
-Code coverage measures which lines, branches, or functions your tests actually
-execute. It doesn't prove correctness (a covered line can still have bugs), but
-it reliably reveals **blind spots** — code paths that no test exercises at all.
+> **相互参照:** [Miriとサニタイザ](ch05-miri-valgrind-and-sanitizers-verifying-u.md) — カバレッジは「未テストのコード」を発見し、Miri は「テスト済みコード内の未定義動作 (UB)」を発見します · [ベンチマーク](ch03-benchmarking-measuring-what-matters.md) — カバレッジは「何がテストされたか」を示し、ベンチマークは「どれほど速いか」を示します · [CI/CD パイプライン](ch11-putting-it-all-together-a-production-cic.md) — パイプラインにおけるカバレッジゲートの組み込み
 
-With 1,006 tests across many crates, the project has substantial test investment.
-Coverage analysis answers: "Is that investment reaching the code that matters?"
+コードカバレッジは、テストがソースコードのどの行、分岐（ブランチ）、または関数を実際に実行したかを測定する指標です。カバレッジが高いからといって正しさが証明されるわけではありません（実行された行にバグが潜んでいることもあります）。しかし、いかなるテストも通過していないコードパス、すなわち**テストの盲点（ブラインドスポット）**を確実に可視化してくれます。
 
-### Source-Based Coverage with `llvm-cov`
+多数のクレートにまたがる 1,006 件のテストを抱えるプロジェクトでは、テストに対して多大な投資が行われています。カバレッジ分析は、「その投資は本当に重要なコードに届いているか？」という問いに答えてくれます。
 
-Rust uses LLVM, which provides source-based coverage instrumentation — the most
-accurate coverage method available. The recommended tool is
-[`cargo-llvm-cov`](https://github.com/taiki-e/cargo-llvm-cov):
+### `llvm-cov` によるソースベースのカバレッジ
+
+Rust は LLVM をバックエンドとして使用しており、利用可能な手法の中で最も高精度なソースベースのカバレッジインストルメンテーションを提供しています。推奨ツールは [`cargo-llvm-cov`](https://github.com/taiki-e/cargo-llvm-cov) です：
 
 ```bash
-# Install
+# インストール
 cargo install cargo-llvm-cov
 
-# Or via rustup component (for the raw llvm tools)
+# または rustup コンポーネント経由 (生の LLVM ツール用)
 rustup component add llvm-tools-preview
 ```
 
-**Basic usage:**
+**基本的な使い方:**
 
 ```bash
-# Run tests and show per-file coverage summary
+# テストを実行し、ファイルごとのカバレッジサマリを表示
 cargo llvm-cov
 
-# Generate HTML report (browsable, line-by-line highlighting)
+# HTML レポートを生成 (ブラウザで閲覧可能、行単位のハイライト表示)
 cargo llvm-cov --html
-# Output: target/llvm-cov/html/index.html
+# 出力先: target/llvm-cov/html/index.html
 
-# Generate LCOV format (for CI integrations)
+# LCOV 形式を生成 (CI 連携用)
 cargo llvm-cov --lcov --output-path lcov.info
 
-# Workspace-wide coverage (all crates)
+# ワークスペース全体のカバレッジ (すべてのクレート)
 cargo llvm-cov --workspace
 
-# Include only specific packages
+# 特定のパッケージのみを対象にする
 cargo llvm-cov --package accel_diag --package topology_lib
 
-# Coverage including doc tests
+# ドキュメントテストを含めてカバレッジを測定
 cargo llvm-cov --doctests
 ```
 
-**Reading the HTML report:**
+**HTML レポートの読み方:**
 
 ```text
 target/llvm-cov/html/index.html
-├── Filename          │ Function │ Line   │ Branch │ Region
-├─ accel_diag/src/lib.rs │  78.5%  │ 82.3% │ 61.2% │  74.1%
-├─ sel_mgr/src/parse.rs│  95.2%  │ 96.8% │ 88.0% │  93.5%
-├─ topology_lib/src/.. │  91.0%  │ 93.4% │ 79.5% │  89.2%
+├── Filename             │ Function │ Line   │ Branch │ Region
+├─ accel_diag/src/lib.rs │  78.5%   │ 82.3%  │ 61.2%  │  74.1%
+├─ sel_mgr/src/parse.rs  │  95.2%   │ 96.8%  │ 88.0%  │  93.5%
+├─ topology_lib/src/..   │  91.0%   │ 93.4%  │ 79.5%  │  89.2%
 └─ ...
 
-Green = covered    Red = not covered    Yellow = partially covered (branch)
+緑 = カバー済み    赤 = 未カバー    黄 = 一部カバー (分岐の一部のみ通過)
 ```
 
-**Coverage types explained:**
+**カバレッジ指標の種類と意味:**
 
-| Type | What It Measures | Significance |
+| 種類 | 測定対象 | 意義 |
 |------|------------------|-------------|
-| **Line coverage** | Which source lines were executed | Basic "was this code reached?" |
-| **Branch coverage** | Which `if`/`match` arms were taken | Catches untested conditions |
-| **Function coverage** | Which functions were called | Finds dead code |
-| **Region coverage** | Which code regions (sub-expressions) were hit | Most granular |
+| **行カバレッジ (Line coverage)** | 実行されたソース行 | 基本的な「このコードに到達したか？」の確認 |
+| **分岐カバレッジ (Branch coverage)** | 実行された `if` や `match` の各分岐 | テストされていない条件分岐の検知 |
+| **関数カバレッジ (Function coverage)** | 呼び出された関数 | 使用されていないデッドコードの特定 |
+| **リージョンカバレッジ (Region coverage)** | 実行されたコード領域（部分式単位） | 最も粒度の細かい網羅性の検証 |
 
-### cargo-tarpaulin — The Quick Path
+### cargo-tarpaulin — 手軽なアプローチ
 
-[`cargo-tarpaulin`](https://github.com/xd009642/tarpaulin) is a Linux-specific
-coverage tool that's simpler to set up (no LLVM components needed):
+[`cargo-tarpaulin`](https://github.com/xd009642/tarpaulin) は Linux 専用のカバレッジツールで、LLVM コンポーネントの追加インストールが不要なため、より手軽にセットアップできます：
 
 ```bash
-# Install
+# インストール
 cargo install cargo-tarpaulin
 
-# Basic coverage report
+# 基本的なカバレッジレポート
 cargo tarpaulin
 
-# HTML output
+# HTML 出力
 cargo tarpaulin --out Html
 
-# With specific options
+# オプションを指定した実行
 cargo tarpaulin \
     --workspace \
     --timeout 120 \
@@ -98,43 +92,41 @@ cargo tarpaulin \
     --exclude-files "*/tests/*" "*/benches/*" \
     --ignore-panics
 
-# Skip certain crates
-cargo tarpaulin --workspace --exclude diag_tool  # exclude the binary crate
+# 特定のクレートを除外
+cargo tarpaulin --workspace --exclude diag_tool  # バイナリクレートを除外
 ```
 
-**tarpaulin vs llvm-cov comparison:**
+**tarpaulin vs llvm-cov の比較:**
 
-| Feature | cargo-llvm-cov | cargo-tarpaulin |
+| 項目 | cargo-llvm-cov | cargo-tarpaulin |
 |---------|----------------|-----------------|
-| Accuracy | Source-based (most accurate) | Ptrace-based (occasional overcounting) |
-| Platform | Any (llvm-based) | Linux only |
-| Branch coverage | Yes | Limited |
-| Doc tests | Yes | No |
-| Setup | Needs `llvm-tools-preview` | Self-contained |
-| Speed | Faster (compile-time instrumentation) | Slower (ptrace overhead) |
-| Stability | Very stable | Occasional false positives |
+| 精度 | ソースベース（最も高精度） | ptrace ベース（過剰カウントが発生する場合あり） |
+| プラットフォーム | 全プラットフォーム対応 (LLVM ベース) | Linux のみ |
+| 分岐カバレッジ | 完全対応 | 限定的 |
+| ドキュメントテスト | 対応 | 非対応 |
+| セットアップ | `llvm-tools-preview` が必要 | 単体で完結 |
+| 実行速度 | 高速（コンパイル時インストルメンテーション） | 低速（ptrace によるオーバーヘッド） |
+| 安定性 | 非常に安定 | 稀に偽陽性（誤検知）あり |
 
-**Recommendation**: Use `cargo-llvm-cov` for accuracy. Use `cargo-tarpaulin` when
-you need a quick check without installing LLVM tools.
+**推奨事項**: 精度を重視する場合は `cargo-llvm-cov` を使用してください。LLVM ツールの追加なしで素早くチェックしたい場合は `cargo-tarpaulin` が適しています。
 
-### grcov — Mozilla's Coverage Tool
+### grcov — Mozilla のカバレッジ集約ツール
 
-[`grcov`](https://github.com/mozilla/grcov) is Mozilla's coverage aggregator.
-It consumes raw LLVM profiling data and produces reports in multiple formats:
+[`grcov`](https://github.com/mozilla/grcov) は Mozilla 製のカバレッジアグリゲータです。生の LLVM プロファイリングデータを集約し、多様なフォーマットでレポートを出力します：
 
 ```bash
-# Install
+# インストール
 cargo install grcov
 
-# Step 1: Build with coverage instrumentation
+# ステップ 1: カバレッジインストルメンテーション付きでビルド
 export RUSTFLAGS="-Cinstrument-coverage"
 export LLVM_PROFILE_FILE="target/coverage/%p-%m.profraw"
 cargo build --tests
 
-# Step 2: Run tests (generates .profraw files)
+# ステップ 2: テストの実行 (.profraw ファイルが生成される)
 cargo test
 
-# Step 3: Aggregate with grcov
+# ステップ 3: grcov で集約
 grcov target/coverage/ \
     --binary-path target/debug/ \
     --source-dir . \
@@ -145,17 +137,15 @@ grcov target/coverage/ \
     --ignore "*/tests/*" \
     --ignore "*/.cargo/*"
 
-# Step 4: View report
+# ステップ 4: レポートの確認
 open target/coverage/report/html/index.html
 ```
 
-**When to use grcov**: It's most useful when you need to **merge coverage from
-multiple test runs** (e.g., unit tests + integration tests + fuzz tests) into a
-single report.
+**grcov を使うべきケース**: **複数の異なるテスト実行結果**（例: 単体テスト + 結合テスト + ファズテスト）を単一のレポートにマージ・集約したい場合に最も威力を発揮します。
 
-### Coverage in CI: Codecov and Coveralls
+### CI でのカバレッジ運用: Codecov と Coveralls
 
-Upload coverage data to a tracking service for historical trends and PR annotations:
+カバレッジデータをトラッキングサービスにアップロードし、推移グラフの確認やプルリクエストへの注記（アノテーション）を行います：
 
 ```yaml
 # .github/workflows/coverage.yml
@@ -172,96 +162,95 @@ jobs:
         with:
           components: llvm-tools-preview
 
-      - name: Install cargo-llvm-cov
+      - name: cargo-llvm-cov のインストール
         uses: taiki-e/install-action@cargo-llvm-cov
 
-      - name: Generate coverage
+      - name: カバレッジの生成
         run: cargo llvm-cov --workspace --lcov --output-path lcov.info
 
-      - name: Upload to Codecov
+      - name: Codecov へアップロード
         uses: codecov/codecov-action@v4
         with:
           files: lcov.info
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
 
-      # Optional: enforce minimum coverage
-      - name: Check coverage threshold
+      # 任意: 最小カバレッジしきい値の強制
+      - name: カバレッジしきい値の確認
         run: |
           cargo llvm-cov --workspace --fail-under-lines 80
-          # Fails the build if line coverage drops below 80%
+          # 行カバレッジが 80% を下回った場合にビルドを失敗させる
 ```
 
-**Coverage gates** — enforce minimums per crate by reading the JSON output:
+**カバレッジゲート** — JSON 出力を読み取り、クレート単位で最小値を強制する：
 
 ```bash
-# Get per-crate coverage as JSON
+# クレートごとのカバレッジを JSON で取得
 cargo llvm-cov --workspace --json | jq '.data[0].totals.lines.percent'
 
-# Fail if below threshold
+# しきい値を下回った場合に失敗させる
 cargo llvm-cov --workspace --fail-under-lines 80
 cargo llvm-cov --workspace --fail-under-functions 70
 cargo llvm-cov --workspace --fail-under-regions 60
 ```
 
-### Coverage-Guided Testing Strategy
+### カバレッジ主導のテスト戦略
 
-Coverage numbers alone are meaningless without a strategy. Here's how to use
-coverage data effectively:
+明確な戦略がなければ、カバレッジの数値自体に意味はありません。カバレッジデータを効果的に活用する方法を紹介します：
 
-**Step 1: Triage by risk**
+**ステップ 1: リスクに応じた優先順位付け**
 
 ```text
-High coverage, high risk     → ✅ Good — maintain it
-High coverage, low risk      → 🔄 Possibly over-tested — skip if slow
-Low coverage, high risk      → 🔴 Write tests NOW — this is where bugs hide
-Low coverage, low risk       → 🟡 Track but don't panic
+高カバレッジ・高リスク → ✅ 良好 — この状態を維持する
+高カバレッジ・低リスク → 🔄 過剰テストの可能性 — テストが遅いなら削減を検討
+低カバレッジ・高リスク → 🔴 今すぐテストを書く — バグが潜んでいる領域
+低カバレッジ・低リスク → 🟡 追跡はするが慌てない
 ```
 
-**Step 2: Focus on branch coverage, not line coverage**
+**ステップ 2: 行カバレッジではなく分岐カバレッジを重視する**
 
 ```rust
-// 100% line coverage, 50% branch coverage — still risky!
+// 行カバレッジ 100% でも、分岐カバレッジは 50% — 依然としてリスクが高い！
 pub fn classify_temperature(temp_c: i32) -> ThermalState {
-    if temp_c > 105 {       // ← tested with temp=110 → Critical
+    if temp_c > 105 {       // ← temp=110 でテスト済み → Critical
         ThermalState::Critical
-    } else if temp_c > 85 { // ← tested with temp=90 → Warning
+    } else if temp_c > 85 { // ← temp=90 でテスト済み → Warning
         ThermalState::Warning
-    } else if temp_c < -10 { // ← NEVER TESTED → sensor error case missed
+    } else if temp_c < -10 { // ← 一度もテストされていない → センサーエラー処理の見落とし
         ThermalState::SensorError
     } else {
-        ThermalState::Normal  // ← tested with temp=25 → Normal
+        ThermalState::Normal  // ← temp=25 でテスト済み → Normal
     }
 }
 ```
 
-**Step 3: Exclude noise**
+**ステップ 3: ノイズの除外**
 
 ```bash
-# Exclude test code from coverage (it's always "covered")
+# テストコード自身をカバレッジから除外 (テストコードは常に「カバー済み」と判定されるため)
 cargo llvm-cov --workspace --ignore-filename-regex 'tests?\.rs$|benches/'
 
-# Exclude generated code
+# 生成されたコードを除外
 cargo llvm-cov --workspace --ignore-filename-regex 'target/'
 ```
 
-In code, mark untestable sections:
+コード内でテスト不可能なセクションをマークする：
 
 ```rust
-// Coverage tools recognize this pattern
-#[cfg(not(tarpaulin_include))]  // tarpaulin
+// カバレッジツールはこのパターンを認識します
+#[cfg(not(tarpaulin_include))]  // tarpaulin 用
 fn unreachable_hardware_path() {
-    // This path requires actual GPU hardware to trigger
+    // このパスは実際の GPU ハードウェアが接続されていないと通過しません
 }
 
-// For llvm-cov, use a more targeted approach:
-// Simply accept that some paths need integration/hardware tests,
-// not unit tests. Track them in a coverage exceptions list.
+// llvm-cov の場合は、よりターゲットを絞ったアプローチをとります:
+// 一部のパスには単体テストではなく結合/ハードウェアテストが必要であることを受け入れ、
+// カバレッジ除外リストなどで追跡します。
 ```
 
-### Complementary Testing Tools
+### 補完的なテストツール
 
-**`proptest` — Property-Based Testing** finds edge cases that hand-written tests miss:
+**`proptest` — プロパティベーステスト** は手書きのテストが見落としがちなエッジケースを発見します：
 
 ```toml
 [dev-dependencies]
@@ -274,9 +263,9 @@ use proptest::prelude::*;
 proptest! {
     #[test]
     fn parse_never_panics(input in "\\PC*") {
-        // proptest generates thousands of random strings
-        // If parse_gpu_csv panics on any input, the test fails
-        // and proptest minimizes the failing case for you.
+        // proptest は何千通りものランダムな文字列を自動生成します。
+        // いかなる入力に対しても parse_gpu_csv がパニックを起こした場合、
+        // テストは失敗し、proptest は失敗した最小の入力を特定してくれます。
         let _ = parse_gpu_csv(&input);
     }
 
@@ -284,13 +273,13 @@ proptest! {
     fn temperature_roundtrip(raw in 0u16..4096) {
         let temp = Temperature::from_raw(raw);
         let md = temp.millidegrees_c();
-        // Property: millidegrees should always be derivable from raw
+        // 特性: ミリ度は常に生データから一意に算出できるはずである
         assert_eq!(md, (raw as i32) * 625 / 10);
     }
 }
 ```
 
-**`insta` — Snapshot Testing** for large structured outputs (JSON, text reports):
+**`insta` — スナップショットテスト** は巨大な構造化出力（JSON、テキストレポートなど）の検証に適しています：
 
 ```toml
 [dev-dependencies]
@@ -301,33 +290,28 @@ insta = { version = "1", features = ["json"] }
 #[test]
 fn test_der_report_format() {
     let report = generate_der_report(&test_results);
-    // First run: creates a snapshot file. Subsequent runs: compares against it.
-    // Run `cargo insta review` to accept changes interactively.
+    // 初回実行時: スナップショットファイルを作成。以降の実行時: その内容と比較検証。
+    // `cargo insta review` を実行すると、差分を確認しながら対話的に受け入れることができます。
     insta::assert_json_snapshot!(report);
 }
 ```
 
-> **When to add proptest/insta**: If your unit tests are all "happy path" examples,
-> proptest will find the edge cases you missed. If you're testing large output
-> formats (JSON reports, DER records), insta snapshots are faster to write and
-> maintain than hand-written assertions.
+> **proptest / insta の導入タイミング**: 単体テストが「正常系（ハッピーパス）」ばかりになっている場合、proptest を使うことで見落としていた異常系エッジケースを発見できます。また、巨大な出力フォーマット（JSON レポートや DER レコードなど）をテストする場合、insta によるスナップショットテストのほうが手書きのアサーションよりも格段に作成・保守が容易になります。
 
-### Application: 1,000+ Tests Coverage Map
+### 実践応用：1,000以上のテストにおけるカバレッジマップ
 
-The project has 1,000+ tests but no coverage tracking. Adding it
-reveals the testing investment distribution. Uncovered paths are prime candidates
-for [Miri and sanitizer](ch05-miri-valgrind-and-sanitizers-verifying-u.md) verification:
+プロジェクトには 1,000 件以上のテストが存在しますが、カバレッジの自動トラッキングは未導入です。これを導入することで、テスト投資の偏りが浮き彫りになります。カバーされていないパスは、[Miri やサニタイザ](ch05-miri-valgrind-and-sanitizers-verifying-u.md) による検証の有力な候補となります：
 
-**Recommended coverage configuration:**
+**推奨されるカバレッジコマンド設定:**
 
 ```bash
-# Quick workspace coverage (proposed CI command)
+# ワークスペース全体のクイックカバレッジ (提案する CI コマンド)
 cargo llvm-cov --workspace \
     --ignore-filename-regex 'tests?\.rs$' \
     --fail-under-lines 75 \
     --html
 
-# Per-crate coverage for targeted improvement
+# クレートごとの重点的な改善用カバレッジ
 for crate in accel_diag event_log topology_lib network_diag compute_diag fan_diag; do
     echo "=== $crate ==="
     cargo llvm-cov --package "$crate" --json 2>/dev/null | \
@@ -335,60 +319,49 @@ for crate in accel_diag event_log topology_lib network_diag compute_diag fan_dia
 done
 ```
 
-**Expected high-coverage crates** (based on test density):
-- `topology_lib` — 922-line golden-file test suite
-- `event_log` — registry with `create_test_record()` helpers
-- `cable_diag` — `make_test_event()` / `make_test_context()` patterns
+**テスト密度から予想される高カバレッジのクレート:**
+- `topology_lib` — 922行のゴールデンファイルテストスイートを保有
+- `event_log` — `create_test_record()` ヘルパーを備えたレジストリ
+- `cable_diag` — `make_test_event()` / `make_test_context()` パターン
 
-**Expected coverage gaps** (based on code inspection):
-- Error handling arms in IPMI communication paths
-- GPU hardware-specific branches (require actual GPU)
-- `dmesg` parsing edge cases (platform-dependent output)
+**コード構造から予想されるカバレッジの盲点（ギャップ）:**
+- IPMI 通信パスにおけるエラーハンドリング分岐
+- GPU ハードウェア固有の分岐（実機 GPU が必要）
+- `dmesg` パースのエッジケース（プラットフォーム依存の出力形式）
 
-> **The 80/20 rule of coverage**: Getting from 0% to 80% coverage is straightforward.
-> Getting from 80% to 95% requires increasingly contrived test scenarios. Getting
-> from 95% to 100% requires `#[cfg(not(...))]` exclusions and is rarely worth the
-> effort. Target **80% line coverage and 70% branch coverage** as a practical floor.
+> **カバレッジの 80/20 ルール**: カバレッジを 0% から 80% に引き上げるのは比較的容易です。しかし 80% から 95% への引き上げには不自然に作り込んだテストシナリオが必要となり、95% から 100% を目指すには `#[cfg(not(...))]` による除外が必須となり、労力に見合う価値はほぼありません。現実的な下限目標としては、**行カバレッジ 80%・分岐カバレッジ 70%** を目指すのが実用的です。
 
-### Troubleshooting Coverage
+### カバレッジのトラブルシューティング
 
-| Symptom | Cause | Fix |
+| 症状 | 原因 | 解決策 |
 |---------|-------|-----|
-| `llvm-cov` shows 0% for all files | Instrumentation not applied | Ensure you run `cargo llvm-cov`, not `cargo test` + `llvm-cov` separately |
-| Coverage counts `unreachable!()` as uncovered | Those branches exist in compiled code | Use `#[cfg(not(tarpaulin_include))]` or add to exclusion regex |
-| Test binary crashes under coverage | Instrumentation + sanitizer conflict | Don't combine `cargo llvm-cov` with `-Zsanitizer=address`; run them separately |
-| Coverage differs between `llvm-cov` and `tarpaulin` | Different instrumentation techniques | Use `llvm-cov` as source of truth (compiler-native); file issues for large discrepancies |
-| `error: profraw file is malformed` | Test binary crashed mid-execution | Fix the test failure first; profraw files are corrupt when the process exits abnormally |
-| Branch coverage seems impossibly low | Optimizer creates branches for match arms, unwrap, etc. | Focus on *line* coverage for practical thresholds; branch coverage is inherently lower |
+| `llvm-cov` が全ファイルで 0% を示す | インストルメンテーションが適用されていない | `cargo test` + `llvm-cov` を別々に実行するのではなく、必ず `cargo llvm-cov` を実行する |
+| `unreachable!()` が未カバーとして計上される | コンパイル後のコードにその分岐が存在している | `#[cfg(not(tarpaulin_include))]` を使用するか、除外正規表現に追加する |
+| カバレッジ測定中にテストバイナリがクラッシュする | インストルメンテーションとサニタイザが競合している | `cargo llvm-cov` と `-Zsanitizer=address` を同一実行で併用しない（別々に実行する） |
+| `llvm-cov` と `tarpaulin` で数値が異なる | 計測技術の原理が異なる | コンパイラネイティブな `llvm-cov` を正（信頼できる情報源）とする |
+| `error: profraw file is malformed` | テスト実行中にバイナリが異常終了した | 先にテストの失敗を修正する（異常終了すると profraw ファイルが破損する） |
+| 分岐カバレッジが異常に低く見える | match アームや `unwrap` 等によりオプティマイザが多数の分岐を生成している | 実用的なしきい値としては*行*カバレッジを重視する（分岐カバレッジは本質的に低めに出る） |
 
-### Try It Yourself
+### 自分で試してみよう
 
-1. **Measure coverage on your project**: Run `cargo llvm-cov --workspace --html`
-   and open the report. Find the three files with the lowest coverage. Are they
-   untested, or inherently hard to test (hardware-dependent code)?
+1. **プロジェクトのカバレッジ測定**: `cargo llvm-cov --workspace --html` を実行し、レポートを開いてください。カバレッジの最も低い3つのファイルを特定します。それらは単純にテストが書かれていないだけですか、それともハードウェア依存コードなどテストが本質的に難しい箇所でしょうか？
+2. **カバレッジゲートの設定**: CI に `cargo llvm-cov --workspace --fail-under-lines 60` を追加してください。意図的にテストを1つコメントアウトして、CI が失敗することを確認します。その後、現在のプロジェクトの実際値マイナス 2% 程度にしきい値を調整してください。
+3. **分岐カバレッジ vs 行カバレッジ**: 3つのアームを持つ `match` 式を含む関数を作成し、そのうち2つのアームのみをテストします。行カバレッジ（66% 前後）と分岐カバレッジ（50% 前後）の数値を比較してください。あなたのプロジェクトにとって、どちらの指標がより有益でしょうか？
 
-2. **Set a coverage gate**: Add `cargo llvm-cov --workspace --fail-under-lines 60`
-   to your CI. Intentionally comment out a test and verify CI fails. Then raise
-   the threshold to your project's actual coverage level minus 2%.
-
-3. **Branch vs. line coverage**: Write a function with a 3-arm `match` and
-   test only 2 arms. Compare line coverage (may show 66%) vs. branch coverage
-   (may show 50%). Which metric is more useful for your project?
-
-### Coverage Tool Selection
+### カバレッジツールの選定
 
 ```mermaid
 flowchart TD
-    START["Need code coverage?"] --> ACCURACY{"Priority?"}
+    START["コードカバレッジが必要？"] --> ACCURACY{"何を優先する？"}
     
-    ACCURACY -->|"Most accurate"| LLVM["cargo-llvm-cov<br/>Source-based, compiler-native"]
-    ACCURACY -->|"Quick check"| TARP["cargo-tarpaulin<br/>Linux only, fast"]
-    ACCURACY -->|"Multi-run aggregate"| GRCOV["grcov<br/>Mozilla, combines profiles"]
+    ACCURACY -->|"最高精度の計測"| LLVM["cargo-llvm-cov<br/>ソースベース、コンパイラネイティブ"]
+    ACCURACY -->|"手軽なチェック"| TARP["cargo-tarpaulin<br/>Linux 専用、高速"]
+    ACCURACY -->|"複数実行の集約"| GRCOV["grcov<br/>Mozilla 製、プロファイル統合"]
     
-    LLVM --> CI_GATE["CI coverage gate<br/>--fail-under-lines 80"]
+    LLVM --> CI_GATE["CI カバレッジゲート<br/>--fail-under-lines 80"]
     TARP --> CI_GATE
     
-    CI_GATE --> UPLOAD{"Upload to?"}
+    CI_GATE --> UPLOAD{"アップロード先は？"}
     UPLOAD -->|"Codecov"| CODECOV["codecov/codecov-action"]
     UPLOAD -->|"Coveralls"| COVERALLS["coverallsapp/github-action"]
     
@@ -398,29 +371,29 @@ flowchart TD
     style CI_GATE fill:#ffd43b,color:#000
 ```
 
-### 🏋️ Exercises
+### 🏋️ 演習問題
 
-#### 🟢 Exercise 1: First Coverage Report
+#### 🟢 演習 1: はじめてのカバレッジレポート
 
-Install `cargo-llvm-cov`, run it on any Rust project, and open the HTML report. Find the three files with the lowest line coverage.
+`cargo-llvm-cov` をインストールし、任意の Rust プロジェクトで実行して HTML レポートを開いてください。行カバレッジの最も低い3つのファイルを特定します。
 
 <details>
-<summary>Solution</summary>
+<summary>解答例</summary>
 
 ```bash
 cargo install cargo-llvm-cov
 cargo llvm-cov --workspace --html --open
-# The report sorts files by coverage — lowest at the bottom
-# Look for files under 50% — those are your blind spots
+# レポートはカバレッジ順に並び替え可能 — 最下部に低いファイルが集まる
+# 50% 未満のファイルを探す — それらがテストの盲点（ブラインドスポット）
 ```
 </details>
 
-#### 🟡 Exercise 2: CI Coverage Gate
+#### 🟡 演習 2: CI カバレッジゲート
 
-Add a coverage gate to a GitHub Actions workflow that fails if line coverage drops below 60%. Verify it works by commenting out a test.
+行カバレッジが 60% を下回った場合に失敗するカバレッジゲートを GitHub Actions ワークフローに追加してください。テストを1つコメントアウトして、ゲートが正しく失敗することを確認します。
 
 <details>
-<summary>Solution</summary>
+<summary>解答例</summary>
 
 ```yaml
 # .github/workflows/coverage.yml
@@ -438,16 +411,15 @@ jobs:
       - run: cargo llvm-cov --workspace --fail-under-lines 60
 ```
 
-Comment out a test, push, and watch the workflow fail.
+テストをコメントアウトしてプッシュし、ワークフローが正しく失敗することを確認してください。
 </details>
 
-### Key Takeaways
+### 重要なまとめ
 
-- `cargo-llvm-cov` is the most accurate coverage tool for Rust — it uses the compiler's own instrumentation
-- Coverage doesn't prove correctness, but **zero coverage proves zero testing** — use it to find blind spots
-- Set a coverage gate in CI (e.g., `--fail-under-lines 80`) to prevent regressions
-- Don't chase 100% coverage — focus on high-risk code paths (error handling, unsafe, parsing)
-- Never combine coverage instrumentation with sanitizers in the same run
+- `cargo-llvm-cov` は Rust において最も精度の高いカバレッジツールです — コンパイラ自身のインストルメンテーションを活用します。
+- カバレッジは正しさを証明するものではありませんが、**「カバレッジ 0%」は「テストが全く存在しない」ことを証明します** — テストの盲点を発見するために活用してください。
+- リグレッションを未然に防ぐため、CI にカバレッジゲート（例: `--fail-under-lines 80`）を設定してください。
+- 100% カバレッジを盲目的に追い求めず、高リスクなコードパス（エラーハンドリング、unsafe、パース処理など）に注力してください。
+- 同一の実行内でカバレッジ計測とサニタイザを併用しないでください。
 
 ---
-

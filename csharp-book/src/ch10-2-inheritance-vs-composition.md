@@ -1,12 +1,11 @@
-## Inheritance vs Composition
+## 継承 vs コンポジション
 
-> **What you'll learn:** Why Rust has no class inheritance, how traits + structs replace deep
-> class hierarchies, and practical patterns for achieving polymorphism through composition.
+> **学べること:** Rust にクラス継承が存在しない理由、トレイトと構造体がどのように深いクラス階層を代替するか、およびコンポジション（合成）を通じて多相性（ポリモーフィズム）を実現するための実践的パターン。
 >
-> **Difficulty:** 🟡 Intermediate
+> **難易度:** 🟡 中級
 
 ```csharp
-// C# - Class-based inheritance
+// C# - クラスベースの継承
 public abstract class Animal
 {
     public string Name { get; protected set; }
@@ -33,7 +32,7 @@ public class Dog : Animal
     }
 }
 
-// Interface-based contracts
+// インターフェースベースの契約
 public interface IFlyable
 {
     void Fly();
@@ -55,16 +54,16 @@ public class Bird : Animal, IFlyable
 }
 ```
 
-### Rust Composition Model
+### Rust のコンポジションモデル
 ```rust
-// Rust - Composition over inheritance with traits
+// Rust - トレイトを用いた継承よりもコンポジション（合成）を重視するアプローチ
 pub trait Animal {
     fn name(&self) -> &str;
     fn make_sound(&self);
     
-    // Default implementation (like C# virtual methods)
+    // デフォルト実装（C# の仮想メソッドに類似）
     fn sleep(&self) {
-        println!("{} is sleeping", self.name());
+        println!("{} は眠っています", self.name());
     }
 }
 
@@ -72,7 +71,7 @@ pub trait Flyable {
     fn fly(&self);
 }
 
-// Separate data from behavior
+// データと振る舞いの分離
 #[derive(Debug)]
 pub struct Dog {
     name: String,
@@ -84,7 +83,7 @@ pub struct Bird {
     wingspan: f64,
 }
 
-// Implement behaviors for types
+// 各型に対する振る舞いの実装
 impl Animal for Dog {
     fn name(&self) -> &str {
         &self.name
@@ -101,7 +100,7 @@ impl Dog {
     }
     
     pub fn fetch(&self) {
-        println!("{} is fetching", self.name);
+        println!("{} は取ってこようとしています", self.name);
     }
 }
 
@@ -117,11 +116,11 @@ impl Animal for Bird {
 
 impl Flyable for Bird {
     fn fly(&self) {
-        println!("{} is flying with {:.1}m wingspan", self.name, self.wingspan);
+        println!("{} は翼長 {:.1}m で飛んでいます", self.name, self.wingspan);
     }
 }
 
-// Multiple trait bounds (like multiple interfaces)
+// 複数のトレイト境界（複数のインターフェース実装に類似）
 fn make_flying_animal_sound<T>(animal: &T) 
 where 
     T: Animal + Flyable,
@@ -133,12 +132,12 @@ where
 
 ```mermaid
 graph TD
-    subgraph "C# Inheritance Hierarchy"
-        CS_ANIMAL["Animal (abstract class)"]
+    subgraph "C# の継承階層"
+        CS_ANIMAL["Animal (抽象クラス)"]
         CS_DOG["Dog : Animal"]
         CS_BIRD["Bird : Animal, IFlyable"]
-        CS_VTABLE["Virtual method dispatch<br/>Runtime cost"]
-        CS_COUPLING["[ERROR] Tight coupling<br/>[ERROR] Diamond problem<br/>[ERROR] Deep hierarchies"]
+        CS_VTABLE["仮想メソッドディスパッチ<br/>実行時コスト"]
+        CS_COUPLING["[エラー] 密結合<br/>[エラー] 菱形継承問題<br/>[エラー] 深い階層構造"]
         
         CS_ANIMAL --> CS_DOG
         CS_ANIMAL --> CS_BIRD
@@ -147,7 +146,7 @@ graph TD
         CS_ANIMAL --> CS_COUPLING
     end
     
-    subgraph "Rust Composition Model"
+    subgraph "Rust のコンポジションモデル"
         RUST_ANIMAL["trait Animal"]
         RUST_FLYABLE["trait Flyable"]
         RUST_DOG["struct Dog"]
@@ -155,8 +154,8 @@ graph TD
         RUST_IMPL1["impl Animal for Dog"]
         RUST_IMPL2["impl Animal for Bird"]
         RUST_IMPL3["impl Flyable for Bird"]
-        RUST_STATIC["Static dispatch<br/>Zero cost"]
-        RUST_FLEXIBLE["[OK] Flexible composition<br/>[OK] No hierarchy limits<br/>[OK] Mix and match traits"]
+        RUST_STATIC["静的ディスパッチ<br/>ゼロコスト"]
+        RUST_FLEXIBLE["[OK] 柔軟なコンポジション<br/>[OK] 階層制限なし<br/>[OK] トレイトの自由な組み合わせ"]
         
         RUST_DOG --> RUST_IMPL1
         RUST_BIRD --> RUST_IMPL2
@@ -179,12 +178,12 @@ graph TD
 
 ---
 
-## Exercises
+## 演習
 
 <details>
-<summary><strong>🏋️ Exercise: Replace Inheritance with Traits</strong> (click to expand)</summary>
+<summary><strong>🏋️ 演習：継承をトレイトに置き換える</strong>（クリックして展開）</summary>
 
-This C# code uses inheritance. Rewrite it in Rust using trait composition:
+この C# コードは継承を使用しています。トレイトのコンポジション（合成）を用いて Rust で書き直してください：
 
 ```csharp
 public abstract class Shape { public abstract double Area(); }
@@ -199,14 +198,14 @@ public class Cylinder : Shape3D
 }
 ```
 
-Requirements:
-1. `HasArea` trait with `fn area(&self) -> f64`
-2. `HasVolume` trait with `fn volume(&self) -> f64`
-3. `Cylinder` struct implementing both
-4. A function `fn print_shape_info(shape: &(impl HasArea + HasVolume))` — note the trait bound composition (no inheritance needed)
+要件:
+1. `fn area(&self) -> f64` を持つ `HasArea` トレイト
+2. `fn volume(&self) -> f64` を持つ `HasVolume` トレイト
+3. 両方を実装する `Cylinder` 構造体
+4. 関数 `fn print_shape_info(shape: &(impl HasArea + HasVolume))` — トレイト境界の合成に注目してください（継承は不要です）
 
 <details>
-<summary>🔑 Solution</summary>
+<summary>🔑 解答例</summary>
 
 ```rust
 use std::f64::consts::PI;
@@ -237,8 +236,8 @@ impl HasVolume for Cylinder {
 }
 
 fn print_shape_info(shape: &(impl HasArea + HasVolume)) {
-    println!("Area:   {:.2}", shape.area());
-    println!("Volume: {:.2}", shape.volume());
+    println!("面積:   {:.2}", shape.area());
+    println!("体積:   {:.2}", shape.volume());
 }
 
 fn main() {
@@ -247,11 +246,9 @@ fn main() {
 }
 ```
 
-**Key insight**: C# needs a 3-level hierarchy (Shape → Shape3D → Cylinder). Rust uses flat trait composition — `impl HasArea + HasVolume` combines capabilities without inheritance depth.
+**重要な洞察**: C# では 3 段階の階層構造（Shape → Shape3D → Cylinder）が必要でした。一方 Rust ではフラットなトレイトのコンポジションを採用しており、`impl HasArea + HasVolume` によって継承の深さを作ることなく機能を組み合わせることができます。
 
 </details>
 </details>
 
 ***
-
-

@@ -1,64 +1,64 @@
 <div style="background-color: #d9d9d9; padding: 16px; border-radius: 6px; color: #000000;">
 
-**License** This project is dual-licensed under the [MIT License](LICENSE) and [Creative Commons Attribution 4.0 International (CC-BY-4.0)](LICENSE-DOCS).
+**ライセンス** 本プロジェクトは、[MIT License](LICENSE) および [Creative Commons Attribution 4.0 International (CC-BY-4.0)](LICENSE-DOCS) のデュアルライセンスの下で提供されています。
 
 </div>
 
 <div style="background-color: #d9d9d9; padding: 16px; border-radius: 6px; color: #000000;">
 
-**Trademarks** This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft trademarks or logos is subject to and must follow [Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks/usage/general). Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship. Any use of third-party trademarks or logos are subject to those third-party's policies.
+**商標** 本プロジェクトには、プロジェクト、製品、またはサービスの商標やロゴが含まれている場合があります。Microsoftの商標またはロゴの許可された使用は、[Microsoftの商標およびブランドガイドライン](https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks/usage/general)に準拠する必要があります。改変された本プロジェクトのバージョンにおけるMicrosoftの商標またはロゴの使用は、混乱を招いたり、Microsoftによる後援を示唆したりしてはなりません。サードパーティの商標またはロゴの使用は、各サードパーティのポリシーに準拠します。
 
 </div>
 
-# Rust Training Books
+# Rust トレーニングブック
 
-Seven training courses covering Rust from different programming backgrounds, plus deep-dives on async, advanced patterns, and engineering practices.
+さまざまなプログラミング言語のバックグラウンドに応じたRustの学習コースに加え、非同期処理、高度なパターン、エンジニアリングの実践プラクティスを掘り下げる7つのトレーニング教材です。
 
-This material combines original content with ideas and examples inspired by some of the best resources in the Rust ecosystem. The goal is to present an in-depth, technically accurate curriculum that weaves together knowledge scattered across books, blogs, conference talks, and video series into a cohesive, pedagogically structured experience.
+本教材は、独自のコンテンツに加えて、Rustエコシステムにおける優れたリソースから得られた知見や実例を組み合わせて作成されています。書籍、ブログ、カンファレンストーク、動画シリーズなどに散らばる知識を結集し、詳細かつ技術的に正確で、教育的に体系化された学習体験を提供することを目指しています。
 
-> **Disclaimer:** These books are training material, not an authoritative reference. While we strive for accuracy, always verify critical details against the [official Rust documentation](https://doc.rust-lang.org/) and the [Rust Reference](https://doc.rust-lang.org/reference/).
+> **免責事項:** これらのブックはトレーニング教材であり、公式なリファレンスではありません。正確性には万全を期していますが、重要な詳細については必ず[公式のRustドキュメント](https://doc.rust-lang.org/)および[Rustリファレンス](https://doc.rust-lang.org/reference/)をご確認ください。
 
-### Inspirations & Acknowledgments
+### インスピレーションと謝辞
 
-- [**The Rust Programming Language**](https://doc.rust-lang.org/book/) — the foundation everything builds on
-- [**Jon Gjengset**](https://www.youtube.com/c/JonGjengset) — deep-dive streams on advanced Rust internals, `Crust of Rust` series
-- [**withoutboats**](https://without.boats/blog/) — async design, `Pin`, and the futures model
-- [**fasterthanlime (Amos)**](https://fasterthanli.me/) — systems programming from first principles, engaging long-form explorations
-- [**Mara Bos**](https://marabos.nl/) — *Rust Atomics and Locks*, concurrency primitives
-- [**Aleksey Kladov (matklad)**](https://matklad.github.io/) — Rust analyzer insights, API design, error handling patterns
-- [**Niko Matsakis**](https://smallcultfollowing.com/babysteps/) — language design, borrow checker internals, Polonius
-- [**Rust by Example**](https://doc.rust-lang.org/rust-by-example/) and [**Rustonomicon**](https://doc.rust-lang.org/nomicon/) — practical patterns and unsafe deep-dives
-- [**This Week in Rust**](https://this-week-in-rust.org/) — community discoveries that shaped many examples
-- [**Binary Musings - Tag(Rust)**](https://binarymusings.org/posts/category/rust/) — Deep dive into Rust internals 
-- …and many others in the **Rust community at large** whose blog posts, conference talks, RFCs, and forum discussions have informed this material — too numerous to list individually, but deeply appreciated
+- [**The Rust Programming Language**](https://doc.rust-lang.org/book/) — すべての基礎となる公式ガイドブック
+- [**Jon Gjengset**](https://www.youtube.com/c/JonGjengset) — 高度なRustの内部構造に関するディープダイブ配信、`Crust of Rust` シリーズ
+- [**withoutboats**](https://without.boats/blog/) — 非同期設計、`Pin`、Futureモデルに関する知見
+- [**fasterthanlime (Amos)**](https://fasterthanli.me/) — 第一原理からのシステムプログラミング探究、魅力的な長編解説記事
+- [**Mara Bos**](https://marabos.nl/) — 『*Rust Atomics and Locks*』、並行性プリミティブの解説
+- [**Aleksey Kladov (matklad)**](https://matklad.github.io/) — rust-analyzer の洞察、API設計、エラー処理パターン
+- [**Niko Matsakis**](https://smallcultfollowing.com/babysteps/) — 言語設計、借用チェッカーの内部構造、Polonius
+- [**Rust by Example**](https://doc.rust-lang.org/rust-by-example/) および [**Rustonomicon**](https://doc.rust-lang.org/nomicon/) — 実践的なパターンとUnsafeのディープダイブ
+- [**This Week in Rust**](https://this-week-in-rust.org/) — 多くの実例に影響を与えたコミュニティの発見や知見
+- [**Binary Musings - Tag(Rust)**](https://binarymusings.org/posts/category/rust/) — Rustの内部構造に関する徹底解説
+- …その他、ブログ記事、カンファレンストーク、RFC、フォーラムでの議論を通じて本教材に知見を提供してくださった**Rustコミュニティ全体の皆様**（個別に挙げきれないほど多数ですが、心より感謝いたします）
 
-## 📖 Start Reading
+## 📖 読み始める
 
-Pick the book that matches your background. Books are grouped by complexity so you can chart a learning path:
+ご自身のバックグラウンドに合ったブックを選択してください。ブックは難易度・テーマ別に分類されており、学習パスを計画しやすくなっています。
 
-| Level | Description |
+| レベル | 説明 |
 |-------|-------------|
-| 🟢 **Bridge** | Learn Rust coming from another language — start here |
-| 🔵 **Deep Dive** | Focused exploration of a major Rust subsystem |
-| 🟡 **Advanced** | Patterns and techniques for experienced Rustaceans |
-| 🟣 **Expert** | Cutting-edge type-level and correctness techniques |
-| 🟤 **Practices** | Engineering, tooling, and production readiness |
+| 🟢 **Bridge** | 他の言語からRustを学ぶ — まずはこちらから |
+| 🔵 **Deep Dive** | Rustの主要サブシステムの集中的な探求 |
+| 🟡 **Advanced** | 経験豊富なRustacean向けの実践パターンとテクニック |
+| 🟣 **Expert** | 最先端の型レベルプログラミングと正当性担保テクニック |
+| 🟤 **Practices** | エンジニアリング、ツールチェイン、本番運用のベストプラクティス |
 
-| Book | Level | Who it's for |
+| ブック | レベル | 対象者 |
 |------|-------|-------------|
-| [**Rust for C/C++ Programmers**](https://microsoft.github.io/RustTraining/c-cpp-book/) | 🟢 Bridge | Move semantics, RAII, FFI, embedded, no_std |
-| [**Rust for C# Programmers**](https://microsoft.github.io/RustTraining/csharp-book/) | 🟢 Bridge | Swift / C# / Java → ownership & type system |
-| [**Rust for Python Programmers**](https://microsoft.github.io/RustTraining/python-book/) | 🟢 Bridge | Dynamic → static typing, GIL-free concurrency |
-| [**Async Rust**](https://microsoft.github.io/RustTraining/async-book/) | 🔵 Deep Dive | Tokio, streams, cancellation safety |
-| [**Rust Patterns**](https://microsoft.github.io/RustTraining/rust-patterns-book/) | 🟡 Advanced | Pin, allocators, lock-free structures, unsafe |
-| [**Type-Driven Correctness**](https://microsoft.github.io/RustTraining/type-driven-correctness-book/) | 🟣 Expert | Type-state, phantom types, capability tokens |
-| [**Rust Engineering Practices**](https://microsoft.github.io/RustTraining/engineering-book/) | 🟤 Practices | Build scripts, cross-compilation, CI/CD, Miri |
+| [**C/C++ プログラマーのための Rust**](https://microsoft.github.io/RustTraining/c-cpp-book/) | 🟢 Bridge | ムーブセマンティクス、RAII、FFI、組み込み、no_std |
+| [**C# プログラマーのための Rust**](https://microsoft.github.io/RustTraining/csharp-book/) | 🟢 Bridge | Swift / C# / Java → 所有権と型システム |
+| [**Python プログラマーのための Rust**](https://microsoft.github.io/RustTraining/python-book/) | 🟢 Bridge | 動的型付け → 静的型付け、GIL不要の並行性 |
+| [**非同期 Rust**](https://microsoft.github.io/RustTraining/async-book/) | 🔵 Deep Dive | Tokio、ストリーム、キャンセル安全性 |
+| [**Rust パターン**](https://microsoft.github.io/RustTraining/rust-patterns-book/) | 🟡 Advanced | Pin、アロケータ、ロックフリーデータ構造、Unsafe |
+| [**型主導の正当性**](https://microsoft.github.io/RustTraining/type-driven-correctness-book/) | 🟣 Expert | 型状態（タイプステート）、幽霊型（Phantom types）、ケーパビリティトークン |
+| [**Rust エンジニアリング実践**](https://microsoft.github.io/RustTraining/engineering-book/) | 🟤 Practices | ビルドスクリプト、クロスコンパイル、CI/CD、Miri |
 
-Each book has 15–16 chapters with Mermaid diagrams, editable Rust playgrounds, exercises, and full-text search.
+各ブックには、Mermaidダイアグラム、編集可能なRust Playground、演習問題、全文検索機能を備えた15〜16の章が含まれています。
 
-> **Tip:** Browse the rendered books with sidebar navigation and search at the [GitHub Pages site](https://microsoft.github.io/RustTraining/).
+> **ヒント:** サイドバーナビゲーションや検索機能を備えたレンダリング済みのブックは、[GitHub Pages サイト](https://microsoft.github.io/RustTraining/)で閲覧できます。
 >
-> **Local preview:** For offline reading or while contributing ([install Rust](https://rustup.rs/) first):
+> **ローカルプレビュー:** オフラインでの閲覧や教材への貢献時には、以下を実行してください（事前に[Rustのインストール](https://rustup.rs/)が必要です）:
 > ```
 > git clone https://github.com/microsoft/RustTraining.git
 > cd RustTraining
@@ -68,44 +68,43 @@ Each book has 15–16 chapters with Mermaid diagrams, editable Rust playgrounds,
 
 ---
 
-## 🔧 For Maintainers
+## 🔧 メンテナー向け情報
 
 <details>
-<summary>Building, serving, and editing the books locally</summary>
+<summary>ブックのローカルでのビルド、配信、および編集</summary>
 
-### Prerequisites
+### 前提条件
 
-Install [Rust via **rustup**](https://rustup.rs/) if you haven't already, then:
+まだインストールしていない場合は、[**rustup** 経由で Rust をインストール](https://rustup.rs/)し、続いて以下を実行します:
 
 ```bash
 cargo install mdbook@0.4.52 mdbook-mermaid@0.14.0
 ```
 
-### Clone the repo
+### リポジトリのクローン
 
 ```bash
 git clone https://github.com/microsoft/RustTraining.git
 cd RustTraining
 ```
 
-### Build & serve
+### ビルドとローカル配信
 
 ```bash
-cargo xtask build               # Build all books into site/ (local preview)
-cargo xtask serve               # Build and serve at http://localhost:3000
-cargo xtask deploy              # Build all books into docs/ (for GitHub Pages)
-cargo xtask clean               # Remove site/ and docs/
+cargo xtask build               # すべてのブックを site/ にビルド（ローカルプレビュー用）
+cargo xtask serve               # ビルドして http://localhost:3000 でローカルサーバーを起動
+cargo xtask deploy              # すべてのブックを docs/ にビルド（GitHub Pages用）
+cargo xtask clean               # site/ および docs/ ディレクトリを削除
 ```
 
-To build or serve a single book:
+単一のブックのみをビルドまたはプレビューする場合:
 
 ```bash
 cd c-cpp-book && mdbook serve --open    # http://localhost:3000
 ```
 
-### Deployment
+### デプロイ
 
-The site auto-deploys to GitHub Pages on push to `main` via `.github/workflows/pages.yml`. No manual steps needed.
+本サイトは、`.github/workflows/pages.yml` により `main` ブランチへのプッシュ時に GitHub Pages へ自動デプロイされます。手動での操作は不要です。
 
 </details>
-
