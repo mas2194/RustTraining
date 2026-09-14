@@ -1,3 +1,6 @@
+> [!IMPORTANT] 
+> 本プロジェクトはこの1行を除いてMicrosoftのRustTrainingをGeminiに日本語化させた自分用のプロジェクトです。
+
 <div style="background-color: #d9d9d9; padding: 16px; border-radius: 6px; color: #000000;">
 
 **ライセンス** 本プロジェクトは、[MIT License](LICENSE) および [Creative Commons Attribution 4.0 International (CC-BY-4.0)](LICENSE-DOCS) のデュアルライセンスの下で提供されています。
