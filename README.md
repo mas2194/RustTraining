@@ -1,5 +1,5 @@
 > [!IMPORTANT] 
-> 本forkははこの1行を除いてMicrosoftのRustTrainingをGeminiに日本語化させた自分用のプロジェクトです。
+> 本forkははこの1行を除いてMicrosoftのRustTrainingをGeminiに日本語に翻訳させた自分用のプロジェクトです。
 
 <div style="background-color: #d9d9d9; padding: 16px; border-radius: 6px; color: #000000;">
 
